@@ -65,6 +65,8 @@ from gpustack.schemas.clusters import Cluster, GatherStrategyEnum
 from gpustack.schemas.workers import Worker
 from gpustack.schemas.models import (
     BackendEnum,
+    is_vllm_family,
+    VLLM_FAMILY,
     CategoryEnum,
     DistributedServers,
     Model,
@@ -587,7 +589,7 @@ async def apply_candidate_to_instance(
         subordinate_workers=candidate.subordinate_workers,
     )
     if get_backend(model) in (
-        BackendEnum.VLLM,
+        *VLLM_FAMILY,
         BackendEnum.ASCEND_MINDIE,
         BackendEnum.SGLANG,
     ):
@@ -627,6 +629,7 @@ def _cards_per_member(model: Model) -> int:
     """
     selector_map = {
         BackendEnum.VLLM.value: VLLMResourceFitSelector,
+        BackendEnum.VLLM_ASCEND.value: VLLMResourceFitSelector,
         BackendEnum.ASCEND_MINDIE.value: AscendMindIEResourceFitSelector,
         BackendEnum.SGLANG.value: SGLangResourceFitSelector,
     }
@@ -715,7 +718,7 @@ def build_candidate_selector(
         return AscendMindIEResourceFitSelector(
             config, model, model_instances, resource_view=resource_view
         )
-    if model.backend == BackendEnum.VLLM and not is_omni_model(model):
+    if is_vllm_family(model.backend) and not is_omni_model(model):
         # Note: Route omni categories to CustomSelector for vLLM-Omni.
         return VLLMResourceFitSelector(
             config, model, model_instances, resource_view=resource_view
@@ -1276,7 +1279,7 @@ async def evaluate_pretrained_config(
 
     # TODO : Additional checks for unsupported architectures for other backends.
     if (
-        model.backend == BackendEnum.VLLM
+        is_vllm_family(model.backend)
         and model_type == CategoryEnum.UNKNOWN
         and not model.backend_version
         and not model.image_name
@@ -1431,7 +1434,7 @@ def get_vllm_override_architectures(model: Model) -> List[str]:
         List of override architectures.
     """
     backend = get_backend(model)
-    if backend != BackendEnum.VLLM:
+    if not is_vllm_family(backend):
         return []
 
     hf_overrides = find_last_parameter(
@@ -1524,6 +1527,7 @@ def set_model_gpus_per_replica(model: Model) -> bool:
         if model.backend_parameters is not None:
             selector_map = {
                 BackendEnum.VLLM.value: VLLMResourceFitSelector,
+                BackendEnum.VLLM_ASCEND.value: VLLMResourceFitSelector,
                 BackendEnum.ASCEND_MINDIE.value: AscendMindIEResourceFitSelector,
                 BackendEnum.SGLANG.value: SGLangResourceFitSelector,
             }

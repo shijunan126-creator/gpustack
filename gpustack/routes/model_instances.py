@@ -31,7 +31,7 @@ from gpustack.api.tenant import (
 from gpustack.server.db import async_session
 from gpustack.server.deps import ListParamsDep, SessionDep, TenantContextDep
 from gpustack.schemas.models import (
-    BackendEnum,
+    is_vllm_family,
     Model,
     ModelInstance,
     ModelInstanceCreate,
@@ -59,7 +59,7 @@ def _is_vllm_ray_subordinate(model_instance: ModelInstance) -> bool:
     shape — fall through to ``sub-vllm`` because the log viewer doesn't need
     that level of granularity.
     """
-    if model_instance.backend != BackendEnum.VLLM:
+    if not is_vllm_family(model_instance.backend):
         return False
     model = model_instance.model
     backend_parameters = model.backend_parameters if model else None

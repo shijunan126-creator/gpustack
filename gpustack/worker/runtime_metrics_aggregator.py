@@ -20,7 +20,7 @@ from gpustack.worker.runtime_metrics_client import (
 )
 from gpustack.worker.runtime_metrics_client import Client as RuntimeMetricsClient
 from gpustack.schemas.models import (
-    BackendEnum,
+    is_vllm_family,
     Model,
     ModelInstance,
     ModelInstanceStateEnum,
@@ -455,7 +455,7 @@ class RuntimeMetricsAggregator:
             return True
 
         # check runtime-specific metrics flags
-        if runtime == BackendEnum.VLLM:
+        if is_vllm_family(runtime):
             disable_metrics = find_parameter(
                 model.backend_parameters, ["disable-log-stats"]
             )

@@ -229,6 +229,7 @@ def _role_gpu_width(model_in, role_name: str) -> Optional[int]:
         return None
     selectors = {
         BackendEnum.VLLM: VLLMResourceFitSelector,
+        BackendEnum.VLLM_ASCEND: VLLMResourceFitSelector,
         BackendEnum.SGLANG: SGLangResourceFitSelector,
     }
     selector = selectors.get(backend)

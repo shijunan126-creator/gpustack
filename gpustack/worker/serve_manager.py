@@ -47,6 +47,7 @@ from gpustack.worker.backends.ascend_mindie import AscendMindIEServer
 from gpustack.worker.backends.sglang import SGLangServer
 from gpustack.utils.command import resolve_executor_backend
 from gpustack.worker.backends.vllm import VLLMServer, cal_multinode_topology
+from gpustack.worker.backends.vllm_ascend import VLLMAscendServer
 from gpustack.utils.vllm_topology import parse_user_parallelism
 from gpustack.worker.backends.vox_box import VoxBoxServer
 from gpustack.worker.backends.custom import CustomServer
@@ -81,6 +82,8 @@ from gpustack.worker.port_reservations import (
 
 from gpustack.schemas.models import (
     BackendEnum,
+    is_vllm_family,
+    VLLM_FAMILY,
     Model,
     ModelUpdate,
     ModelInstance,
@@ -130,6 +133,7 @@ _VLLM_MP_CONNECTING_BAND_NAME = "_vllm_mp_connecting"
 
 _SERVER_CLASS_MAPPING = {
     BackendEnum.VLLM: VLLMServer,
+    BackendEnum.VLLM_ASCEND: VLLMAscendServer,
     BackendEnum.SGLANG: SGLangServer,
     BackendEnum.VOX_BOX: VoxBoxServer,
     BackendEnum.ASCEND_MINDIE: AscendMindIEServer,
@@ -2375,7 +2379,7 @@ class ServeManager(ContainerLogPersister):
                     model.backend_version,
                     model.image_name,
                 )
-                if backend == BackendEnum.VLLM
+                if is_vllm_family(backend)
                 else None
             )
             # Use the command builder's topology so only deployments that
@@ -2401,7 +2405,7 @@ class ServeManager(ContainerLogPersister):
                 )
                 unavailable_ports.update(connecting_band)
 
-            if backend == BackendEnum.VLLM:
+            if is_vllm_family(backend):
                 if executor_backend == "mp":
                     # DP RPC + PyTorch master + VLLM_PORT.
                     cross_port_count = 3
@@ -3020,7 +3024,7 @@ def is_ready(
     is_built_in = is_built_in_backend(backend)
     custom_image = bool(
         model
-        and backend in (BackendEnum.VLLM, BackendEnum.SGLANG)
+        and backend in (*VLLM_FAMILY, BackendEnum.SGLANG)
         and is_built_in_backend_custom_version(
             backend, model.backend_version, model.image_name
         )
@@ -3053,7 +3057,7 @@ def is_ready(
         else:
             # Older versions do not support health check, consider it always ready.
             return True
-    elif backend in (BackendEnum.VLLM, BackendEnum.SGLANG) and not health_check_path:
+    elif backend in (*VLLM_FAMILY, BackendEnum.SGLANG) and not health_check_path:
         health_check_path = "/health"
     elif is_built_in and backend != BackendEnum.CUSTOM and not health_check_path:
         # VoxBox uses the OpenAI model list as its default health endpoint.

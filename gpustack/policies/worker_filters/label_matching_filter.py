@@ -1,7 +1,12 @@
 import logging
 from typing import Dict, List, Tuple
 from gpustack.policies.base import WorkerFilter
-from gpustack.schemas.models import BackendEnum, Model, get_backend
+from gpustack.schemas.models import (
+    BackendEnum,
+    Model,
+    get_backend,
+    is_vllm_family,
+)
 from gpustack.schemas.workers import Worker
 
 logger = logging.getLogger(__name__)
@@ -29,7 +34,7 @@ class LabelMatchingFilter(WorkerFilter):
             messages = [
                 f"Matched {len(candidates)}/{len(workers)} workers by label selector: {self._model.worker_selector}."
             ]
-            if get_backend(self._model) == BackendEnum.VLLM:
+            if is_vllm_family(get_backend(self._model)):
                 messages[0] += " (Note: The vLLM backend supports Linux only.)"
             elif get_backend(self._model) == BackendEnum.ASCEND_MINDIE:
                 messages[0] += " (Note: The Ascend MindIE backend supports Linux only.)"

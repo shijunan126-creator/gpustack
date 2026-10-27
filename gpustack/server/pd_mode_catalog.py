@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import yaml
 
-from gpustack.schemas.models import PDModeEnum
+from gpustack.schemas.models import PDModeEnum, catalog_backend_name
 from gpustack.schemas.pd_modes import (
     PDComposedCache,
     PDKVLease,
@@ -564,7 +564,7 @@ def get_pairing_toggles(backend: str) -> List[PDPairingToggle]:
     return [
         toggle
         for toggle in load_pd_mode_catalog().pairing_toggles
-        if toggle.backend == backend
+        if toggle.backend == catalog_backend_name(backend)
     ]
 
 
@@ -572,4 +572,4 @@ def get_composed_cache(backend: str) -> Optional[PDComposedCache]:
     """What this backend requires before a shared cache is folded in beside
     the PD connector, or None when it declares nothing — which is the answer
     for an engine that never composes the two."""
-    return load_pd_mode_catalog().composed_cache.get(backend)
+    return load_pd_mode_catalog().composed_cache.get(catalog_backend_name(backend))

@@ -16,6 +16,7 @@ OPENMETRICS_CONTENT_TYPE = "application/openmetrics-text"
 
 BackendVersionAPI = {
     BackendEnum.VLLM.value: ["version"],
+    BackendEnum.VLLM_ASCEND.value: ["version"],
     BackendEnum.SGLANG.value: ["server_info", "get_server_info"],
     BackendEnum.ASCEND_MINDIE.value: ["info"],
 }

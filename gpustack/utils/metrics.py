@@ -21,4 +21,6 @@ def get_builtin_metrics_config_file_path() -> str:
 
 
 def get_runtime_metrics_config(metrics_config: dict, runtime: str) -> Optional[dict]:
-    return metrics_config.get("runtime_mapping", {}).get(runtime)
+    from gpustack.schemas.models import catalog_backend_name
+
+    return metrics_config.get("runtime_mapping", {}).get(catalog_backend_name(runtime))

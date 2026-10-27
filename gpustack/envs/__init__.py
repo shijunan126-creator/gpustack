@@ -714,3 +714,23 @@ BOOTSTRAP_WITH_EMBEDDED_SOURCES: Optional[bool] = (
     if _bootstrap_with_embedded_sources is None
     else _bootstrap_with_embedded_sources.lower() == "true"
 )
+
+# Repository the vLLM-Ascend backend takes its images from, as
+# ``[http(s)://]host[:port]/namespace/name``. The upstream project publishes
+# releases to quay.io; an air-gapped installation points this at an internal
+# registry that carries the same tags. Plain-HTTP registries need the explicit
+# ``http://`` prefix.
+VLLM_ASCEND_IMAGE_REPOSITORY = (
+    os.getenv("GPUSTACK_VLLM_ASCEND_IMAGE_REPOSITORY") or "quay.io/ascend/vllm-ascend"
+)
+
+# Credentials for listing the tags of the repository above. Anonymous access is
+# used when unset; pulling the image itself is configured through the container
+# runtime's registry credentials.
+VLLM_ASCEND_REGISTRY_USERNAME = os.getenv("GPUSTACK_VLLM_ASCEND_REGISTRY_USERNAME")
+VLLM_ASCEND_REGISTRY_PASSWORD = os.getenv("GPUSTACK_VLLM_ASCEND_REGISTRY_PASSWORD")
+
+# How long a tag listing is reused before the registry is asked again.
+VLLM_ASCEND_TAGS_CACHE_SECONDS = int(
+    os.getenv("GPUSTACK_VLLM_ASCEND_TAGS_CACHE_SECONDS", 600)
+)

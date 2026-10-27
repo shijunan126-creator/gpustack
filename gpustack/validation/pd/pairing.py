@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Union
 from gpustack.api.exceptions import BadRequestException
 from gpustack.schemas.models import (
     BackendEnum,
+    is_vllm_family,
     Model,
     ModelCreate,
     ModelSpecBase,
@@ -181,7 +182,7 @@ def validate_role_pairing(  # noqa: C901
 
     backend = field("backend") or BackendEnum.VLLM.value
     for role, parameters in ((prefill, prefill_params), (decode, decode_params)):
-        if (role.backend or backend) == BackendEnum.VLLM.value:
+        if is_vllm_family(role.backend or backend):
             _validate_connector_json(parameters, role.name)
 
     verdict, prefill_len, decode_len = compare_max_model_len(

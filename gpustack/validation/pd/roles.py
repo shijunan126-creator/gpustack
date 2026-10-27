@@ -4,6 +4,7 @@ from typing import Optional, Union
 
 from gpustack.api.exceptions import BadRequestException
 from gpustack.schemas.models import (
+    catalog_backend_name,
     PD_BACKENDS,
     DisaggregationSpec,
     Model,
@@ -191,7 +192,7 @@ def validate_roles(  # noqa: C901
     if permitted:
         for role in roles:
             role_backend = role.backend or field("backend")
-            if role_backend and role_backend not in permitted:
+            if role_backend and catalog_backend_name(role_backend) not in permitted:
                 raise BadRequestException(
                     message=(
                         f"Role '{role.name}' runs backend '{role_backend}', which "

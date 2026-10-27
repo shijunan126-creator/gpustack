@@ -35,6 +35,7 @@ from gpustack.schemas.model_evaluations import (
 from gpustack.schemas.models import (
     ModelInstance,
     BackendEnum,
+    is_vllm_family,
     SourceEnum,
     get_backend,
     is_gguf_model,
@@ -861,7 +862,7 @@ async def evaluate_environment(
             )
         ]
 
-    if backend == BackendEnum.VLLM:
+    if is_vllm_family(backend):
         message = evaluate_local_extended_kv_cache(model, workers)
         if message:
             return False, [message]
@@ -1028,7 +1029,7 @@ def hybrid_verdict_possible(
     # Both verdicts are about vLLM's connectors. SGLang's in-process mode
     # runs its own hierarchical cache, and its LMCache adapter has not been
     # run against a hybrid model.
-    if get_backend(model) != BackendEnum.VLLM:
+    if not is_vllm_family(get_backend(model)):
         return False
 
     if ext.is_local():

@@ -30,6 +30,7 @@ from gpustack.schemas.models import (
     ModelInstanceStateEnum,
     ModelInstancesPublic,
     BackendEnum,
+    is_vllm_family,
     ModelListParams,
     shared_cache_service_ids_by_role,
 )
@@ -888,7 +889,7 @@ async def validate_gpu_ids(  # noqa: C901
         if gpu:
             validate_gpu(gpu, model_backend=model_backend)
 
-        if model_backend == BackendEnum.VLLM and len(worker_name_set) > 1:
+        if is_vllm_family(model_backend) and len(worker_name_set) > 1:
             await validate_distributed_vllm_limit_per_worker(session, model_in, worker)
 
     if (

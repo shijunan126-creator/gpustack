@@ -21,6 +21,7 @@ from gpustack_runner.runner import (
 )
 
 from gpustack.mixins import BaseModelMixin
+from gpustack.utils.vllm_ascend_images import SERVICE_NAME, list_runners_from_registry
 from .inference_backend import (
     built_in_backend_names_by_service,
     deployed_backend_versions,
@@ -193,6 +194,10 @@ def merged_runners(overrides: List[RunnerOverrideEntry], **filters) -> Runners:
     - Decided on the *unfiltered* rows: a scoped query the document has nothing for
       comes back empty instead of falling back to images it replaced.
     """
+    if filters.get("service") == SERVICE_NAME:
+        # vLLM-Ascend images follow a tag convention instead of being listed in
+        # the packaged catalog or an override source.
+        return _filter_overrides(list_runners_from_registry(), **filters)
     if overrides:
         return _filter_overrides(
             [_to_runner(override) for override in overrides], **filters

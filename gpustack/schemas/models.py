@@ -89,10 +89,30 @@ class PlacementStrategyEnum(str, Enum):
 
 class BackendEnum(str, Enum):
     VLLM = "vLLM"
+    VLLM_ASCEND = "vLLM-Ascend"
     VOX_BOX = "VoxBox"
     ASCEND_MINDIE = "MindIE"
     SGLANG = "SGLang"
     CUSTOM = "Custom"
+
+
+# Engines that run the same vLLM server, command line and disaggregation
+# recipes. vLLM-Ascend differs from vLLM in where its images come from and in
+# which devices it runs on, not in how it is driven.
+VLLM_FAMILY = (BackendEnum.VLLM, BackendEnum.VLLM_ASCEND)
+
+
+def is_vllm_family(backend: Optional[str]) -> bool:
+    return backend in VLLM_FAMILY
+
+
+def catalog_backend_name(backend: Optional[str]) -> Optional[str]:
+    """The backend name the string-keyed catalogs (PD modes, metrics, cache
+    providers) know the engine by. vLLM-Ascend shares vLLM's entries; what
+    differs is filtered by device vendor inside those catalogs."""
+    if backend == BackendEnum.VLLM_ASCEND:
+        return BackendEnum.VLLM.value
+    return backend
 
 
 class BackendSourceEnum(str, Enum):
@@ -691,6 +711,7 @@ class PDModeEnum(str, Enum):
 # disaggregation protocol is one this form should not offer.
 PD_BACKENDS: List[str] = [
     BackendEnum.VLLM.value,
+    BackendEnum.VLLM_ASCEND.value,
     BackendEnum.SGLANG.value,
     # A user-supplied engine image, which is how a BYO engine runs PD here.
     BackendEnum.CUSTOM.value,
@@ -1171,7 +1192,7 @@ class ModelSpecBase(SQLModel, ModelSource):
             self.distributed_inference_across_workers = (
                 True
                 if backend
-                in [BackendEnum.VLLM, BackendEnum.ASCEND_MINDIE, BackendEnum.SGLANG]
+                in [*VLLM_FAMILY, BackendEnum.ASCEND_MINDIE, BackendEnum.SGLANG]
                 else False
             )
         return self
@@ -2103,7 +2124,7 @@ def is_omni_model(model: Model) -> bool:
         model: Model to check.
     """
 
-    if model.backend == BackendEnum.VLLM and find_bool_parameter(
+    if is_vllm_family(model.backend) and find_bool_parameter(
         model.backend_parameters, ["omni"]
     ):
         return True

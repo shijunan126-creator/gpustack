@@ -1395,10 +1395,13 @@ class CacheProvider(BaseModel):
         validation before scheduling) a scoped-only declaration still
         answers "attachable" through any entry for the backend.
         """
+        from gpustack.schemas.models import catalog_backend_name
+
+        wanted = (catalog_backend_name(backend_name) or "").lower()
         matches = [
             entry
             for entry in self.inference_backend_integrations
-            if entry.backend.lower() == (backend_name or "").lower()
+            if entry.backend.lower() == wanted
         ]
         if framework:
             for entry in matches:

@@ -27,6 +27,7 @@ import logging
 from typing import Dict, List, Optional, Set
 
 from gpustack.schemas.pd_modes import PDMode
+from gpustack.schemas.models import catalog_backend_name
 from gpustack.server.pd_mode_catalog import get_pd_modes
 from gpustack.schemas.pd_mode_resolution import (
     PDModeEligibility,
@@ -47,7 +48,7 @@ def _mode_vendors(mode: PDMode) -> Set[str]:
 def _fits_backend(mode: PDMode, backend: Optional[str]) -> bool:
     if not mode.backends or not backend:
         return True
-    return backend in mode.backends
+    return catalog_backend_name(backend) in mode.backends
 
 
 def _built_in_candidates(
