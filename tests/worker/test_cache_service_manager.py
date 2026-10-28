@@ -3039,3 +3039,53 @@ def test_unhealthy_container_recovery_does_not_wait_for_a_quiet_log_writer(resta
     else:
         delete.assert_not_called()
         assert update.call_args.kwargs["state"] == CacheServiceStateEnum.ERROR
+
+
+def test_start_instance_writes_the_component_config_files():
+    """A component that reads its settings from a file gets it rendered
+    against the launch namespace and placed in the container, with the
+    env var that names it alongside."""
+    from gpustack.server.cache_provider_catalog import asset_providers
+
+    provider = next(p for p in asset_providers() if p.name == "MemCache")
+    manager, clientset = _build_manager(worker_id=1)
+    cache_service = _new_cache_service(
+        provider_name="MemCache",
+        provider_version="custom",
+        config=CacheServiceConfig(
+            fields={"config_store_port": 6100, "evict_threshold_high": 70},
+            image="quay.io/ascend/vllm-ascend:test",
+        ),
+    )
+
+    create, update = _run_start(
+        manager,
+        clientset,
+        cache_service,
+        provider,
+        instance=_new_instance(component="meta"),
+    )
+
+    container = create.call_args[0][0].containers[0]
+    assert update.call_args[1].get("state") != CacheServiceStateEnum.ERROR
+    assert container.image == "quay.io/ascend/vllm-ascend:test"
+    assert container.execution.command[:2] == ["bash", "-c"]
+    assert "MetaService.main()" in container.execution.command[2]
+    env = {e.name: e.value for e in container.envs}
+    assert env["MMC_META_CONFIG_PATH"] == "/tmp/gpustack-mmc-meta.conf"
+    # The MetaService holds no card, so none is mounted into it.
+    assert not container.resources
+    (config_file,) = container.files
+    assert config_file.path == "/tmp/gpustack-mmc-meta.conf"
+    lines = config_file.content.splitlines()
+    assert "ock.mmc.meta_service_url = tcp://10.0.0.1:40001" in lines
+    assert "ock.mmc.meta_service.config_store_url = tcp://10.0.0.1:6100" in lines
+    assert "ock.mmc.meta_service.metrics_url = http://10.0.0.1:40002" in lines
+    assert "ock.mmc.evict_threshold_high = 70" in lines
+    assert "ock.mmc.evict_threshold_low = 80" in lines
+
+
+def test_start_instance_without_component_files_mounts_none():
+    manager, clientset = _build_manager(worker_id=1)
+    create, _ = _run_start(manager, clientset, _new_cache_service(), _new_provider())
+    assert not create.call_args[0][0].containers[0].files

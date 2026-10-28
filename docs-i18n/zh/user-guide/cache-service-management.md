@@ -73,6 +73,28 @@ Setting attention block size to 544 tokens to ensure that attention page size is
 
 [混合注意力模型](https://docs.lmcache.ai/mp/hybrid_models.html)——LMCache 官方对此要求的说明，以及缓存服务器为此提供的参数。
 
+## 在昇腾上使用 MemCache { #using-memcache-on-ascend }
+
+MemCache 是昇腾基于 MemFabric 构建的分布式 KV Cache 池。它与 LMCache 的区别在于缓存所在的位置：GPUStack 只运行一个负责索引缓存池的 `MetaService`，每个 vLLM-Ascend 引擎在自己的进程内贡献主机内存，并自行在 NPU 内存与缓存池之间搬运 KV 块。它仅适用于 vLLM-Ascend 部署，通过 vllm-ascend 的 `AscendStoreConnector` 接入。
+
+使用要求：
+
+- vLLM-Ascend 0.23.0 及以上，运行在 Ascend A2、A3 或 950PR/950DT 的 worker 上。
+- 镜像需包含 `memcache_hybrid` 与 `memfabric_hybrid` 包。MemCache 没有独立的发布版本线，因此请将`版本`选为`自定义`并填写镜像，通常就是部署所用的 vLLM-Ascend 镜像。
+- 按所选传输方式完成宿主机准备，参见 [vllm-ascend KV 池指南](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html)：RoCE 需要大页（`vm.nr_hugepages`）与 `/etc/hccn.conf`，A3 上使用 `device_sdma` 需要灵衢计算网络 1.5 及以上。
+
+按[创建缓存服务](#create-a-cache-service)的步骤创建，并设置：
+
+- `单卡内存贡献（GiB）`：每个引擎进程为其使用的每张卡贡献的主机内存。缓存池容量为该值乘以所有接入引擎的卡数。这部分内存由引擎自行占用，调度器不会为其预留，请为系统、引擎和这部分内存在每个 worker 上留足空闲内存。
+- `传输协议`：A2 使用 `device_rdma`，A3 经 HCCS 使用 `device_sdma`，950PR/950DT 使用 `device_urma` 或 `device_uboe`。同一服务的所有 worker 共用该选择。
+- `配置存储端口`：运行 `MetaService` 的 worker 上的空闲端口，引擎加入缓存池时在此汇合。
+
+按[接入部署](#attach-a-deployment)的步骤接入。在 vLLM-Ascend 的 PD 模式下，MemCache 在两个角色上均被接受，prefill 为生产者，decode 为消费者。
+
+!!! note
+
+    逐层传输、SSD 层以及将缓存池本地服务作为独立进程运行暂不提供。所有共享同一缓存池的引擎必须使用相同的 `PYTHONHASHSEED`，GPUStack 会注入 `0`。
+
 ## 自定义缓存提供商 { #customize-cache-providers }
 
 可选择的提供商包括当前版本内置的提供商，以及已安装扩展添加的提供商。平台管理员可以用自己的文档替换整个集合，以固定其他镜像、添加版本，或声明 GPUStack 未内置的提供商。

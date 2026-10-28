@@ -902,3 +902,170 @@
           /tmp/gpustack-lmcache-sgl.yaml: |
             mp_host: "{{host}}"
             mp_port: {{port}}
+
+# Ascend MemCache: a distributed KV cache pool built on MemFabric. Unlike a
+# cache server per node, the pool's data path lives inside the engines: each
+# vllm-ascend process embeds a LocalService that contributes DRAM per card
+# and moves KV blocks between HBM and the pooled DRAM, and the only process
+# GPUStack runs is the MetaService that indexes the pool. Engines attach
+# through vllm-ascend's AscendStoreConnector with the memcache backend.
+- name: MemCache
+  display_name: MemCache
+  source: built_in
+  icon: /static/catalog_icons/memcache.svg
+  description:
+    default: >-
+      MemCache is Ascend's distributed KV cache pool, built on MemFabric. A
+      MetaService indexes the pool; every vLLM-Ascend engine contributes host
+      DRAM from its own process and reads and writes KV blocks through the
+      pool, so deployments and nodes reuse each other's prefixes without
+      recomputing them.
+    zh-CN: >-
+      MemCache 是昇腾的分布式 KV Cache 池，基于 MemFabric 构建。MetaService
+      负责索引，每个 vLLM-Ascend 引擎在自己的进程内贡献一部分内存，并通过缓存池读写
+      KV 块，使不同部署、不同节点之间复用前缀而不必重新计算。
+  links:
+    - label: { default: Documentation, zh-CN: 文档 }
+      url: "https://gitcode.com/Ascend/memcache/"
+    - label: { default: Usage with vLLM-Ascend, zh-CN: 与 vLLM-Ascend 配合使用 }
+      url: "https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html"
+  # One MetaService serves the cluster; engines on any worker reach it over
+  # the network, since the pool's transfers are the engines' own.
+  attach_locality: cluster
+  # The image is the one carrying the memcache_hybrid wheel and its
+  # MemFabric libraries (a vllm-ascend runner image), and it is not
+  # published under a version line of its own, so every service names it.
+  custom_version: true
+  components:
+    meta:
+      topology: replicas
+      replicas: 1
+      attach_endpoint: true
+      gpu_access: false
+      # The service port is the metadata endpoint engines dial. The config
+      # store the engines rendezvous at is the `config_store_port` field,
+      # because an engine's injection sees the endpoint's address and
+      # service port but not the instance's other allocations.
+      ports: [port, metrics]
+      health_check:
+        scheme: tcp
+      env:
+        MMC_META_CONFIG_PATH: /tmp/gpustack-mmc-meta.conf
+      # The MetaService does not touch a card; the environment scripts only
+      # put the MemFabric and CANN libraries on the loader path, where the
+      # image has them.
+      run_command: >-
+        bash -c "for f in /usr/local/Ascend/ascend-toolkit/set_env.sh
+        /usr/local/memfabric_hybrid/set_env.sh
+        /usr/local/memcache_hybrid/set_env.sh; do [ -f $f ] && . $f; done;
+        exec python3 -c 'from memcache_hybrid import MetaService; MetaService.main()'"
+      files:
+        /tmp/gpustack-mmc-meta.conf: |
+          ock.mmc.meta_service_url = tcp://{{worker_ip}}:{{port}}
+          ock.mmc.meta_service.config_store_url = tcp://{{worker_ip}}:{{config_store_port}}
+          ock.mmc.meta_service.metrics_url = http://{{worker_ip}}:{{ports.metrics}}
+          ock.mmc.log_level = info
+          ock.mmc.evict_threshold_high = {{evict_threshold_high}}
+          ock.mmc.evict_threshold_low = {{evict_threshold_low}}
+  resource_profile:
+    cpu: 1
+  fields:
+    - name: dram_per_die
+      label: { default: DRAM per Card (GiB), zh-CN: 单卡内存贡献（GiB） }
+      description:
+        default: >-
+          Host DRAM each engine process contributes to the pool per card it
+          uses. The pool holds this multiplied by the number of cards across
+          all attached engines. It is taken from the worker's memory by the
+          engines themselves, so the scheduler does not reserve it: leave
+          enough free memory on every worker for the operating system, the
+          engines and this contribution.
+        zh-CN: >-
+          每个引擎进程为其使用的每张卡向缓存池贡献的主机内存。缓存池总容量为该值乘以所有接入引擎
+          的卡数。这部分内存由引擎自行占用，调度器不会为其预留，请为操作系统、引擎和这部分内存
+          留足 worker 的空闲内存。
+      type: number
+      required: true
+      default: 20
+      min: 1
+      step: 1
+    - name: protocol
+      label: { default: Transport Protocol, zh-CN: 传输协议 }
+      description:
+        default: >-
+          How engines move data to and from the pool. device_rdma (RoCE) is
+          the choice on A2. device_sdma uses A3 HCCS and needs LingQu
+          Computing Network 1.5 or later. device_urma and device_uboe are for
+          950PR and 950DT products.
+        zh-CN: >-
+          引擎与缓存池之间的数据传输方式。A2 使用 device_rdma（RoCE）；device_sdma 走 A3 的
+          HCCS，需要灵衢计算网络 1.5 及以上；device_urma 与 device_uboe 用于 950PR、950DT 产品。
+      default: device_rdma
+      options: [device_rdma, device_sdma, device_urma, device_uboe]
+    - name: config_store_port
+      label: { default: Config Store Port, zh-CN: 配置存储端口 }
+      description:
+        default: >-
+          Port of the MetaService's config store, which engines rendezvous at
+          when they join the pool. It is bound on the worker running the
+          MetaService, so it must be free there.
+        zh-CN: >-
+          MetaService 的配置存储端口，引擎加入缓存池时在此汇合。它绑定在运行 MetaService 的
+          worker 上，需保证该端口空闲。
+      type: number
+      required: true
+      default: 6000
+      min: 1025
+      max: 65535
+      step: 1
+    - name: evict_threshold_high
+      label: { default: Eviction High Watermark (%), zh-CN: 淘汰高水位（%） }
+      description:
+        default: Pool usage percentage that triggers eviction.
+        zh-CN: 触发淘汰的缓存池使用率百分比。
+      type: number
+      default: 90
+      min: 1
+      max: 99
+      step: 1
+    - name: evict_threshold_low
+      label: { default: Eviction Low Watermark (%), zh-CN: 淘汰低水位（%） }
+      description:
+        default: Pool usage percentage at which eviction stops.
+        zh-CN: 淘汰停止时的缓存池使用率百分比。
+      type: number
+      default: 80
+      min: 1
+      max: 98
+      step: 1
+  inference_backend_integrations:
+    # vLLM-Ascend shares vLLM's catalog entries; the framework scopes this
+    # one to Ascend workers. AscendStoreConnector arrived in vllm-ascend
+    # 0.23.0, the same baseline the Ascend PD recipe names.
+    - backend: vLLM
+      frameworks: [cann]
+      versions: ">=0.23.0"
+      injection:
+        env:
+          # Every process must hash blocks alike, or a block one engine
+          # stored is never found by another.
+          PYTHONHASHSEED: "0"
+          MMC_LOCAL_CONFIG_PATH: /tmp/gpustack-mmc-local.conf
+        kv_transfer_config:
+          kv_connector: AscendStoreConnector
+          kv_role: kv_both
+          kv_connector_extra_config:
+            backend: memcache
+            # Names the engine's own scheduler-to-worker socket, which
+            # lives in the engine container.
+            lookup_rpc_port: "0"
+            use_layerwise: false
+        files:
+          /tmp/gpustack-mmc-local.conf: |
+            ock.mmc.meta_service_url = tcp://{{host}}:{{port}}
+            ock.mmc.local_service.config_store_url = tcp://{{host}}:{{config_store_port}}
+            ock.mmc.log_level = info
+            ock.mmc.local_service.world_size = 256
+            ock.mmc.local_service.protocol = {{protocol}}
+            ock.mmc.local_service.dram.size = {{dram_per_die}}GB
+            ock.mmc.local_service.max.dram.size = 1024GB

@@ -678,6 +678,14 @@ class CacheProviderComponent(BaseModel):
     """Env template for this component's container; values support
     {{placeholder}} including cross-component addresses."""
 
+    files: Dict[str, str] = {}
+    """Config files written into this component's container before it
+    starts, keyed by absolute path; contents support {{placeholder}}, with
+    the same namespace as the launch templates. For a server that reads
+    its settings from a path (named by an env var, say) rather than from
+    flags. An unknown placeholder is left as written, as in a launch
+    template."""
+
     data_dirs: List[str] = []
     """Directories this component keeps its data in (templates, e.g. a
     configured disk-tier path). The worker creates each before the

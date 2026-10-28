@@ -1756,3 +1756,74 @@ def test_a_component_may_declare_its_own_completion_hints():
     # already its own
     assert server.common_parameters == []
     assert "--l1-size-gb" not in coordinator.common_parameters
+
+
+def test_memcache_attaches_vllm_ascend_through_the_ascend_store_connector():
+    provider = _asset_provider("MemCache")
+    assert provider is not None
+    # The pool is reached over the network from any worker, and its image is
+    # whichever carries the memcache wheel, so a service names it itself.
+    assert provider.attach_locality == "cluster"
+    assert provider.custom_version
+    assert provider.attach_component() == "meta"
+
+    rendered = render_injection(
+        provider,
+        "vLLM-Ascend",
+        {"host": "10.0.0.5", "port": 5000, "locality": "remote"},
+        framework="cann",
+    )
+    assert rendered is not None
+    env, args, files = rendered
+    assert env == {
+        "PYTHONHASHSEED": "0",
+        "MMC_LOCAL_CONFIG_PATH": "/tmp/gpustack-mmc-local.conf",
+    }
+    assert args[0] == "--kv-transfer-config"
+    assert json.loads(args[1]) == {
+        "kv_connector": "AscendStoreConnector",
+        "kv_role": "kv_both",
+        "kv_connector_extra_config": {
+            "backend": "memcache",
+            "lookup_rpc_port": "0",
+            "use_layerwise": False,
+        },
+    }
+    local_conf = files["/tmp/gpustack-mmc-local.conf"]
+    assert "ock.mmc.meta_service_url = tcp://10.0.0.5:5000" in local_conf
+    assert "ock.mmc.local_service.config_store_url = tcp://10.0.0.5:6000" in local_conf
+    assert "ock.mmc.local_service.protocol = device_rdma" in local_conf
+    assert "ock.mmc.local_service.dram.size = 20GB" in local_conf
+    assert "{{" not in local_conf
+
+
+def test_memcache_is_scoped_to_ascend_workers():
+    """The connector is vllm-ascend's; a CUDA worker has no integration to
+    attach through, so the instance starts without the cache."""
+    provider = _asset_provider("MemCache")
+    assert provider.integration_for("vLLM", "cuda") is None
+    assert provider.integration_for("vLLM", "cann") is not None
+    assert render_injection(provider, "vLLM", {"host": "h", "port": 1}, "cuda") is None
+    assert (
+        render_injection(provider, "SGLang", {"host": "h", "port": 1}, "cann") is None
+    )
+
+
+def test_memcache_field_values_reach_the_engine_config():
+    provider = _asset_provider("MemCache")
+    rendered = render_injection(
+        provider,
+        "vLLM",
+        {
+            "host": "10.0.0.5",
+            "port": 5000,
+            "protocol": "device_sdma",
+            "dram_per_die": 40,
+            "config_store_port": 6100,
+        },
+        framework="cann",
+    )
+    local_conf = rendered[2]["/tmp/gpustack-mmc-local.conf"]
+    assert "config_store_url = tcp://10.0.0.5:6100" in local_conf
+    assert "protocol = device_sdma" in local_conf
+    assert "dram.size = 40GB" in local_conf

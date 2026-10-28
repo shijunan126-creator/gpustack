@@ -13,6 +13,7 @@ from gpustack_runtime.deployer import (
     Container,
     ContainerEnv,
     ContainerExecution,
+    ContainerFile,
     ContainerProfileEnum,
     ContainerResources,
     ContainerRestartPolicyEnum,
@@ -43,6 +44,7 @@ from gpustack.schemas.cache_providers import (
     CacheProviderVersionConfig,
     render_argument,
     render_l2_adapter,
+    render_template,
     resolved_field_values,
 )
 from gpustack.schemas.cache_service_resources import cache_service_resource_claim
@@ -396,6 +398,7 @@ class CacheServiceManager:
                 envs=[
                     ContainerEnv(name=name, value=value) for name, value in env.items()
                 ],
+                files=self._build_files(component_spec, params),
                 resources=(
                     self._gpu_resources()
                     if component_spec is None or component_spec.gpu_access
@@ -738,6 +741,20 @@ class CacheServiceManager:
                 else list(user_parameters)
             )
         return argv, overrides_entrypoint
+
+    @staticmethod
+    def _build_files(
+        component_spec: Optional[CacheProviderComponent], params: Dict[str, Any]
+    ) -> Optional[List[ContainerFile]]:
+        """The config files the component declares, rendered against the
+        launch namespace, for the runtime to place in the container before
+        it starts. None when there are none."""
+        if component_spec is None or not component_spec.files:
+            return None
+        return [
+            ContainerFile(path=path, content=render_template(content, params))
+            for path, content in component_spec.files.items()
+        ]
 
     @staticmethod
     def _prepare_data_dirs(component_spec, params: Dict[str, Any]) -> None:

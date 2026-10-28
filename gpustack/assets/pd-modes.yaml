@@ -917,6 +917,15 @@ modes:
             kv_role: kv_producer
           decode:
             kv_role: kv_consumer
+      # MemCache is also reached through AscendStoreConnector, so it composes
+      # with the Mooncake transfer connector the same way.
+      - provider: MemCache
+        backend_versions: ">=0.23.0"
+        roles:
+          prefill:
+            kv_role: kv_producer
+          decode:
+            kv_role: kv_consumer
     # PD variants: standard=MooncakeConnectorV1; hybrid=MooncakeHybridConnector.
     # Standard examples: Qwen3, GLM-5, DeepSeek V3.1.
     # Hybrid examples: DeepSeek V4 / V4 Flash / V4 Pro.
@@ -927,7 +936,7 @@ modes:
     # in_process (NPU/CPU offload):
     #   P: MultiConnector[PD(P), SimpleCPUOffloadConnector(B)]
     #   D: MultiConnector[PD(D), SimpleCPUOffloadConnector(B)]
-    # cache_service (Mooncake only):
+    # cache_service (Mooncake or MemCache):
     #   P: MultiConnector[PD(P), AscendStoreConnector(P)]
     #   D: MultiConnector[PD(D), AscendStoreConnector(D)]
     # MultiConnector resolves to AscendMultiConnector in vllm-ascend.
