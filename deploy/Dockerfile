@@ -27,11 +27,20 @@ RUN pnpm install --frozen-lockfile --registry "${NPM_REGISTRY}" \
 FROM gpustack/gpustack:${GPUSTACK_VERSION}
 
 ARG PKG=/usr/local/lib/python3.11/dist-packages/gpustack
+# Recorded on the image to tell which commit of this repository it was built from.
+ARG FORK_COMMIT=unknown
+LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
+
+# The release build stamps the version into gpustack/__init__.py; the repository
+# holds a placeholder. Keep the stamp of the base image.
+RUN grep -E "^__(version|git_commit)__ = " "${PKG}/__init__.py" > /tmp/version-stamp
 
 # Backend: make the package's Python sources match the repository exactly, so a
 # file the fork deleted does not linger from the base image.
 RUN find "${PKG}" -type f \( -name '*.py' -o -name '*.pyc' \) -not -path "${PKG}/ui/*" -delete
 COPY gpustack/ ${PKG}/
+RUN sed -i -E "/^__(version|git_commit)__ = /d" "${PKG}/__init__.py" \
+    && cat /tmp/version-stamp >> "${PKG}/__init__.py" && rm /tmp/version-stamp
 
 # Frontend: the UI directory is replaced wholesale. The backend ships its own
 # static files into ui/static (catalog icons from the repository's static/, the
@@ -51,4 +60,5 @@ RUN python -m compileall -q "${PKG}" \
     && rm /tmp/check_imports.py \
     && test "$(ls ${PKG}/ui/static/catalog_icons | wc -l)" -ge 47 \
     && test -n "$(ls ${PKG}/ui/static/charts)" \
-    && test -f "${PKG}/ui/index.html"
+    && test -f "${PKG}/ui/index.html" \
+    && python -c "import gpustack; assert gpustack.__version__ != '0.0.0', 'version stamp lost'"
