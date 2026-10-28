@@ -1352,3 +1352,14 @@ def test_dynamic_membership_requires_a_launched_api():
 
     with pytest.raises(ValidationError, match="membership API"):
         PDRouter(protocol="user_provided", membership_update="dynamic")
+
+
+def test_ascend_mooncake_mode_composes_with_memcache():
+    """MemCache attaches through the same AscendStoreConnector as Mooncake's
+    store, so the Ascend PD recipe accepts it on both roles with the producer
+    and consumer roles the pool expects."""
+    mode = get_pd_mode(PDModeEnum.VLLM_ASCEND_MOONCAKE)
+    assert mode.cache_service_reason("MemCache", "prefill") is None
+    assert mode.cache_service_reason("MemCache", "decode") is None
+    assert mode.cache_service_role("MemCache", "prefill").kv_role == "kv_producer"
+    assert mode.cache_service_role("MemCache", "decode").kv_role == "kv_consumer"

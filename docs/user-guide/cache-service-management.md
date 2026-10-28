@@ -69,6 +69,28 @@ Deploy the model as in [Attach a Deployment](#attach-a-deployment), choosing the
 
 [Hybrid Attention Models](https://docs.lmcache.ai/mp/hybrid_models.html) — LMCache's own account of the same requirement, and the flags its server takes for it.
 
+## Using MemCache on Ascend { #using-memcache-on-ascend }
+
+MemCache is Ascend's distributed KV cache pool, built on MemFabric. It differs from LMCache in where the cache lives: GPUStack runs one `MetaService` that indexes the pool, and every vLLM-Ascend engine contributes host DRAM from inside its own process and moves KV blocks between NPU memory and the pool itself. It attaches to vLLM-Ascend deployments only, through vllm-ascend's `AscendStoreConnector`.
+
+Requirements:
+
+- vLLM-Ascend 0.23.0 or later, on Ascend A2, A3 or 950PR/950DT workers.
+- An image that carries the `memcache_hybrid` and `memfabric_hybrid` packages. MemCache has no release line of its own, so select `Custom` as the `Version` and enter the image, normally the vLLM-Ascend image the deployments use.
+- Host setup for the transport you choose, as described in the [vllm-ascend KV pool guide](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html): huge pages (`vm.nr_hugepages`) and `/etc/hccn.conf` on RoCE, and LingQu Computing Network 1.5 or later for `device_sdma` on A3.
+
+Create the service as in [Create a Cache Service](#create-a-cache-service), then set:
+
+- `DRAM per Card (GiB)`: the host memory each engine process contributes per card it uses. The pool holds this multiplied by the cards of every attached engine. The engines take this memory themselves and the scheduler does not reserve it, so keep enough free on each worker for the system, the engines and this contribution.
+- `Transport Protocol`: `device_rdma` on A2, `device_sdma` on A3 over HCCS, `device_urma` or `device_uboe` on 950PR/950DT. All workers of one service share the choice.
+- `Config Store Port`: a free port on the worker running the `MetaService`, where engines rendezvous when they join the pool.
+
+Attach a deployment as in [Attach a Deployment](#attach-a-deployment). With the vLLM-Ascend PD mode, MemCache is accepted on both roles, with prefill as the producer and decode as the consumer.
+
+!!! note
+
+    Layer-by-layer transfer, the SSD tier and running the pool's local service as a separate process are not exposed. Set `PYTHONHASHSEED` identically wherever engines share a pool; GPUStack injects `0`.
+
 ## Customize Cache Providers
 
 The providers you can pick from are the ones this release carries, plus any an installed extension adds. Platform admins can replace that set with a document of their own — to pin a different image, add a version, or declare a provider GPUStack does not ship.
