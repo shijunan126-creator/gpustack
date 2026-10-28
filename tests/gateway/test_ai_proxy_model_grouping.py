@@ -21,7 +21,6 @@ from gpustack.gateway.utils import (
     provider_id_prefix,
 )
 
-from gpustack.schemas.model_provider import ModelProvider
 from gpustack.schemas.models import Model
 
 ROUTE_A = "default/ai-route-route-1.internal"
@@ -522,8 +521,9 @@ def test_another_routes_legacy_entry_is_left_alone():
 
 @pytest.mark.asyncio
 async def test_startup_cleanup_drops_only_entries_nothing_will_reconcile():
-    """The startup pass keeps live providers and live deployments, and
-    retires every legacy per-route entry wholesale — running this pass
+    """The startup pass keeps live deployments, and retires every legacy
+    per-route entry wholesale — the leftover entries of the removed external
+    model providers (``provider-N``) go with them — running this pass
     means control is already on this server version, so the per-route
     entries are dropped in one deterministic write instead of racing
     per-route retirements against sibling reconciles; the replay
@@ -560,17 +560,13 @@ async def test_startup_cleanup_drops_only_entries_nothing_will_reconcile():
         patch("gpustack.gateway.utils.k8s_client.ApiClient"),
     ):
         await cleanup_ai_proxy_config(
-            providers=[ModelProvider(id=3, name="p3")],
             models=[Model(id=5, name="m5")],
             k8s_config=MagicMock(),
             namespace="higress-system",
         )
 
     body = api.edit_wasmplugin.await_args.kwargs["body"]
-    assert _provider_ids(body.spec) == [
-        "gpustack-model-5",
-        "provider-3",
-    ]
+    assert _provider_ids(body.spec) == ["gpustack-model-5"]
     assert _rule_keys(body.spec) == [
         ("gpustack-model-5", (), ("model-5-1.static",)),
     ]
@@ -578,8 +574,8 @@ async def test_startup_cleanup_drops_only_entries_nothing_will_reconcile():
 
 @pytest.mark.asyncio
 async def test_startup_cleanup_drops_only_dead_providers():
-    """Retention is judged by provider id: entries of a deployment or provider
-    that no longer exists are dropped, a rule a deleted route left behind on a
+    """Retention is judged by provider id: entries of a deployment that no
+    longer exists, and any leftover of an external model provider, are dropped, a rule a deleted route left behind on a
     live deployment is kept (inert — no route leads traffic to those services
     — and retired with the deployment), and the legacy per-route entry of a
     route that no longer exists is dropped.
@@ -610,7 +606,6 @@ async def test_startup_cleanup_drops_only_dead_providers():
         patch("gpustack.gateway.utils.k8s_client.ApiClient"),
     ):
         await cleanup_ai_proxy_config(
-            providers=[ModelProvider(id=3, name="p3")],
             models=[Model(id=5, name="m5")],
             k8s_config=MagicMock(),
             namespace="higress-system",
@@ -619,9 +614,8 @@ async def test_startup_cleanup_drops_only_dead_providers():
     body = api.edit_wasmplugin.await_args.kwargs["body"]
     assert _rule_keys(body.spec) == [
         ("gpustack-model-5", (), ("model-5-1.static",)),
-        ("provider-3", (), ("provider-3.dns",)),
     ]
-    assert _provider_ids(body.spec) == ["gpustack-model-5", "provider-3"]
+    assert _provider_ids(body.spec) == ["gpustack-model-5"]
 
 
 def test_none_config_and_default_config_are_tolerated():

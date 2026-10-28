@@ -51,7 +51,6 @@ from gpustack.schemas.models import (
     ModelInstancePublic,
 )
 from gpustack.schemas.model_provider import (
-    ModelProvider,
     ModelProviderTypeEnum,
 )
 from gpustack.schemas.model_routes import ModelRoute
@@ -77,6 +76,8 @@ gpustack_model_mapper_name = "gpustack-model-mapper"
 gpustack_generic_proxy_router_name = "gpustack-model-router"
 model_ingress_prefix = "ai-route-model-"
 model_route_ingress_prefix = "ai-route-route-"
+# Registries and proxies of the removed external model providers carried this
+# prefix; the startup cleanup still sweeps them away.
 provider_id_prefix = "provider-"
 model_id_prefix = "model-"
 # AI proxy provider id prefix for self-hosted deployments. One provider per
@@ -477,122 +478,6 @@ def cluster_registry(cluster: Cluster) -> Optional[McpBridgeRegistry]:
         protocol="http",
         type="static",
     )
-
-
-def provider_registry_name(id: int) -> str:
-    return f"{provider_id_prefix}{id}"
-
-
-def provider_proxy_name(id: int) -> str:
-    return f"{provider_registry_name(id)}-proxy"
-
-
-def provider_registry(provider: ModelProvider) -> Optional[McpBridgeRegistry]:
-    provider_url = provider.config.get_base_url()
-    if provider_url is None:
-        return None
-    result = urlparse(url=provider_url)
-    protocol = "http" if result.scheme == "http" else "https"
-    port = 443 if protocol == "https" else 80
-    registry_type = (
-        "static" if result.hostname and is_ipaddress(result.hostname) else "dns"
-    )
-    if registry_type == "static":
-        domain = result.netloc
-        if result.port is None:
-            domain = f"{domain}:{port}"
-    else:
-        domain = result.hostname
-        if result.port is not None:
-            port = result.port
-    registry_name = provider_registry_name(provider.id)
-    proxyName = f"{registry_name}-proxy" if provider.proxy_url else None
-    return McpBridgeRegistry(
-        domain=domain,
-        port=port,
-        name=registry_name,
-        protocol=protocol,
-        type=registry_type,
-        proxyName=proxyName,
-    )
-
-
-def provider_proxy(provider: ModelProvider) -> Optional[McpBridgeProxy]:
-    if provider.proxy_url is None:
-        return None
-    proxy_url = urlparse(provider.proxy_url)
-    scheme = proxy_url.scheme
-    port = proxy_url.port
-    if port is None:
-        port = 443 if scheme == "https" else 80
-    # timeout in seconds
-    connection_timeout = provider.proxy_timeout or 5
-    return McpBridgeProxy(
-        name=provider_proxy_name(provider.id),
-        serverAddress=proxy_url.hostname,
-        serverPort=port,
-        type=scheme.upper(),
-        # convert to milliseconds
-        connectTimeout=connection_timeout * 1000,
-    )
-
-
-def provider_proxy_plugin_spec(
-    *providers: ModelProvider,
-) -> Tuple[List[Dict[str, Any]], List[WasmPluginMatchRule]]:
-    provider_list = []
-    match_rules = []
-    sorted_providers: List[ModelProvider] = sorted(providers, key=lambda p: p.id)
-    for provider in sorted_providers:
-        # Imported lazily: the plugin package's __init__ pulls the route
-        # plugin, which pulls this module -- a module-level import cycles.
-        from gpustack.routes.plugins.decision_service.providers import (
-            is_decision_config,
-        )
-
-        if is_decision_config(provider.config):
-            # A Jev decision service feeds the gpustack-lb-decision-service
-            # plugin's providers catalogue, not the inference proxy;
-            # riding the ai-proxy catalogue would deploy an unreachable
-            # provider and a matchRule on a service nobody selects.
-            continue
-        registry = provider_registry(provider)
-        if registry is None:
-            continue
-        service_name = registry.get_service_name()
-        default_config_data = {
-            "id": provider_registry_name(provider.id),
-            "apiTokens": provider.api_tokens,
-            **provider.config.model_dump_with_default_override(),
-            "type": provider.config.type.value,
-        }
-        accessible_llm_model = next(
-            (model.name for model in provider.models or [] if model.category == "llm"),
-            None,
-        )
-        # Failover has more config
-        if accessible_llm_model and len(provider.api_tokens) > 1:
-            default_config_data["failover"] = ai_proxy_types.FailoverConfig(
-                enabled=True,
-                healthCheckModel=accessible_llm_model,
-            )
-        default_config = ai_proxy_types.AIProxyDefaultConfig.model_validate(
-            default_config_data
-        )
-        provider_list.append(
-            default_config.model_dump(by_alias=True, exclude_none=True)
-        )
-        active_config = ai_proxy_types.ActiveConfig(
-            activeProviderId=provider_registry_name(provider.id),
-        ).model_dump(exclude_none=True)
-        match_rules.append(
-            WasmPluginMatchRule(
-                config=active_config,
-                service=[service_name],
-                configDisable=False,
-            )
-        )
-    return provider_list, match_rules
 
 
 def diff_registries(
@@ -1825,7 +1710,6 @@ def compare_and_append_proxy_match_rules(
 
 
 async def cleanup_ai_proxy_config(
-    providers: List[ModelProvider],
     models: List[Model],
     k8s_config: k8s_client.Configuration,
     namespace: str,
@@ -1833,8 +1717,8 @@ async def cleanup_ai_proxy_config(
 ):
     """Prune the ai-proxy CR at startup, before the controllers replay routes.
 
-    Kept: one entry per live external provider and one per live
-    deployment. Dropped: everything else — including every legacy
+    Kept: one entry per live deployment. Dropped: everything else — including
+    the entries of the removed external model providers — including every legacy
     per-route entry. The pass is leader-gated (see Server's
     _start_leader_tasks): running it at all means this node holds
     leadership, so the control plane is already on this server
@@ -1847,7 +1731,6 @@ async def cleanup_ai_proxy_config(
     no traffic to authorize anyway.
     """
     ids_to_keep = {model_ai_proxy_provider_id(model.id) for model in models}
-    ids_to_keep.update({provider_registry_name(provider.id) for provider in providers})
 
     def should_keep_rule(
         rule: WasmPluginMatchRule, kept_provider_ids: Set[str]
@@ -1980,7 +1863,6 @@ async def cleanup_generic_proxy_router(
 
 
 async def cleanup_mcpbridge_registry(
-    providers: List[ModelProvider],
     model_instances: List[ModelInstance],
     workers: List[Worker],
     namespace: str,
@@ -1988,24 +1870,14 @@ async def cleanup_mcpbridge_registry(
 ):
     worker_by_id = {worker.id: worker for worker in workers}
     networking_higress_api = NetworkingHigressIoV1Api(k8s_client.ApiClient(k8s_config))
-    # cleanup providers
-    desired_registries = []
-    desired_proxies = []
-    for provider in providers:
-        registry = provider_registry(provider=provider)
-        if registry is not None:
-            desired_registries.append(registry)
-        proxy = provider_proxy(provider=provider)
-        if proxy is not None:
-            desired_proxies.append(proxy)
-    to_delete_prefix = provider_id_prefix
+    # Drop what the removed external model providers left behind.
     await ensure_mcp_bridge(
         client=networking_higress_api,
         namespace=namespace,
         mcp_bridge_name=default_mcp_bridge_name,
-        desired_registries=desired_registries,
-        to_delete_prefix=to_delete_prefix,
-        desired_proxies=desired_proxies,
+        desired_registries=[],
+        to_delete_prefix=provider_id_prefix,
+        desired_proxies=[],
         to_delete_proxies_prefix=provider_id_prefix,
     )
     # cleanup model instances

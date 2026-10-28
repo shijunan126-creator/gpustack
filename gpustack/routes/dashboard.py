@@ -27,7 +27,6 @@ from gpustack.schemas.system_load import SystemLoad
 from gpustack.schemas.users import User
 from gpustack.server.deps import SessionDep, TenantContextDep
 from gpustack.schemas import Worker, Cluster
-from gpustack.schemas.model_provider import ModelProvider
 from gpustack.server.system_load import compute_system_load
 
 router = APIRouter()
@@ -400,75 +399,6 @@ async def get_model_usage_summary(
     )
 
 
-async def _get_maas_active_models(
-    session: AsyncSession,
-    owner_principal_id: Optional[int] = None,
-) -> List[ModelSummary]:
-    if owner_principal_id is None:
-        all_providers = await ModelProvider.all_by_fields(
-            session, fields={"deleted_at": None}
-        )
-    else:
-        # ``ModelProvider.owner_principal_id IS NULL`` means a global,
-        # admin-managed provider that every Org can call. An Org owner
-        # viewing their dashboard should see usage of those alongside
-        # their own org-scoped providers — otherwise active_models
-        # would silently drop traffic the org actually generated.
-        stmt = select(ModelProvider).where(
-            ModelProvider.deleted_at.is_(None),
-            or_(
-                ModelProvider.owner_principal_id == owner_principal_id,
-                ModelProvider.owner_principal_id.is_(None),
-            ),
-        )
-        all_providers = (await session.exec(stmt)).all()
-    if not all_providers:
-        return []
-
-    provider_ids = [p.id for p in all_providers]
-    total_tokens = func.sum(
-        ModelUsage.prompt_token_count + ModelUsage.completion_token_count
-    )
-    # Aggregate model usage in the database for efficiency
-    statement = (
-        select(
-            ModelUsage.provider_id,
-            ModelUsage.model_name,
-            total_tokens.label("total_token_count"),
-        )
-        .where(col(ModelUsage.provider_id).in_(provider_ids))
-        .group_by(ModelUsage.provider_id, ModelUsage.model_name)
-        .order_by(func.coalesce(total_tokens, 0).desc())
-        .limit(10)
-    )
-    top_model_usages = (await session.exec(statement)).all()
-
-    models_by_provider_and_name = {
-        (p.id, m.name): m for p in all_providers for m in (p.models or [])
-    }
-
-    provider_id_to_name = {p.id: p.name for p in all_providers}
-
-    model_summaries = []
-    for usage in top_model_usages:
-        model = models_by_provider_and_name.get((usage.provider_id, usage.model_name))
-
-        model_summaries.append(
-            ModelSummary(
-                provider_id=usage.provider_id,
-                provider_name=provider_id_to_name.get(
-                    usage.provider_id, "Unknown Provider"
-                ),
-                name=usage.model_name,
-                instance_count=0,
-                token_count=int(usage.total_token_count or 0),
-                categories=([model.category] if model and model.category else None),
-            )
-        )
-
-    return model_summaries
-
-
 async def _get_gpustack_active_models(
     session: AsyncSession,
     cluster_id: Optional[int] = None,
@@ -529,9 +459,6 @@ async def get_active_models(
     owner_principal_id: Optional[int] = None,
 ) -> List[ModelSummary]:
     summary = await _get_gpustack_active_models(session, cluster_id, owner_principal_id)
-    if cluster_id is None:
-        maas_active_models = await _get_maas_active_models(session, owner_principal_id)
-        summary.extend(maas_active_models)
     summary.sort(key=lambda x: x.token_count, reverse=True)
     summary = summary[:10]
     return summary

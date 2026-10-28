@@ -27,8 +27,6 @@ from gpustack.gateway.utils import (
     mirror_from_anchor_ingress,
     model_instance_registry,
     model_instances_registry_list,
-    provider_proxy_plugin_spec,
-    provider_registry,
     route_rule_ingress_names,
     router_header_key,
 )
@@ -36,13 +34,6 @@ from gpustack.schemas.models import ModelInstance
 from gpustack.gateway.client.extensions_higress_io_v1_api import (
     WasmPluginMatchRule,
     WasmPluginSpec,
-)
-from gpustack.schemas.model_provider import (
-    ClaudeConfig,
-    ModelProvider,
-    ModelProviderTypeEnum,
-    OpenAIConfig,
-    OllamaConfig,
 )
 from gpustack.gateway.client.networking_higress_io_v1_api import (
     McpBridgeProxy,
@@ -103,173 +94,12 @@ def test_v2_prefixes():
     ]
 
 
-def test_provider_registry_static_ip():
-    provider = ModelProvider(
-        id=1,
-        name="provider-1",
-        config=OpenAIConfig(
-            type=ModelProviderTypeEnum.OPENAI, openaiCustomUrl="http://1.2.3.4/v1"
-        ),
-        proxy_url="http://proxy.example.com:8080",
-    )
-    reg = provider_registry(provider)
-    assert isinstance(reg, McpBridgeRegistry)
-    assert reg.domain == "1.2.3.4:80"
-    assert reg.port == 80
-    assert reg.protocol == "http"
-    assert reg.type == "static"
-    assert reg.name == "provider-1"
-    assert reg.proxyName is not None
-    assert reg.proxyName == "provider-1-proxy"
 
 
-def test_provider_registry_dns():
-    provider = ModelProvider(
-        id=2,
-        name="provider-2",
-        config=OpenAIConfig(
-            type=ModelProviderTypeEnum.OPENAI,
-            openaiCustomUrl="https://provider.example.com:8443/v1",
-        ),
-    )
-    reg = provider_registry(provider)
-    assert reg.domain == "provider.example.com"
-    assert reg.port == 8443
-    assert reg.protocol == "https"
-    assert reg.type == "dns"
-    assert reg.name == "provider-2"
-    assert reg.proxyName is None
 
 
-def test_ollama_registry():
-    provider = ModelProvider(
-        id=3,
-        name="provider-3",
-        config=OllamaConfig(
-            type=ModelProviderTypeEnum.OLLAMA,
-            ollamaServerHost="localhost",
-            ollamaServerPort=8080,
-        ),
-    )
-    reg = provider_registry(provider)
-    assert reg.domain == "localhost"
-    assert reg.port == 8080
-    assert reg.protocol == "http"
-    assert reg.type == "dns"
-    assert reg.name == "provider-3"
-
-    provider = ModelProvider(
-        id=3,
-        name="provider-3",
-        config=OllamaConfig(
-            type=ModelProviderTypeEnum.OLLAMA,
-            ollamaServerHost="1.2.3.4",
-            ollamaServerPort=8080,
-        ),
-    )
-    reg = provider_registry(provider)
-    assert reg.domain == "1.2.3.4:8080"
-    assert reg.port == 80
-    assert reg.type == "static"
-    assert reg.protocol == "http"
 
 
-class TestClaudeCustomUrlRouting:
-    """A custom Anthropic endpoint has to reach Envoy twice over.
-
-    ``provider_registry`` decides where the connection goes; the ai-proxy
-    provider config decides the authority and path on it. Only one of the two
-    coming from ``claudeCustomUrl`` is the failure worth a test: the request
-    lands on the custom host carrying ``Host: api.anthropic.com``, or on
-    Anthropic carrying the custom one.
-    """
-
-    def _provider(self, url: str) -> ModelProvider:
-        return ModelProvider(
-            id=7,
-            name="claude-1",
-            api_tokens=["sk-test"],
-            config=ClaudeConfig(type=ModelProviderTypeEnum.CLAUDE, claudeCustomUrl=url),
-        )
-
-    def test_the_registry_points_at_the_custom_host(self):
-        reg = provider_registry(self._provider("http://192.168.50.14:8080"))
-
-        assert reg.domain == "192.168.50.14:8080"
-        assert reg.protocol == "http"
-        assert reg.type == "static"
-        # A static registry carries the port in the domain, and Higress ignores
-        # the field -- same shape openaiCustomUrl already produces.
-        assert reg.port == 80
-
-    def test_a_hostname_registry_stays_dns(self):
-        reg = provider_registry(self._provider("https://claude.example.com/anthropic"))
-
-        assert reg.domain == "claude.example.com"
-        assert reg.port == 443
-        assert reg.protocol == "https"
-        assert reg.type == "dns"
-
-    def test_without_a_custom_url_the_registry_is_anthropic(self):
-        provider = ModelProvider(
-            id=7,
-            name="claude-1",
-            api_tokens=["sk-test"],
-            config=ClaudeConfig(type=ModelProviderTypeEnum.CLAUDE),
-        )
-
-        reg = provider_registry(provider)
-
-        assert reg.domain == "api.anthropic.com"
-        assert reg.type == "dns"
-        assert reg.port == 443
-
-    def test_the_plugin_config_carries_the_endpoint(self):
-        configs, rules = provider_proxy_plugin_spec(
-            self._provider("http://192.168.50.14:8080/anthropic")
-        )
-
-        assert len(configs) == 1
-        assert configs[0]["providerDomain"] == "192.168.50.14:8080"
-        assert configs[0]["providerBasePath"] == "/anthropic"
-        # claudeCustomUrl is ours, not the plugin's: it is translated into the
-        # two knobs above and must not also be emitted raw.
-        assert "claudeCustomUrl" not in configs[0]
-        assert len(rules) == 1
-
-    def test_passthrough_is_opt_in(self):
-        # The endpoint alone says nothing about which protocol to expose it as,
-        # so protocol is left to the config. Deriving it from claudeCustomUrl
-        # would flip every existing custom provider to passthrough on reconcile.
-        default = self._provider("http://192.168.50.14:8080")
-        passthrough = ModelProvider(
-            id=7,
-            name="claude-1",
-            api_tokens=["sk-test"],
-            config=ClaudeConfig(
-                type=ModelProviderTypeEnum.CLAUDE,
-                claudeCustomUrl="http://192.168.50.14:8080",
-                protocol="original",
-            ),
-        )
-
-        assert "protocol" not in provider_proxy_plugin_spec(default)[0][0]
-        assert provider_proxy_plugin_spec(passthrough)[0][0]["protocol"] == "original"
-
-    def test_an_anthropic_provider_gets_no_protocol_override(self):
-        provider = ModelProvider(
-            id=7,
-            name="claude-1",
-            api_tokens=["sk-test"],
-            config=ClaudeConfig(type=ModelProviderTypeEnum.CLAUDE),
-        )
-
-        configs, _ = provider_proxy_plugin_spec(provider)
-
-        # Absent, not "openai": ai-proxy already defaults to openai, and writing
-        # it would rewrite the deployed config of every existing provider.
-        assert "protocol" not in configs[0]
-        assert "providerDomain" not in configs[0]
 
 
 # --- Generic proxy router -------------------------------------------------

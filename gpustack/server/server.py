@@ -35,7 +35,6 @@ from gpustack.schemas.api_keys import ApiKey
 from gpustack.schemas.workers import Worker
 from gpustack.schemas.clusters import Cluster, ClusterProvider, ClusterStateEnum
 from gpustack.schemas.model_routes import ModelRoute, ModelRouteTarget
-from gpustack.schemas.model_provider import ModelProvider
 from gpustack.security import (
     generate_access_key,
     generate_secret_key,
@@ -66,7 +65,6 @@ from gpustack.server.controllers import (
     CatalogSourceController,
     ModelRouteController,
     ModelRouteTargetController,
-    ModelProviderController,
 )
 from gpustack.gpu_instances.controllers import (
     GPUInstanceController,
@@ -463,9 +461,6 @@ class Server:
     def _start_controllers(self):
         """Start all controllers and return the list of tasks."""
         tasks = []
-
-        model_provider_controller = ModelProviderController(self._config)
-        tasks.append(asyncio.create_task(model_provider_controller.start()))
 
         model_route_target_controller = ModelRouteTargetController(self._config)
         tasks.append(asyncio.create_task(model_route_target_controller.start()))
@@ -1176,10 +1171,6 @@ class Server:
             session=session,
             fields={"deleted_at": None},
         )
-        providers = await ModelProvider.all_by_fields(
-            session=session,
-            fields={"deleted_at": None},
-        )
         model_instances = await ModelInstance.all_by_fields(
             session=session,
             fields={"deleted_at": None},
@@ -1254,7 +1245,6 @@ class Server:
             namespace=self.config.gateway_namespace,
         )
         await cleanup_mcpbridge_registry(
-            providers=providers,
             namespace=self.config.gateway_namespace,
             model_instances=model_instances,
             workers=workers,
@@ -1274,17 +1264,12 @@ class Server:
         for attempt, delay in enumerate((*delays, None)):
             try:
                 async with async_session() as session:
-                    providers = await ModelProvider.all_by_fields(
-                        session=session,
-                        fields={"deleted_at": None},
-                    )
                     models = await Model.all_by_fields(
                         session=session,
                         fields={"deleted_at": None},
                     )
                 await cleanup_ai_proxy_config(
                     namespace=self.config.gateway_namespace,
-                    providers=providers,
                     models=models,
                     k8s_config=get_async_k8s_config(cfg=self.config),
                     cfg=self.config,

@@ -222,18 +222,7 @@ from gpustack.routes.plugins import (
     RouteReconcileContext,
     dispatch_route_reconcile,
 )
-from gpustack.routes.plugins.decision_service.providers import (
-    DECISION_PROVIDER_TYPES,
-    sync_decision_service_providers,
-)
-from gpustack.routes.plugins.decision_service.plugin import (
-    decision_referencing_route_ids,
-)
-from gpustack.routes.plugins.capability_policy import CapabilityPolicy
 from gpustack.gateway import get_async_k8s_config
-from gpustack.schemas.model_provider import (
-    ModelProvider,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -3074,13 +3063,9 @@ def derive_route_target_state(
     recomputed at any time from rows that are already loaded — which is what
     makes the state correctable rather than only updatable.
 
-    A provider target is always ACTIVE: its availability belongs to the
-    provider, not to us. A target that points at neither a model nor a
-    provider is UNAVAILABLE rather than left as it was; the previous code left
-    that case's variable unbound.
+    A target that points at no model is UNAVAILABLE rather than left as it
+    was; the previous code left that case's variable unbound.
     """
-    if target.provider_id is not None:
-        return TargetStateEnum.ACTIVE
     if target.model_id is not None and model is not None:
         return (
             TargetStateEnum.ACTIVE
@@ -4695,12 +4680,6 @@ async def calculate_destinations(
             to_extend = await calculate_model_destinations(
                 session, model, target.overridden_model_name
             )
-        elif target.provider_id is not None:
-            to_extend = await provider_destinations(
-                session=session,
-                provider_id=target.provider_id,
-                provider_model_name=target.overridden_model_name,
-            )
         if to_extend is None or len(to_extend) == 0:
             # no valid destination found
             continue
@@ -4751,20 +4730,6 @@ async def cluster_registration_tokens(
     if cluster is None or not cluster.registration_token:
         return []
     return [cluster.registration_token]
-
-
-async def provider_destinations(
-    session: AsyncSession,
-    provider_id: int,
-    provider_model_name: str,
-) -> mcp_handler.DestinationTupleList:
-    """
-    return count dict for provider registry
-    """
-    provider = await ModelProvider.one_by_id(session, provider_id)
-    if provider is None:
-        return []
-    return [(1, provider_model_name, mcp_handler.provider_registry(provider))]
 
 
 async def calculate_model_destinations(
@@ -6696,322 +6661,6 @@ async def sync_categories_and_meta(session: AsyncSession, model: Model, event: E
             )
 
 
-def _is_decision_payload(value: Any) -> bool:
-    """Whether a provider config value -- a pydantic model, the raw dict an
-    event payload can carry, or a bare type value -- names a decision
-    provider type."""
-    if isinstance(value, BaseModel):
-        type_value = getattr(value, "type", None)
-    elif isinstance(value, dict):
-        type_value = value.get("type")
-    else:
-        type_value = value
-    return type_value in DECISION_PROVIDER_TYPES
-
-
-class ModelProviderController:
-    def __init__(self, cfg: Config):
-        self._config = cfg
-        self._disable_gateway = cfg.gateway_mode == GatewayModeEnum.disabled
-        self._k8s_config = get_async_k8s_config(cfg=cfg)
-
-    async def start(self):
-        if self._disable_gateway:
-            return
-        if not self._disable_gateway:
-            base_client = k8s_client.ApiClient(configuration=self._k8s_config)
-            self._higress_network_api = NetworkingHigressIoV1Api(base_client)
-            self._higress_extension_api = ExtensionsHigressIoV1Api(base_client)
-
-        async for event in ModelProvider.subscribe(source="model_provider_controller"):
-            try:
-                await self._reconcile(event)
-            except Exception as e:
-                logger.exception(f"Failed to reconcile model provider: {e}")
-
-    async def _ensure_provider_registry(
-        self,
-        model_provider: ModelProvider,
-        event: Event,
-    ):
-        # On DELETED both desired sets are empty and only the id is read, so
-        # this path works off an id-only payload (see Event) -- which is what
-        # a cross-instance delete carries, and skipping it would strand the
-        # registry and proxy of a provider that no longer exists. Deriving
-        # the two specs first would defeat that: they need a hydrated row and
-        # their values are discarded here anyway.
-        deleted = event.type == EventType.DELETED
-        provider_id = resolve_event_id(event)
-        provider_registry = (
-            None if deleted else mcp_handler.provider_registry(model_provider)
-        )
-        registry_to_remove = provider_registry is None or deleted
-        # Match by exact name (not prefix) so that deleting provider id "1" does
-        # not also drop other providers whose id shares that numeric prefix
-        # (e.g. "provider-10", "provider-11").
-        to_delete_names = (
-            [mcp_handler.provider_registry_name(provider_id)]
-            if registry_to_remove
-            else None
-        )
-        desired_registries = [] if registry_to_remove else [provider_registry]
-
-        provider_proxy = None if deleted else mcp_handler.provider_proxy(model_provider)
-        proxy_to_remove = provider_proxy is None or deleted
-        to_delete_proxy_names = (
-            [mcp_handler.provider_proxy_name(provider_id)] if proxy_to_remove else None
-        )
-        desired_proxies = [] if proxy_to_remove else [provider_proxy]
-
-        try:
-            await mcp_handler.ensure_mcp_bridge(
-                client=self._higress_network_api,
-                namespace=self._config.gateway_namespace,
-                mcp_bridge_name=mcp_handler.default_mcp_bridge_name,
-                desired_registries=desired_registries,
-                desired_proxies=desired_proxies,
-                to_delete_names=to_delete_names,
-                to_delete_proxies_names=to_delete_proxy_names,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to ensure MCPRegistry for model provider "
-                f"{event_field(model_provider, 'name', provider_id)}: {e}"
-            )
-            raise
-
-    async def _ensure_provider_ai_proxy_config(self):
-        try:
-            async with async_session() as session:
-                providers = await ModelProvider.all_by_field(
-                    session,
-                    "deleted_at",
-                    None,
-                )
-                provider_config_list, match_rules = (
-                    mcp_handler.provider_proxy_plugin_spec(*providers)
-                )
-                await mcp_handler.ensure_wasm_plugin(
-                    api=self._higress_extension_api,
-                    name=mcp_handler.gpustack_ai_proxy_name,
-                    namespace=self._config.gateway_namespace,
-                    spec_diff=partial(
-                        mcp_handler.ai_proxy_diff_spec,
-                        expected_providers=provider_config_list,
-                        expected_match_rules=match_rules,
-                        operating_id_prefix=mcp_handler.provider_id_prefix,
-                        cfg=self._config,
-                    ),
-                )
-        except Exception as e:
-            logger.error(f"Failed to ensure provider's ai_proxy config: {e}")
-            raise
-
-    async def _ensure_decision_service_config(self):
-        """Rebuild the gpustack-lb-decision-service providers catalogue
-        (the gpustack-lb-typesafe type ModelProviders). Separate
-        from the ai-proxy pass: a different CR, a different set of
-        providers (only the gpustack-lb-typesafe type), and a failure in
-        one must not mask the other."""
-        try:
-            async with async_session() as session:
-                await sync_decision_service_providers(
-                    cfg=self._config,
-                    session=session,
-                    extensions_api=self._higress_extension_api,
-                )
-        except Exception as e:
-            logger.error(f"Failed to ensure decision-service provider config: {e}")
-            raise
-
-    async def _notify_decision_service_routes(self, event: Event) -> None:
-        """Re-reconcile routes whose decision-service section is affected by
-        a provider change: a deletion (row or id-only payload -- it cannot
-        be ruled out that the deleted row was a decision provider), a type
-        move off or back onto the decision types, a ``models`` cache
-        refresh, or a change of the provider's default ``model`` -- any of
-        these can flip what the render guard decides. The reconcile then
-        strips or restores each matchRule while the stored policy is left
-        untouched.
-
-        Field access goes through ``event_field``/``resolve_event_id``:
-        cross-instance events can carry an id-only payload where attribute
-        access would raise before any notification went out."""
-        provider_id = resolve_event_id(event)
-        if provider_id is None:
-            return
-        changed = event.changed_fields or {}
-        if event.type == EventType.DELETED:
-            payload_config = event_field(event.data, "config")
-            if payload_config is not None and not _is_decision_payload(payload_config):
-                return
-        else:
-            config_change = changed.get("config")
-            # _changed_scalar normalizes both producer shapes: the local
-            # find_history path stores ([old], [new]) and the cross-instance
-            # detect_changes path stores a flat (old, new).
-            old_value = (
-                _changed_scalar(config_change[0])
-                if config_change and len(config_change) > 0
-                else None
-            )
-            new_value = (
-                _changed_scalar(config_change[1])
-                if config_change and len(config_change) > 1
-                else None
-            )
-            was_decision = old_value is not None and _is_decision_payload(old_value)
-            is_decision = new_value is not None and _is_decision_payload(new_value)
-
-            def _payload_model(value) -> Optional[Any]:
-                if isinstance(value, BaseModel):
-                    return getattr(value, "model", None)
-                if isinstance(value, dict):
-                    return value.get("model")
-                return None
-
-            model_changed = _payload_model(old_value) != _payload_model(new_value)
-            # notify when the provider left or re-entered the decision
-            # types (a stripped rule can come back), when its default model
-            # changed (the effective alias a route renders may be valid
-            # again), or when the pulled models cache changed (an alias may
-            # have gone)
-            if not (
-                was_decision != is_decision
-                or (is_decision and model_changed)
-                or "models" in changed
-            ):
-                return
-        try:
-            async with async_session() as session:
-                policies = await CapabilityPolicy.all_by_fields(
-                    session, fields={"capability": "decision-service"}
-                )
-                route_ids = decision_referencing_route_ids(policies, provider_id)
-                for route_id in sorted(route_ids):
-                    route = await ModelRoute.one_by_id(session, route_id)
-                    if route is None:
-                        continue
-                    route_copy = ModelRoute.model_validate(route.model_dump())
-                    await event_bus.publish(
-                        route_copy.__class__.__name__.lower(),
-                        Event(type=EventType.UPDATED, data=route_copy),
-                    )
-        except Exception as e:
-            logger.error(
-                "Failed to notify decision-service routes for provider %s: %s",
-                provider_id,
-                e,
-            )
-
-    async def _notify_provider_model_routes(
-        self, session: AsyncSession, model_provider: ModelProvider, event: Event
-    ):
-        if event.type != EventType.UPDATED:
-            return
-        changed_fields = event.changed_fields or {}
-        should_notify = False
-        if "config" not in changed_fields:
-            return
-
-        # the changed field "config" must have old and new value, otherwise it's not a valid update event for config change.
-        # index 0 of the tuple is the old value, index 1 is the new value.
-        # each value must be a list with only 1 element as it is a norman field instead of relationship field.
-        old_config = changed_fields["config"][0][0]
-        if isinstance(changed_fields["config"][0][0], BaseModel):
-            old_config = changed_fields["config"][0][0].model_dump()
-        new_config = changed_fields["config"][1][0]
-        if isinstance(changed_fields["config"][1][0], BaseModel):
-            new_config = changed_fields["config"][1][0].model_dump()
-
-        # use hardcoded fields to determine whether to notify.
-        # For ProviderConfigType, including:
-        # - openaiCustomUrl
-        # - ollamaServerHost
-        # - difyApiUrl
-        # - claudeCustomUrl
-        # The above fields will affect the registry type of the provider_registry,
-        # it requires notifying ingress to regenerate registry destination.
-        related_fields = [
-            "openaiCustomUrl",
-            "ollamaServerHost",
-            "difyApiUrl",
-            "claudeCustomUrl",
-        ]
-        for field in related_fields:
-            if old_config.get(field) != new_config.get(field):
-                should_notify = True
-                break
-        if not should_notify:
-            return
-        targets = await ModelRouteTarget.all_by_fields(
-            session=session,
-            fields={"provider_id": model_provider.id},
-            options=[selectinload(ModelRouteTarget.model_route)],
-        )
-        unique_routes = {
-            target.model_route.id: target.model_route
-            for target in targets
-            if target.model_route is not None
-        }
-        for route in unique_routes.values():
-            route_copy = ModelRoute.model_validate(route.model_dump())
-            await event_bus.publish(
-                route_copy.__class__.__name__.lower(),
-                Event(type=EventType.UPDATED, data=route_copy),
-            )
-
-    async def _ensure_catalogues_and_notify(self, event: Event) -> None:
-        """Run the ai-proxy and decision-service passes independently: both
-        log-and-reraise on failure, so sequencing them directly would let an
-        ai-proxy failure mask the decision-service catalogue sync and the
-        route re-notification. Each runs regardless of the other; the first
-        error (ai-proxy wins only because it is checked first) is re-raised
-        after both had their chance."""
-        ai_proxy_error: Optional[BaseException] = None
-        decision_error: Optional[BaseException] = None
-        try:
-            await self._ensure_provider_ai_proxy_config()
-        except Exception as e:
-            ai_proxy_error = e
-        try:
-            await self._ensure_decision_service_config()
-        except Exception as e:
-            decision_error = e
-        try:
-            await self._notify_decision_service_routes(event)
-        except Exception as e:
-            # the notifier already logs its own errors; recorded so the
-            # failure surfaces with the others instead of disappearing
-            if decision_error is None:
-                decision_error = e
-        if ai_proxy_error is not None:
-            raise ai_proxy_error
-        if decision_error is not None:
-            raise decision_error
-
-    async def _reconcile(self, event: Event):
-        """
-        Reconcile the model provider.
-        """
-        model_provider: ModelProvider = event.data
-        if not model_provider:
-            return
-        if event.type == EventType.DELETED:
-            await self._ensure_provider_registry(model_provider, event)
-            await self._ensure_catalogues_and_notify(event)
-            return
-        async with async_session() as session:
-            model_provider: ModelProvider = await ModelProvider.one_by_id(
-                session, model_provider.id
-            )
-            if not model_provider:
-                return
-            await self._ensure_provider_registry(model_provider, event)
-            await self._ensure_catalogues_and_notify(event)
-            await self._notify_provider_model_routes(session, model_provider, event)
-
-
 class ModelRouteTargetController:
     def __init__(self, config: Config):
         self._config = config
@@ -7083,7 +6732,6 @@ class ModelRouteTargetController:
             return
         should_notify_fields = [
             "state",
-            "provider_id",
             "model_id",
             "overridden_model_name",
             "model",
@@ -7152,22 +6800,17 @@ class ModelRouteTargetController:
         target: ModelRouteTarget = await ModelRouteTarget.one_by_id(session, target_id)
         if not target:
             return
-        if target.provider_id is not None:
-            target_state = TargetStateEnum.ACTIVE
+        model = None
         if target.model_id is not None:
             model = await Model.one_by_id(session, target.model_id)
             if not model:
                 return
-            # The servability gate: `Model.state`, not the RUNNING count.
-            # `ModelRoute.ready_targets`, `/v1/models` and
-            # `resolve_route_targets` are all defined off this target state,
-            # so they follow from here. The route's weight / fallback / alias
-            # mechanics are untouched.
-            target_state = (
-                TargetStateEnum.ACTIVE
-                if is_model_servable(model)
-                else TargetStateEnum.UNAVAILABLE
-            )
+        # The servability gate: `Model.state`, not the RUNNING count.
+        # `ModelRoute.ready_targets`, `/v1/models` and
+        # `resolve_route_targets` are all defined off this target state,
+        # so they follow from here. The route's weight / fallback / alias
+        # mechanics are untouched.
+        target_state = derive_route_target_state(target, model)
         if target.state != target_state:
             target.state = target_state
             await target.update(session=session, auto_commit=True)

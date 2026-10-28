@@ -48,7 +48,6 @@ from gpustack.routes import (
     token,
     benchmarks,
     benchmark_profiles,
-    model_provider,
     rerank,
     model_routes,
     grafana,
@@ -79,7 +78,7 @@ from gpustack_higress_plugins.server import router as higress_plugins_router
 versioned_prefix = "/v2"
 
 # Org-owner gate for management surfaces (Models / Model Routes /
-# Model Providers / Benchmarks / Model Files). Platform admin and
+# Benchmarks / Model Files). Platform admin and
 # SYSTEM principals (worker / cluster callbacks reaching shared
 # routers) bypass via ``require_org_role`` itself.
 _org_owner_only = [Depends(require_org_role(OrgRole.OWNER))]
@@ -318,12 +317,6 @@ tenant_routers = model_routers + [
         "dependencies": _org_owner_only,
     },
     {"router": gpu_devices.router, "prefix": "/gpu-devices", "tags": ["GPU Devices"]},
-    {
-        "router": model_provider.router,
-        "prefix": "/model-providers",
-        "tags": ["Model Providers"],
-        "dependencies": _org_owner_only,
-    },
     {
         "router": model_routes.router,
         "prefix": "/model-routes",

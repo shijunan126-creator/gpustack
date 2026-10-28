@@ -58,16 +58,6 @@ def test_the_answer_does_not_depend_on_the_state_already_stored():
         )
 
 
-def test_a_provider_target_is_active_regardless_of_any_model():
-    """Its availability belongs to the provider, not to us."""
-    target = _target(provider_id=9, state=TargetStateEnum.UNAVAILABLE)
-    assert derive_route_target_state(target, None) is TargetStateEnum.ACTIVE
-    assert (
-        derive_route_target_state(target, _model(state=ModelStateEnum.PARTIAL))
-        is TargetStateEnum.ACTIVE
-    )
-
-
 def test_a_target_pointing_at_nothing_is_unavailable_rather_than_undefined():
     """The previous code left its `target_state` variable unbound on this
     path, so whether the target changed at all depended on which branch had

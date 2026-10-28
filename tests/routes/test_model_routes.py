@@ -315,14 +315,18 @@ def test_model_route_create_rejects_slashed_name():
         ModelRouteCreate(name="org1/qwen3-0.6b", targets=[])
 
 
-def test_provider_target_accepts_slashed_model_name():
-    target = ModelRouteTargetUpdateItem(
-        provider_id=10,
-        overridden_model_name="kimi/kimi-k3",
-        weight=1,
-    )
+def test_provider_target_is_rejected():
+    with pytest.raises(ValueError, match="not supported as route targets"):
+        ModelRouteTargetUpdateItem(
+            provider_id=10,
+            overridden_model_name="gpt-4",
+            weight=1,
+        )
 
-    assert target.overridden_model_name == "kimi/kimi-k3"
+
+def test_target_without_model_is_rejected():
+    with pytest.raises(ValueError, match="model_id must be provided"):
+        ModelRouteTargetUpdateItem(weight=1)
 
 
 def test_local_model_target_rejects_slashed_overridden_model_name():
@@ -876,41 +880,6 @@ def _capture_target_updates(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_update_targets_model_to_provider_clears_model_id(monkeypatch):
-    # Switching a local-model target to a provider target must null model_id;
-    # leaving both ids set persists a row the schema validator rejects.
-    captured = _capture_target_updates(monkeypatch)
-    existing = ModelRouteTarget(
-        id=1,
-        name="r1-abcde",
-        route_name="r1",
-        route_id=1,
-        model_id=5,
-        weight=1,
-        state=TargetStateEnum.ACTIVE,
-    )
-
-    result = await model_routes.update_model_route_targets(
-        session=MagicMock(),
-        targets=[
-            ModelRouteTargetUpdateItem(
-                id=1, provider_id=10, overridden_model_name="gpt-4", weight=1
-            )
-        ],
-        existing_target_map={1: existing},
-    )
-
-    assert len(captured) == 1
-    source = captured[0]
-    assert source["model_id"] is None
-    assert source["provider_id"] == 10
-    # provider targets carry no readiness, so they go straight to ACTIVE.
-    assert source["state"] == TargetStateEnum.ACTIVE
-    assert result[0].model_id is None
-    assert result[0].provider_id == 10
-
-
-@pytest.mark.asyncio
 async def test_update_targets_provider_to_model_clears_provider_id(monkeypatch):
     # The reverse switch must null provider_id and go UNAVAILABLE so the
     # controller re-validates against current model readiness.
@@ -1126,8 +1095,8 @@ async def test_update_targets_noop_does_not_write(monkeypatch):
         name="r1-abcde",
         route_name="r1",
         route_id=1,
-        provider_id=10,
-        overridden_model_name="gpt-4",
+        model_id=5,
+        overridden_model_name="base:lora",
         weight=1,
         state=TargetStateEnum.ACTIVE,
     )
@@ -1136,7 +1105,7 @@ async def test_update_targets_noop_does_not_write(monkeypatch):
         session=MagicMock(),
         targets=[
             ModelRouteTargetUpdateItem(
-                id=1, provider_id=10, overridden_model_name="gpt-4", weight=1
+                id=1, model_id=5, overridden_model_name="base:lora", weight=1
             )
         ],
         existing_target_map={1: existing},

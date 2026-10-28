@@ -34,7 +34,6 @@ from gpustack.schemas.model_routes import (
 from gpustack.schemas.links import ModelRoutePrincipalLink
 from gpustack.schemas.principals import platform_principal_id
 from gpustack.schemas.principals import Principal, PrincipalType
-from gpustack.schemas.model_provider import ModelProvider
 from gpustack.schemas.models import Model
 from gpustack.server.controllers import notify_model_ai_proxy_change
 from gpustack.server.db import async_session
@@ -1211,25 +1210,18 @@ async def update_model_route_targets(
         input_target = to_update_target_map.get(id, None)
         input_dict = {**existing_dict}
         if input_target is not None:
-            # ``check_provider_or_model`` guarantees an update item sets exactly
-            # one of model_id/provider_id, so the item fully determines the
-            # target type. Pin both ids from the item so a model<->provider
-            # switch clears the opposite id even when the client only sends the
-            # new id (omitting, rather than nulling, the old one). Leaving both
-            # set persists a row the schema validator rejects and never nulls
-            # the stale column.
+            # ``check_model_target`` guarantees an update item names a model
+            # and no provider. Pin both ids from the item so a row left over
+            # from when providers existed is cleared of its stale provider_id.
             input_dict["model_id"] = input_target.model_id
-            input_dict["provider_id"] = input_target.provider_id
+            input_dict["provider_id"] = None
             type_switched = (input_target.model_id is None) != (
                 existing_target.model_id is None
             )
-            # ``overridden_model_name`` is type-coupled (a LoRA suffix for a
-            # model target, the upstream model name for a provider target). On a
-            # type switch the existing value belongs to the old kind and is
-            # meaningless — often invalid — for the new one, so reset it from
-            # the item (whose value the validator already vetted for the new
-            # type) rather than preserving the stale value when the client
-            # omits it.
+            # ``overridden_model_name`` was the upstream model name on a
+            # provider row. A row converted to a model target must take the
+            # item's value (already vetted by the validator) rather than keep
+            # that stale name when the client omits it.
             if type_switched:
                 input_dict["overridden_model_name"] = input_target.overridden_model_name
             # For the remaining fields, honor exactly what the client sent:
@@ -1245,22 +1237,9 @@ async def update_model_route_targets(
             input_dict["route_name"] = new_route_name
         update_source = {}
         if existing_dict != input_dict:
-            # Local-model targets go UNAVAILABLE so the controller
-            # re-validates against current model readiness on the
-            # resulting UPDATED event; provider (maas) targets have no
-            # readiness to wait on — ``_sync_state`` forces them to
-            # ACTIVE unconditionally — so set ACTIVE directly to avoid a
-            # transient UNAVAILABLE routing gap and a redundant reconcile
-            # write. Mirrors ``create_model_route_targets``. Keyed on the
-            # merged ``input_dict`` (whose type ids are pinned from the input
-            # item above) so a type-changing edit is classified by its
-            # resulting type, matching ``_sync_state``'s
-            # model_id-takes-precedence semantics.
-            new_state = (
-                TargetStateEnum.UNAVAILABLE
-                if input_dict.get("model_id") is not None
-                else TargetStateEnum.ACTIVE
-            )
+            # Targets go UNAVAILABLE so the controller re-validates against
+            # current model readiness on the resulting UPDATED event.
+            new_state = TargetStateEnum.UNAVAILABLE
             update_source.update(
                 {
                     **input_dict,
@@ -1322,7 +1301,7 @@ def _assert_target_tenant_aligned(
     target_id: int,
 ) -> None:
     """Routes are GPUStack's only cross-tenant sharing surface — a
-    deployment (Model / ModelProvider) has no permission primitive of
+    deployment (Model) has no permission primitive of
     its own, so it lives within one Org's boundary and must only be
     referenced from routes in the same Org. Cross-Org targeting that
     bypasses this is a misconfiguration: usage attribution
@@ -1330,8 +1309,8 @@ def _assert_target_tenant_aligned(
     owner, so a cross-Org target silently drifts the row's tenant scope
     away from the route's caller.
 
-    A NULL target owner (e.g. legacy provider rows that predate
-    multi-tenancy) is treated as global and allowed everywhere — the
+    A NULL target owner (e.g. legacy rows that predate multi-tenancy) is
+    treated as global and allowed everywhere — the
     strict rule kicks in only when the target explicitly carries an
     owner. A route with no owner (also legacy / platform fallback) is
     similarly skipped.
@@ -1367,34 +1346,7 @@ async def validate_targets(
                     "Only one target can be set as fallback for status codes."
                 )
             fallback_index = index
-        if target.provider_id is not None:
-            provider = await ModelProvider.one_by_id(
-                session=session, id=target.provider_id
-            )
-            if provider is None or provider.deleted_at is not None:
-                raise NotFoundException(
-                    f"ModelProvider with id '{target.provider_id}' not found."
-                )
-            from gpustack.routes.plugins.decision_service.providers import (
-                is_decision_config,
-            )
-
-            if is_decision_config(provider.config):
-                # A decision service feeds the route-selection plugin, not
-                # inference; UI filtering alone is not enforcement.
-                raise InvalidException(
-                    f"ModelProvider {target.provider_id} is a decision "
-                    "service (gpustack-lb-typesafe) and cannot serve as an "
-                    "inference target."
-                )
-            validate_provider_model_name(provider, target.overridden_model_name)
-            _assert_target_tenant_aligned(
-                route_owner_principal_id,
-                getattr(provider, "owner_principal_id", None),
-                "ModelProvider",
-                target.provider_id,
-            )
-        elif target.model_id is not None:
+        if target.model_id is not None:
             model = await Model.one_by_id(session=session, id=target.model_id)
             if model is None or model.deleted_at is not None:
                 raise NotFoundException(f"Model with id '{target.model_id}' not found.")
@@ -1405,18 +1357,6 @@ async def validate_targets(
                 target.model_id,
             )
     return fallback_index
-
-
-def validate_provider_model_name(
-    provider: ModelProvider,
-    model_name: str,
-):
-    supported_models = provider.models or []
-    model_names = [model.name for model in supported_models]
-    if model_name not in model_names:
-        raise InvalidException(
-            f"overridden_model_name '{model_name}' is not supported by provider '{provider.name}'. Supported models: {', '.join(model_names)}"
-        )
 
 
 def _target_stream_visibility(
@@ -1469,7 +1409,6 @@ async def get_model_route_targets(
             "route_id",
             "route_name",
             "model_id",
-            "provider_id",
         },
         exclude_none=True,
     )

@@ -184,22 +184,13 @@ class ModelRouteTargetUpdate(SQLModel):
         return v
 
     @model_validator(mode="after")
-    def check_provider_or_model(self):
-        both_set = self.provider_id is not None and self.model_id is not None
-        both_none = self.provider_id is None and self.model_id is None
-
-        if both_none:
-            raise ValueError("Either provider_id or model_id must be provided.")
-        if both_set:
-            raise ValueError("Only one of provider_id or model_id can be provided.")
-        if self.provider_id is not None and self.overridden_model_name is None:
-            raise ValueError(
-                "overridden_model_name must be provided when provider_id is set."
-            )
-        if self.provider_id is not None and not self.overridden_model_name.strip():
-            raise ValueError(
-                "overridden_model_name must not be empty or blank when provider_id is set."
-            )
+    def check_model_target(self):
+        # ``provider_id`` stays on the row so existing databases keep their
+        # schema, but external model providers are no longer a target kind.
+        if self.provider_id is not None:
+            raise ValueError("Model providers are not supported as route targets.")
+        if self.model_id is None:
+            raise ValueError("model_id must be provided.")
         # Local-model targets only accept overridden_model_name shaped like
         # "<base_model_name>:<lora_name>". The full base-prefix check lives in
         # the service layer (lora_route_name_for); schema only enforces shape.
@@ -297,7 +288,6 @@ class ModelRouteTargetListParams(ListParams):
     route_id: Optional[int] = None
     route_name: Optional[str] = None
     model_id: Optional[int] = None
-    provider_id: Optional[int] = None
     sortable_fields: ClassVar[List[str]] = [
         "id",
         "created_at",

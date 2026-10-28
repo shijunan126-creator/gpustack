@@ -10,18 +10,13 @@ import pytest
 
 from gpustack.api.tenant import TenantContext
 from gpustack.mixins import active_record
-from gpustack.routes import cloud_credentials, model_provider, worker_pools
+from gpustack.routes import cloud_credentials, worker_pools
 from gpustack.schemas.clusters import (
     CloudCredential,
     CloudCredentialListParams,
     WorkerPool,
 )
 from gpustack.schemas.common import ListParams
-from gpustack.schemas.model_provider import (
-    ModelProvider,
-    ModelProviderListParams,
-    OpenAIConfig,
-)
 from gpustack.schemas.principals import OrgRole, PrincipalType
 from gpustack.server.bus import Event, EventType
 
@@ -60,10 +55,6 @@ def _row(model, row_id, owner_id, cluster_id, name="shared"):
             os_image="test-os",
             image_name="test-image",
         )
-    else:
-        fields.update(
-            config=OpenAIConfig(type="openai"), api_tokens=["private-provider-token"]
-        )
     return model(**fields)
 
 
@@ -73,7 +64,6 @@ def _row(model, row_id, owner_id, cluster_id, name="shared"):
     [
         (CloudCredential, cloud_credentials.list, CloudCredentialListParams),
         (WorkerPool, worker_pools.list, ListParams),
-        (ModelProvider, model_provider.get_model_providers, ModelProviderListParams),
     ],
 )
 @pytest.mark.parametrize(
@@ -145,6 +135,5 @@ async def test_watch_filters_replay_and_bus_events(
         for row_id in expected_ids
     ]
     assert "private-cloud-secret" not in "".join(frames)
-    assert "private-provider-token" not in "".join(frames)
     cached_all.assert_awaited_once()
     bus.unsubscribe.assert_called_once_with(model.__name__.lower(), subscriber)
