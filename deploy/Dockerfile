@@ -28,8 +28,12 @@ FROM gpustack/gpustack:${GPUSTACK_VERSION}
 
 ARG PKG=/usr/local/lib/python3.11/dist-packages/gpustack
 # Recorded on the image to tell which commit of this repository it was built from.
+# The base image's org.opencontainers.image.* labels must stay as they are: a worker
+# finds its own container for mirrored deployment (the GPU runtime and devices it
+# hands to the inference containers) by matching them, so rewriting one leaves the
+# inference containers without a GPU.
 ARG FORK_COMMIT=unknown
-LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
+LABEL io.github.shijunan126-creator.gpustack.commit="${FORK_COMMIT}"
 
 # The release build stamps the version into gpustack/__init__.py; the repository
 # holds a placeholder. Keep the stamp of the base image.
