@@ -140,16 +140,6 @@ const baseRoutes = [
         component: './model-routes/index'
       },
       {
-        name: 'providers',
-        path: '/models/providers',
-        key: 'modelProviders',
-        icon: 'icon-extension-outline',
-        selectedIcon: 'icon-extension-filled',
-        defaultIcon: 'icon-extension-outline',
-        access: 'canSeeOrgAdmin',
-        component: './maas-provider/index'
-      },
-      {
         name: 'benchmark',
         path: '/models/benchmark',
         key: 'benchmark',

@@ -38,9 +38,6 @@ const isSameTarget = (
   if (left.model_id && left.model_id === right.model_id) {
     return left.overridden_model_name === right.overridden_model_name;
   }
-  if (left.provider_id && left.provider_id === right.provider_id) {
-    return left.overridden_model_name === right.overridden_model_name;
-  }
   return false;
 };
 
@@ -51,7 +48,6 @@ const normalizeTarget = (
     id: target?.id,
     weight: target?.weight ?? 0,
     model_id: target?.model_id,
-    provider_id: target?.provider_id,
     overridden_model_name: target?.overridden_model_name,
     fallback_status_codes: target?.fallback_status_codes,
     max_running_requests: target?.max_running_requests ?? null
@@ -230,14 +226,12 @@ const AccessForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
       targetsRef.current?.initDataList(
         targets?.map((ep) => ({
           weight: ep.weight,
-          value: ep.model_id
-            ? [
-                'deployments',
-                ep.overridden_model_name
-                  ? `${ep.model_id}_lora_${ep.overridden_model_name}`
-                  : ep.model_id
-              ]
-            : [ep.provider_id, ep.overridden_model_name]
+          value: [
+            'deployments',
+            ep.overridden_model_name
+              ? `${ep.model_id}_lora_${ep.overridden_model_name}`
+              : ep.model_id
+          ]
         })) || []
       );
     };
@@ -287,14 +281,12 @@ const AccessForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
       // init fallback value
       if (fallbackTarget) {
         targetsRef.current?.initFallbackValues({
-          value: fallbackTarget.model_id
-            ? [
-                'deployments',
-                fallbackTarget.overridden_model_name
-                  ? `${fallbackTarget.model_id}_lora_${fallbackTarget.overridden_model_name}`
-                  : fallbackTarget.model_id
-              ]
-            : [fallbackTarget.provider_id, fallbackTarget.overridden_model_name]
+          value: [
+            'deployments',
+            fallbackTarget.overridden_model_name
+              ? `${fallbackTarget.model_id}_lora_${fallbackTarget.overridden_model_name}`
+              : fallbackTarget.model_id
+          ]
         });
       }
     };
@@ -307,7 +299,7 @@ const AccessForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
       initDataList(currentData?.routeTargets || []);
     };
 
-    // --- register from provider page ---
+    // --- register a prefilled route ---
     if (action === PageAction.EDIT && currentData) {
       initEditionForm();
     } else if (realAction === 'register' && currentData) {
@@ -369,9 +361,6 @@ const AccessForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
           <LbPolicySection
             onModeChange={(mode) =>
               targetsRef.current?.handleLbModeChange(mode)
-            }
-            getTargetModelNames={() =>
-              targetsRef.current?.getTargetModelNames?.() || []
             }
           />
           {/* Targets carries its own section heading; it is the last section

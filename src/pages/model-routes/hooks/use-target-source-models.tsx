@@ -1,8 +1,5 @@
 import { queryModelsList } from '@/pages/llmodels/apis';
 import { ListItem as ModelListItem } from '@/pages/llmodels/config/types';
-import { queryMaasProviders } from '@/pages/maas-provider/apis';
-import { isDecisionServiceType } from '@/pages/maas-provider/config/providers';
-import { MaasProviderItem } from '@/pages/maas-provider/config/types';
 import { useIntl } from '@umijs/max';
 import _ from 'lodash';
 import React, { useState } from 'react';
@@ -36,16 +33,12 @@ const useTargetSourceModels = () => {
   const fetchSourceModels = async (params?: any) => {
     setLoading(true);
     try {
-      const [models, providers] = await Promise.all([
-        queryModelsList({ page: -1, ...params }),
-        queryMaasProviders({ page: -1, ...params })
-      ]);
+      const models = await queryModelsList({ page: -1, ...params });
 
       const modelsList = [
         {
           label: intl.formatMessage({ id: 'menu.models.deployment' }),
           value: 'deployments',
-          providerType: 'deployments',
           parent: false,
           isParent: true,
           children: _.uniqBy(
@@ -85,37 +78,7 @@ const useTargetSourceModels = () => {
         }
       ].filter((group) => group.children && group.children.length > 0);
 
-      const providerOptions: CascaderOption[] = (providers?.items || [])
-        .filter(
-          (provider: MaasProviderItem) =>
-            // A decision service is not an inference backend — its cached
-            // "models" are decision engines, never servable route targets.
-            !isDecisionServiceType(provider.config?.type)
-        )
-        .map((provider: MaasProviderItem) => {
-          const children = provider.models?.map?.((model) => ({
-            label: model.name,
-            value: model.name,
-            data: {
-              overridden_model_name: model.name,
-              provider_id: provider.id,
-              parentId: provider.id
-            },
-            source: 'providerModel'
-          }));
-
-          return {
-            label: provider.name,
-            value: provider.id,
-            parent: false,
-            isParent: true,
-            providerType: provider.config?.type,
-            children: _.uniqBy(children, 'value')
-          };
-        })
-        .filter((group) => group.children && group.children.length > 0);
-
-      setSourceModels([...modelsList, ...providerOptions]);
+      setSourceModels(modelsList);
     } catch (error) {
       setSourceModels([]);
     } finally {

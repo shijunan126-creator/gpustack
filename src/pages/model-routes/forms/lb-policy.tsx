@@ -2,7 +2,6 @@ import { CardWrapper } from '@gpustack/core-ui';
 import { useIntl } from '@umijs/max';
 import { Flex, Form, Segmented, Tooltip } from 'antd';
 import { createStyles } from 'antd-style';
-import DecisionServiceFields from '../components/lb-policy/decision-service-fields';
 import PolicyPluginSection from '../components/lb-policy/policy-plugin-section';
 import PolicyWeightField from '../components/lb-policy/policy-weight-field';
 import SessionAffinityFields from '../components/lb-policy/session-affinity-fields';
@@ -28,11 +27,9 @@ const useStyles = createStyles(({ css }, isPolicy: boolean) => ({
 }));
 
 const LbPolicySection = ({
-  onModeChange,
-  getTargetModelNames
+  onModeChange
 }: {
   onModeChange: (mode: string) => void;
-  getTargetModelNames: () => string[];
 }) => {
   const intl = useIntl();
   const form = Form.useFormInstance<FormData>();
@@ -107,7 +104,6 @@ const LbPolicySection = ({
             <PolicyPluginSection plugin="least-load">
               <PolicyWeightField plugin="least-load" />
             </PolicyPluginSection>
-            <DecisionServiceFields getTargetModelNames={getTargetModelNames} />
           </div>
         )}
       </CardWrapper>

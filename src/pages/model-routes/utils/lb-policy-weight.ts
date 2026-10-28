@@ -21,16 +21,3 @@ export const toPolicyInfluence = (value: any): number => {
   }
   return Math.min(max, Math.max(min, num));
 };
-
-// Decision-service rankWeight uses whole numbers on a separate (0, 20] scale.
-export const toDecisionServiceWeight = (value: any): number => {
-  const num = toWeightNumber(value);
-  const { min, max } = POLICY_WEIGHT_CONFIG.decision;
-  if (num == null) {
-    return min;
-  }
-  if (num === 0) {
-    return 0;
-  }
-  return Math.min(max, Math.max(min, Math.round(num)));
-};

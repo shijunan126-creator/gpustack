@@ -1,4 +1,4 @@
-import ProviderLogo from '@/pages/maas-provider/components/provider-logo';
+import DeploymentLogo from '@/components/deployment-logo';
 import { DeleteOutlined } from '@ant-design/icons';
 import {
   AutoTooltip,
@@ -84,29 +84,24 @@ const RouteItem: React.FC<TargetItemProps> = ({
   // status to the last, weight absorbs whatever is between.
   const splitMiddle = middleSpan >= 3;
 
-  const renderProviderSource = () => {
-    const model = sourceModels.find((item: any) => {
-      if (data.model_id) {
-        return item.value === 'deployments';
-      }
-      return item.value === data.provider_id;
-    });
+  const renderSource = () => {
+    const model = sourceModels.find(
+      (item: any) => item.value === 'deployments'
+    );
     if (!model) {
       return '-';
     }
     return (
       <span className="flex-center" style={{ gap: 8, width: '100%' }}>
-        <ProviderLogo provider={model.providerType}></ProviderLogo>
+        <DeploymentLogo />
         <AutoTooltip ghost minWidth={20}>
-          {data.model_id
-            ? modelList?.find((m) => m.value === data.model_id)?.label
-            : data.overridden_model_name}
+          {modelList?.find((m) => m.value === data.model_id)?.label}
         </AutoTooltip>
       </span>
     );
   };
 
-  const sourceNode = renderProviderSource();
+  const sourceNode = renderSource();
   // Weight 0 is what round-robin and policy mode write to every target, so it
   // is the absence of a weight rather than a value — nothing to show. The cell
   // carries whatever the target actually is: a weight, the fallback role, or

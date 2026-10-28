@@ -16,7 +16,6 @@ export default {
   'menu.models.benchmark': 'ベンチマーク',
   'menu.models.benchmarkDetail': 'ベンチマークの詳細',
   'menu.modelCatalog': 'カタログ',
-  'menu.models.providers': 'プロバイダー',
   'menu.models.instances': 'インスタンス',
   'menu.models.routes': 'ルート',
   'menu.models.usage': '使用量',

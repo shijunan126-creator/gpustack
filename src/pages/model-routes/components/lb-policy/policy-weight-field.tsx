@@ -5,10 +5,7 @@ import { createStyles } from 'antd-style';
 import { useState } from 'react';
 import { LB_POLICY_PLUGINS, POLICY_WEIGHT_CONFIG } from '../../config';
 import type { FormData } from '../../config/types';
-import {
-  toDecisionServiceWeight,
-  toPolicyInfluence
-} from '../../utils/lb-policy-weight';
+import { toPolicyInfluence } from '../../utils/lb-policy-weight';
 import WeightSlider from './weight-slider';
 
 const useStyles = createStyles(({ css }) => ({
@@ -39,13 +36,7 @@ const PolicyWeightField = ({
     plugin,
     'weight'
   ];
-  const isDecisionService = plugin === 'decision-service';
-  const { min, max, step, defaultValue } = isDecisionService
-    ? POLICY_WEIGHT_CONFIG.decision
-    : POLICY_WEIGHT_CONFIG.influence;
-  const transform = isDecisionService
-    ? toDecisionServiceWeight
-    : toPolicyInfluence;
+  const { min, max, step, defaultValue } = POLICY_WEIGHT_CONFIG.influence;
   // Only persisted weights auto-reveal the field. An untouched plugin keeps
   // weight unset so the server can apply its built-in default.
   const [open, setOpen] = useState(() => form.getFieldValue(name) != null);
@@ -74,7 +65,7 @@ const PolicyWeightField = ({
         </Divider>
       )}
       {open && (
-        <Form.Item name={name} noStyle getValueFromEvent={transform}>
+        <Form.Item name={name} noStyle getValueFromEvent={toPolicyInfluence}>
           <WeightSlider
             label={intl.formatMessage({ id: 'routes.lb.influence' })}
             min={min}

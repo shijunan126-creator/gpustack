@@ -80,16 +80,11 @@ export const LB_POLICY_PLUGINS = {
   'least-load': {
     titleId: 'routes.lb.leastLoad',
     tipsId: 'routes.lb.leastLoad.tips'
-  },
-  'decision-service': {
-    titleId: 'routes.lb.systemone',
-    tipsId: 'routes.lb.systemone.tips'
   }
 } as const;
 
 export const POLICY_WEIGHT_CONFIG = {
-  influence: { min: 0.1, max: 2, step: 0.1, defaultValue: 1 },
-  decision: { min: 1, max: 20, step: 1, defaultValue: 10 }
+  influence: { min: 0.1, max: 2, step: 0.1, defaultValue: 1 }
 } as const;
 
 // List rendering for the server-derived `lb_mode` (plain text — the column

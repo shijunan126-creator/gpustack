@@ -12,7 +12,7 @@ type ShuihuaIconProps = Omit<
  * TODO(shuihua): every other cluster provider renders an iconfont glyph. This
  * one ships as a plain asset so the provider does not have to wear a generic
  * cloud placeholder while the mark is not in the iconfont project yet — same
- * approach as `maas-provider`'s `ProviderLogo`. Once the glyph lands, both
+ * approach the removed provider logos used. Once the glyph lands, both
  * render sites (`config/providers.ts`, `credentials.tsx`) can go back to
  * `IconFont`. The mark carries its own `#8CCCDF` fill, like `icon-aws` /
  * `icon-alicloud`, so it needs no `color` override either way.

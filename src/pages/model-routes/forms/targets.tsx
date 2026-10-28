@@ -1,5 +1,5 @@
+import DeploymentLogo from '@/components/deployment-logo';
 import { PageAction } from '@/config';
-import ProviderLogo from '@/pages/maas-provider/components/provider-logo';
 import { MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   AutoTooltip,
@@ -178,35 +178,6 @@ const TargetsForm = forwardRef((props, ref) => {
         }
       );
       setAdvancedKeys(seeded);
-    },
-    // Model names of the currently selected (non-fallback) targets, for the
-    // systemone plugin's criteria skeleton: a LoRA's overridden name, a
-    // provider model's name (also stored in overridden_model_name), or the
-    // deployment's model name looked up from the cascader source. sourceModels
-    // is fetched at mount, so the lookup is available by the time the user
-    // reaches the LB section.
-    getTargetModelNames: (): string[] => {
-      const deployments = sourceModels.find(
-        (group) => group.value === 'deployments'
-      );
-      const targetList: FormData['targets'] =
-        form.getFieldValue('targets') || [];
-      return _.uniq(
-        targetList
-          .map((target) => {
-            if (target?.overridden_model_name) {
-              return target.overridden_model_name as string;
-            }
-            if (target?.model_id != null) {
-              const option = deployments?.children?.find(
-                (child) => child.value === target.model_id
-              );
-              return option?.label as string;
-            }
-            return '';
-          })
-          .filter(Boolean)
-      );
     }
   }));
 
@@ -276,11 +247,11 @@ const TargetsForm = forwardRef((props, ref) => {
     setAdvancedKeys(shiftKeys);
   };
 
-  // Collapsed-card title: the selected provider / model labels resolved
+  // Collapsed-card title: the selected deployment / model labels resolved
   // from the cascader options tree.
   const resolveEntryTitle = (value: any[]) => {
     if (!value || value.length === 0) {
-      return intl.formatMessage({ id: 'providers.form.target.placeholder' });
+      return intl.formatMessage({ id: 'routes.form.target.placeholder' });
     }
     const parent = sourceModels.find((model: any) => model.value === value[0]);
     const child = parent?.children?.find(
@@ -288,7 +259,7 @@ const TargetsForm = forwardRef((props, ref) => {
     );
     return child?.label
       ? `${parent?.label ? `${parent.label} / ` : ''}${child.label}`
-      : intl.formatMessage({ id: 'providers.form.target.placeholder' });
+      : intl.formatMessage({ id: 'routes.form.target.placeholder' });
   };
 
   const handleFallbackChange = (value: any[], options?: any[]) => {
@@ -378,7 +349,7 @@ const TargetsForm = forwardRef((props, ref) => {
   const displayRender = (labels: any[], option: any) => {
     return (
       <LabelWrapper>
-        <ProviderLogo provider={_.get(option, '0.providerType') as string} />
+        <DeploymentLogo />
         <AutoTooltip
           ghost
           maxWidth={300}
@@ -411,22 +382,11 @@ const TargetsForm = forwardRef((props, ref) => {
       return <AutoTooltip ghost>{data.label}</AutoTooltip>;
     }
 
-    if (data.providerType === 'deployments') {
-      return (
-        <OptionWrapper>
-          <ProviderLogo provider={data.providerType as string} />
-          <AutoTooltip ghost maxWidth={105}>
-            {intl.formatMessage({ id: 'menu.models.deployment' })}
-          </AutoTooltip>
-        </OptionWrapper>
-      );
-    }
-
     return (
       <OptionWrapper>
-        <ProviderLogo provider={data.providerType as string} />
+        <DeploymentLogo />
         <AutoTooltip ghost maxWidth={105}>
-          <span>{data.label}</span>
+          {intl.formatMessage({ id: 'menu.models.deployment' })}
         </AutoTooltip>
       </OptionWrapper>
     );
@@ -460,7 +420,7 @@ const TargetsForm = forwardRef((props, ref) => {
                 ) {
                   setValidTriggered(true);
                   return Promise.reject(
-                    getRuleMessage('input', 'providers.form.target.placeholder')
+                    getRuleMessage('input', 'routes.form.target.placeholder')
                   );
                 }
                 // Weighted mode: every target must carry weight>0. Mixing
@@ -615,7 +575,7 @@ const TargetsForm = forwardRef((props, ref) => {
                       }}
                       maxTagCount={1}
                       placeholder={intl.formatMessage({
-                        id: 'providers.form.target.placeholder'
+                        id: 'routes.form.target.placeholder'
                       })}
                       value={item.value}
                       options={filterOptions(item.value)}
@@ -736,7 +696,7 @@ const TargetsForm = forwardRef((props, ref) => {
               id: 'routes.form.target.fallback'
             })}
             placeholder={intl.formatMessage({
-              id: 'providers.form.target.placeholder'
+              id: 'routes.form.target.placeholder'
             })}
             maxTagCount={1}
             value={fallbackValues.value}

@@ -16,7 +16,6 @@ export default {
   'menu.models.userModels': 'Models',
   'menu.models.benchmark': 'Benchmarks',
   'menu.models.benchmarkDetail': 'Benchmark Details',
-  'menu.models.providers': 'Providers',
   'menu.models.instances': 'Instances',
   'menu.models.routes': 'Routes',
   'menu.models.usage': 'Usage',

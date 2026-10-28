@@ -1,4 +1,4 @@
-import ProviderLogo from '@/pages/maas-provider/components/provider-logo';
+import DeploymentLogo from '@/components/deployment-logo';
 import { renderUserOption } from '@/pages/users/components/user-option-content';
 import { DownloadOutlined } from '@ant-design/icons';
 import {
@@ -76,22 +76,13 @@ const FilterBar: React.FC<FilterBarProps> = (props) => {
       return <AutoTooltip ghost>{data.label}</AutoTooltip>;
     }
 
-    if (data.providerType === 'deployments') {
-      return (
-        <span className={FilterBarCss.optionsWrapper}>
-          <ProviderLogo provider={data.providerType as string} />
-          <AutoTooltip ghost>
-            {intl.formatMessage({ id: 'menu.models.deployment' })}
-          </AutoTooltip>
-        </span>
-      );
-    }
-
     return (
       <span className={FilterBarCss.optionsWrapper}>
-        <ProviderLogo provider={data.providerType as string} />
+        {data.providerType === 'deployments' && <DeploymentLogo />}
         <AutoTooltip ghost>
-          <span>{data.label}</span>
+          {data.providerType === 'deployments'
+            ? intl.formatMessage({ id: 'menu.models.deployment' })
+            : data.label}
         </AutoTooltip>
       </span>
     );

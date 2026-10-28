@@ -3,7 +3,6 @@ export interface RouteTargetFormItem {
   overridden_model_name?: string;
   weight?: number | null;
   model_id?: number;
-  provider_id?: number;
   fallback_status_codes?: string[];
   parentId?: string | number;
   max_running_requests?: number | null;
@@ -60,33 +59,12 @@ export interface LeastLoadPluginConfig {
   weight?: number;
 }
 
-// `plugins["decision-service"]` section: route by task difficulty via a Jev
-// compatible decision service ("system-1"). providerId points to a
-// ModelProvider of type gpustack-lb-typesafe (required in the UI when the
-// card is enabled). weight maps to the wasm plugin's rankWeight (default 10).
-// criteria: model name -> capability description, the basis of the decision.
-export interface DecisionServicePluginConfig {
-  enabled?: boolean;
-  providerId?: number | null;
-  weight?: number;
-  // Route-level decision engine model, read from the selected provider's
-  // cached engines. Required in the UI when the card is enabled: without a
-  // valid model the server silently falls back and skips JEV-based routing
-  // (gpustack/gpustack#6353).
-  decisionModel?: string;
-  modelSelection?: {
-    instructions?: string;
-    criteria?: Record<string, string>;
-  };
-}
-
 // Route-level plugin namespace. A plugin key set to null means "delete the
 // plugin's config" on PUT; absent means "leave untouched".
 export interface RoutePlugins {
   lb?: LbPluginConfig | null;
   'session-affinity'?: SessionAffinityPluginConfig | null;
   'least-load'?: LeastLoadPluginConfig | null;
-  'decision-service'?: DecisionServicePluginConfig | null;
 }
 
 export interface FormData {
@@ -133,7 +111,6 @@ export interface RouteTarget extends RouteTargetFormItem {
   name: string;
   route_name: string;
   route_id: number;
-  provider_id: number;
   overridden_model_name: string;
   fallback_status_codes: string[];
   state: string;

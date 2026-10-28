@@ -16,7 +16,6 @@ export default {
   'menu.models.userModels': 'Modeller',
   'menu.models.benchmark': 'Kıyaslamalar',
   'menu.models.benchmarkDetail': 'Kıyaslama Detayları',
-  'menu.models.providers': 'Sağlayıcılar',
   'menu.models.routes': 'Yönlendirmeler',
   'menu.models.usage': 'Kullanım',
   'menu.modelCatalog': 'Katalog',

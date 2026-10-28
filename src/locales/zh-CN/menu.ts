@@ -15,7 +15,6 @@ export default {
   'menu.models.userModels': '模型广场',
   'menu.models.benchmark': '基准测试',
   'menu.models.benchmarkDetail': '基准测试详情',
-  'menu.models.providers': '提供商',
   'menu.models.instances': '实例',
   'menu.models.routes': '路由',
   'menu.models.usage': '用量统计',

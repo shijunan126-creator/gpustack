@@ -15,7 +15,6 @@ export default {
   'menu.models.deployment': 'Развёртывания',
   'menu.models.benchmark': 'Бенчмарки',
   'menu.models.benchmarkDetail': 'Подробности бенчмарка',
-  'menu.models.providers': 'Провайдеры',
   'menu.models.instances': 'Экземпляры',
   'menu.models.routes': 'Маршруты',
   'menu.models.usage': 'Использование',
