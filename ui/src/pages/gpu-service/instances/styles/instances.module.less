@@ -1,0 +1,59 @@
+.container {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.colWrapper {
+  display: flex;
+  flex: 1;
+  max-width: 33%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.formWrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.command {
+  :global {
+    .seal-textarea-label {
+      background-color: transparent;
+    }
+  }
+}
+
+.sshkeySelection {
+  :global {
+    .ant-select-content .ant-tag {
+      font-size: 12px !important;
+    }
+  }
+}
+.segmented {
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.instanceTypeCard,
+.instanceTemplateCard {
+  background-color: var(--ant-color-bg-container);
+}
+
+// TemplateCard applies a fixed inline height; override to let sliceable cards
+// (with the extra Sliceable row) grow while keeping a 106px floor.
+.instanceTypeCard {
+  height: auto !important;
+  min-height: 106px;
+}

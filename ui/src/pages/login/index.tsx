@@ -1,0 +1,270 @@
+import LogoIcon from '@/assets/images/gpustack-logo.png';
+import { initialPasswordAtom, userAtom } from '@/atoms/user';
+import { resetStorageUserSettings } from '@/atoms/utils';
+import DarkMask from '@/components/dark-mask';
+import Footer from '@/components/footer';
+import LangSelect from '@/components/lang-select';
+import ThemeDropActions from '@/components/theme-toggle/theme-drop-actions';
+import { PasswordReg } from '@/config';
+import { GPUSTACK_API_BASE_URL } from '@/config/settings';
+import { COLOR_PRIMARY } from '@/config/theme/constants';
+import { documentationPaths } from '@/constants/documentation';
+import useUserSettings from '@/hooks/use-user-settings';
+import useUserSettingsStorage from '@/hooks/use-user-settings-storage';
+import { getGPUStackPlugin } from '@/plugins';
+import { getDocumentationUrl } from '@/utils/documentation';
+import {
+  CRYPT_TEXT,
+  IS_FIRST_LOGIN,
+  writeState
+} from '@/utils/localstore/index';
+import { CoreUIProvider } from '@gpustack/core-ui';
+import {
+  getAllLocales,
+  request,
+  setLocale,
+  useIntl,
+  useModel,
+  useNavigate
+} from '@umijs/max';
+import { ConfigProvider } from 'antd';
+import { createStyles } from 'antd-style';
+import CryptoJS from 'crypto-js';
+import { useAtom } from 'jotai';
+import { useCallback, useEffect, useMemo } from 'react';
+import { flushSync } from 'react-dom';
+import styled from 'styled-components';
+import { updatePassword as updatePasswordApi } from './apis';
+import Background from './components/background';
+import LoginForm from './components/login-form';
+import PasswordForm from './components/password-form';
+import { useInitialPasswordGuard } from './hooks/use-initial-password-guard';
+import { useLocalAuth } from './hooks/use-local-auth';
+import { useSSOAuth } from './hooks/use-sso-auth';
+import { checkDefaultPage } from './utils';
+
+const COLOR_LINK = '#1677ff';
+
+const useStyles = createStyles(({ token, css }) => ({
+  header: css`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 60px;
+    padding: 20px;
+    z-index: 100;
+    .anticon-global {
+      color: ${token.colorText};
+    }
+    .anticon:hover {
+      color: ${token.colorTextTertiary};
+    }
+  `,
+  formContainer: css`
+    height: calc(100vh - 64px);
+    width: 100%;
+  `
+}));
+
+const Box = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+  .ant-form-item-label {
+    line-height: 1;
+    padding-bottom: 4px;
+  }
+  .ant-form-item-label > label:after {
+    display: none;
+  }
+  .ant-form-item-label > label {
+    height: auto !important;
+  }
+`;
+
+const FormWrapper = styled.div`
+  margin: 0 auto;
+  margin-top: 50vh;
+  width: 400px;
+  transform: translateY(-50%);
+  position: relative;
+  z-index: 999;
+  border-radius: var(--border-radius-modal);
+  height: max-content;
+  max-height: 660px;
+  padding: 40px;
+  background-color: var(--color-modal-content-bg);
+  box-shadow: var(--color-modal-box-shadow);
+  .field-wrapper {
+    background-color: transparent !important;
+  }
+
+  .ant-input-outlined.ant-input-status-error:not(.ant-input-disabled) {
+    background-color: transparent !important;
+  }
+`;
+
+const decryptInitialPassword = (password: string) => {
+  const bytes = CryptoJS.AES?.decrypt?.(password, CRYPT_TEXT);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
+
+const Login = () => {
+  const { styles } = useStyles();
+  const intl = useIntl();
+  const navigate = useNavigate();
+  const userSettingsStorage = useUserSettingsStorage();
+  const { themeData, userSettings, isDarkTheme } = useUserSettings();
+  const [userInfo, setUserInfo] = useAtom(userAtom);
+  const [initialPassword, setInitialPassword] = useAtom(initialPasswordAtom);
+  const { initialState, setInitialState } = useModel('@@initialState') || {};
+
+  // Runs ahead of the render branch below so the custom-login path gets
+  // the same recovery — its component reads `userInfo` off `kit`, which
+  // the logout clears.
+  const credentialLost = useInitialPasswordGuard();
+
+  const plugin = getGPUStackPlugin();
+
+  const CustomLoginComponent = plugin?.login?.CustomLoginComponent;
+  const shouldUseCustomLogin = plugin?.login?.shouldUseCustomLogin;
+
+  const useCustomLogin = useMemo(
+    () => shouldUseCustomLogin?.(userSettings),
+    [shouldUseCustomLogin, userSettings]
+  );
+
+  const gotoDefaultPage = async (info: any) => {
+    if (!info || info?.require_password_change) {
+      return;
+    }
+
+    checkDefaultPage(info, true);
+    if (!initialState?.currentUser) {
+      setInitialState((preState: any) => ({
+        ...preState,
+        currentUser: info
+      }));
+    }
+  };
+
+  useEffect(() => {
+    gotoDefaultPage(userInfo);
+  }, [userInfo]);
+
+  const fetchUserInfo = useCallback(async () => {
+    const info = await initialState?.fetchUserInfo?.();
+    if (info) {
+      flushSync(() => {
+        setInitialState((s: any) => ({
+          ...s,
+          currentUser: info
+        }));
+      });
+    }
+    return info;
+  }, [initialState, setInitialState]);
+
+  const onPasswordChanged = useCallback(() => {
+    resetStorageUserSettings();
+    writeState(IS_FIRST_LOGIN, null);
+  }, []);
+
+  const kit = useMemo(
+    () => ({
+      useLocalAuth,
+      useSSOAuth,
+      userInfo,
+      setUserInfo,
+      fetchUserInfo,
+      checkDefaultPage,
+      initialPassword,
+      setInitialPassword,
+      decryptInitialPassword,
+      updatePassword: updatePasswordApi,
+      passwordReg: PasswordReg,
+      onPasswordChanged,
+      resetPasswordUrl: getDocumentationUrl(
+        documentationPaths.resetPassword,
+        intl.locale
+      ),
+      formLogoUrl: LogoIcon
+    }),
+    [
+      userInfo,
+      setUserInfo,
+      fetchUserInfo,
+      initialPassword,
+      setInitialPassword,
+      onPasswordChanged,
+      intl.locale
+    ]
+  );
+  return (
+    <ConfigProvider componentSize="large" theme={themeData}>
+      <CoreUIProvider
+        config={{
+          apiBaseUrl: GPUSTACK_API_BASE_URL,
+          theme: userSettings.theme,
+          iconUrl: '',
+          isDarkTheme: userSettings.isDarkTheme,
+          defaultColorPrimary: COLOR_PRIMARY
+        }}
+        hooks={
+          {
+            useUserSettings: useUserSettings as any,
+            useUserSettingsStorage: () => userSettingsStorage,
+            useIntl: useIntl
+            // useCurrentUser / useTableFetch are required by the
+            // 1.0.10 CoreHooks type but the login page doesn't use
+            // either — nothing here lists data or reads the current
+            // user. Cast away rather than mounting stubs that would
+            // never run.
+          } as any
+        }
+        i18n={intl}
+        locale={{
+          getAllLocales: getAllLocales,
+          setLocale: setLocale
+        }}
+        services={{
+          request: request,
+          router: {
+            push: (path: string) => navigate(path),
+            replace: (path: string) => navigate(path, { replace: true }),
+            goBack: () => navigate(-1)
+          }
+        }}
+      >
+        <div className={styles.header}>
+          <ThemeDropActions></ThemeDropActions>
+          <LangSelect />
+        </div>
+        <DarkMask></DarkMask>
+        <Background isDarkTheme={isDarkTheme} />
+        {useCustomLogin && CustomLoginComponent ? (
+          <CustomLoginComponent kit={kit} />
+        ) : (
+          <Box>
+            <div className={styles.formContainer}>
+              <FormWrapper>
+                {userInfo?.require_password_change && !credentialLost ? (
+                  <PasswordForm />
+                ) : (
+                  <LoginForm />
+                )}
+              </FormWrapper>
+            </div>
+            <Footer />
+          </Box>
+        )}
+      </CoreUIProvider>
+    </ConfigProvider>
+  );
+};
+
+export default Login;

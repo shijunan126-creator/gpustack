@@ -1,0 +1,1170 @@
+@import url('src/assets/styles/common.less');
+@import url('src/assets/styles/menu.less');
+@import url('src/assets/styles/driver.less');
+@import './assets/styles/message.less';
+@import url('./overrides.less');
+
+html {
+  --page-header-height: 56px;
+  --page-content-padding: 8px;
+  --app-banner-height: 0px;
+  --color-text-light-1: rgba(255, 255, 255, 90%);
+  // Literal, not `var(--ant-color-bg-container)` — see the status block below
+  // for why aliasing an antd cssVar at `html` scope silently yields nothing.
+  // This one predates that block: its three consumers (core-ui `transition`,
+  // `divider-line`) have been rendering a transparent background all along.
+  --color-fill-1: #fdfdfd;
+  --color-scrollbar-thumb: rgba(193, 193, 193, 80%);
+  --scrollbar-size: 6px;
+  --scrollbar-handle-bg: rgba(0, 0, 0, 44%);
+  --scrollbar-handle-light-bg: rgba(255, 255, 255, 25%);
+  --scrollbar-handle-hover-bg: rgba(0, 0, 0, 55%);
+  --color-editor-dark: #282c34;
+  --color-editor-light: #fafafa;
+  --color-editor-header-bg: #383838;
+  // Scrollbar track inside the log / terminal viewers. NOT a page surface —
+  // the old comment claimed it followed `--ant-color-fill-tertiary`, which it
+  // never matched. `--color-fill-sider` and `--color-bg-1` sat beside it with
+  // the same value and zero consumers; both are gone.
+  --color-scrollbar-track: #f4f5f4;
+  // The page canvas (antd's B1 layer). Also fed to antd as `colorBgLayout` in
+  // `theme/light.ts`, so the `<html>` backdrop and any antd Layout agree.
+  --color-bg-page: #f4f5f6;
+  --color-scroll-bg: #d9d9d9;
+  --color-logs-bg: #1e1e1e;
+  --color-logs-text: #d4d4d4;
+  --layout-content-blockpadding: 24px;
+  --layout-content-inlinepadding: 24px;
+  --layout-content-header-inlinepadding: 40px;
+  // Radius scale — one value per ROLE, no aliases and no value-named tokens.
+  // modal/drawer 12 · page container 8 · card & control 6 · inner control 4 ·
+  // hairline chip 2. Anything not on this list is off the scale.
+  // (`--border-radius-small: 3px` and `--border-radius-2px` are gone: both
+  // duplicated `base` / `mini` by value. `.desc-block` was the one consumer of
+  // `-2px` and now reads `mini`, which is the same 2px.)
+  --border-radius-modal: 12px;
+  --border-radius-container: 8px;
+  --menu-border-radius-base: 6px;
+  --border-radius-lg: 6px;
+  --border-radius-base: 4px;
+  --border-radius-mini: 2px;
+  --color-white-1: rgba(255, 255, 255, 100%);
+  // Weight scale. `medium` is 500 and `semibold` is 600, per CSS convention —
+  // the old `--font-weight-medium: 600` claimed to be medium while emitting
+  // semibold, and `--font-weight-500` named itself by value instead of role.
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --color-progress-text: rgba(255, 255, 255, 100%);
+  --color-white-primary: rgba(255, 255, 255, 100%);
+  --color-white-secondary: rgba(255, 255, 255, 90%);
+  --color-white-tertiary: rgba(255, 255, 255, 70%);
+  --color-white-quaternary: rgba(255, 255, 255, 50%);
+  --color-white-light-1: rgba(255, 255, 255, 15%);
+  --color-white-light-2: rgba(255, 255, 255, 25%);
+  --color-white-light-3: rgba(255, 255, 255, 35%);
+  --color-white-light-4: rgba(255, 255, 255, 45%);
+  --color-gray-fill-4: rgba(92, 92, 92, 45%);
+  --color-gray-fill-3: rgba(92, 92, 92, 35%);
+  --color-text-3: rgba(0, 0, 0, 45%);
+  --color-text-2: rgba(0, 0, 0, 65%);
+  --color-bg-light-1: #e6f6ff;
+  // Type scale — one value per role. `--font-size-middle` was a second name for
+  // `base` (both 14px) and is gone. `caption` is the 12px step the codebase was
+  // already using ~64 times as a bare literal (or via the misnamed `code`).
+  --font-size-caption: 12px;
+  --font-size-code: 12px;
+  --font-size-small: 13px;
+  --font-size-base: 14px;
+  --font-size-large: 16px;
+  --font-size-title: 20px;
+  --font-size-display: 24px;
+  --table-td-radius: 6px;
+  --checkbox-border-radius: 4px;
+  // ---------------------------------------------------------------------------
+  // There are deliberately NO `--ant-*` declarations in this file.
+  //
+  // antd owns those: with cssVar on (antd 6 default) it emits them scoped to a
+  // ConfigProvider-owned class, so anything declared here on `html` is only
+  // visible AT `html` — every real component reads antd's value instead. Ten
+  // such overrides used to live in this block and none of them did anything:
+  //
+  //   --ant-color-success / --ant-border-radius-lg  duplicated `theme/light.ts`
+  //   --ant-color-error / --ant-line-type / --ant-line-width /
+  //   --ant-rate-star-color / --ant-box-shadow-secondary
+  //                                        restated antd's own defaults verbatim
+  //   --ant-color-border: #d9d9d9          lost to `theme/light.ts`'s #d3d8de
+  //   --ant-color-success-bg / --ant-color-error-bg
+  //                                        lost to antd's derived palette step
+  //
+  // To change an antd token, edit `config/theme/light.ts` / `dark.ts`.
+  // ---------------------------------------------------------------------------
+  --color-chart-red: rgba(255, 77, 79, 80%);
+  --color-chart-green: rgb(84, 204, 152, 80%);
+  --color-chart-glod: rgba(250, 173, 20, 80%);
+  --seal-transition-func: cubic-bezier(0, 0, 1, 1);
+  --color-green-fill-light: rgb(243 251 248);
+  --color-fill-spin-bg: rgba(255, 255, 255, 15%);
+  --width-tooltip-max: 420px;
+  --color-modal-content-bg: rgba(255, 255, 255, 90%);
+  --color-modal-box-shadow: 0 4px 16px rgba(0, 0, 0, 10%);
+  --color-spotlight-bg: rgba(255, 255, 255, 100%);
+  // ======== input ============
+  --box-shadow-base: 0 4px 6px rgba(227, 232, 240, 70%);
+  --color-selected-bg: rgba(230, 230, 230, 88%);
+  --color-esc-hint-bg: rgba(0, 0, 0, 75%);
+  // ======== container ============
+  --color-border-container: #ededed;
+  // 5.90:1 on the header's `--ant-color-fill-tertiary`. The previous #71717a
+  // measured 4.31:1 — under the 4.5:1 AA floor for the 14px header text.
+  --color-text-table-header: #5c5c66;
+  // Sider nav item resting colour — icon and label both. Not an antd step:
+  // `text-secondary` (.65) is legible but sits only 2.24x off the group titles
+  // (`colorText`), and with 30+ items in the rail that flattening is what makes
+  // the list unscannable. `text-tertiary` (.45) is what the design originally
+  // used FOR that separation, but it measures 3.30:1 here — fine for the icon
+  // as a graphic, a fail for the label as text.
+  // .55 is the lightest step that still clears 4.5:1, so it buys back most of
+  // the hierarchy (3.24x off the group titles) without the AA failure.
+  // Measured on the real sider surface: #f4f5f6 light, #141414 dark.
+  --color-sider-item-text: rgba(0, 0, 0, 55%);
+  --seal-table-row-min-height: 68px;
+  // The expanded child row is 80% of a parent row rather than a literal, so the
+  // two stay on one rhythm when the parent height is retuned.
+  --seal-table-child-row-height: calc(var(--seal-table-row-min-height) * 0.8);
+  // ======== status ============
+  // One layer for all five states. `StatusColorMap` used to read the PALETTE
+  // scale for error/warning/transitioning but the SEMANTIC token for success, so
+  // a brand change reached two of five.
+  //
+  // LITERAL VALUES ON PURPOSE — do not rewrite these as `var(--ant-*)`.
+  // antd 6 enables cssVar by default and scopes its variables to a CLASS on a
+  // ConfigProvider-owned element, not to `:root`. A custom property's `var()` is
+  // substituted on the element the DECLARATION sits on, so `--x: var(--ant-red-7)`
+  // written here (on `html`) looks for `--ant-red-7` on `html`, does not find it,
+  // and collapses the whole property to guaranteed-invalid — consumers then fall
+  // back to inherited text and a transparent background. A `var(--ant-*)` used
+  // directly as a property value on a deep element is fine; it is only this
+  // aliasing-at-the-root pattern that breaks.
+  //
+  // Values are the antd palette steps by hex. Measured against their own tinted
+  // background, light theme: error 5.07 · warning 5.09 · transitioning 5.50 ·
+  // success 5.27. All clear the 4.5:1 AA floor for the tag's 12px/400 label.
+  // The TINTS are deliberately stronger than the antd `-1` steps they started
+  // from. Those were ~99% white, so the pill barely existed and the state read
+  // as a stretch of faint text rather than a badge. The text cannot go back
+  // toward vivid to compensate — at 12px on a light tint, `#fa8c16` tops out at
+  // 2.23:1 and the brand mint `#54cc98` at 1.94:1, which is arithmetic, not
+  // taste. So the contrast headroom is spent on the background instead, which is
+  // what makes the chip read as a chip.
+  --color-status-error-text: #cf1322;
+  --color-status-error-bg: #ffe3e1; // 4.60:1
+  --color-status-warning-text: #ad4e00;
+  --color-status-warning-bg: #ffeed2; // 4.76:1
+  --color-status-transitioning-text: #0958d9;
+  --color-status-transitioning-bg: #d6ebff; // 5.04:1
+  // The brand mint darkened along its own hue for use as TEXT.
+  --color-status-success-text: #317658;
+  --color-status-success-bg: #dcf8e8; // 4.82:1
+  --color-status-inactive-text: rgba(0, 0, 0, 45%);
+  --color-status-inactive-bg: #f7f8fa;
+  --color-status-inactive-border: #d9d9d9;
+  // A filled dot is a GRAPHIC, not text. It never carries the state on its own —
+  // `StatusDot` always renders a label beside it — so it is not bound by the
+  // 4.5:1 text floor, and painting it with the darkened text colour was a
+  // category error: it made a bright brand mint come out as dark pine. These are
+  // the vivid brand hues, which is what a dot wanted all along.
+  --color-status-error-dot: #f5222d;
+  --color-status-warning-dot: #fa8c16;
+  --color-status-transitioning-dot: #1677ff;
+  --color-status-success-dot: #54cc98;
+  // `outlined` StatusTag. A third step, because that variant has no tint under
+  // it — the label sits straight on the container. The `-text` steps above are
+  // darkened to clear 4.5:1 against their own PALE TINT, and a tint is darker
+  // than the container, so on white they overshoot to 5.4–6.2 and read muddy.
+  //
+  // These are the lightest value on each hue that still clears 4.5:1 on the
+  // container, solved in OKLCH from the vivid `-6` step. The old palette values
+  // cannot simply come back: as 12px text on white they measure error 4.08,
+  // transitioning 4.10, warning 2.38 and success 2.01 — all fails.
+  // error and transitioning land essentially back at vivid; success gets much
+  // more saturated than its `-text` step. Warning barely moves and that is
+  // arithmetic, not a choice — amber cannot be both vivid and 4.5:1 on white.
+  //
+  // Dark mode needs no counterpart: its `-text` steps are light-on-dark and
+  // already measure 6.51–10.32 on the container, so the dark block maps these
+  // straight onto `-text`.
+  --color-status-error-outline: #ec0f25; // 4.50:1
+  --color-status-warning-outline: #b46100; // 4.52:1
+  --color-status-transitioning-outline: #086ff7; // 4.54:1
+  --color-status-success-outline: #00875c; // 4.55:1
+  // The outlined pill's BORDER: a HAIRLINE, deliberately weaker than the label
+  // it encloses.
+  //
+  // These were briefly solved to 3:1 on the theory that a border is a graphic.
+  // That over-applies the rule — a decorative hairline carries no information,
+  // the label does — and it inverted the pill: the outline came out more vivid
+  // than its own text, so the eye read the ring instead of the state.
+  //
+  // The correct relationship was already in the component. `inactive` pairs a
+  // `.45` label with a `#d9d9d9` border at **1.41:1**, and the download state's
+  // border measures 1.42 — so the one variant the original author styled by
+  // hand used a hairline. These four now match that, per hue.
+  // Every one is 1.41–1.42:1 on the container; the labels are untouched.
+  --color-status-error-outline-border: #ffcdc8; // 1.42:1
+  --color-status-warning-outline-border: #ffd0ac; // 1.41:1
+  --color-status-transitioning-outline-border: #c3daff; // 1.42:1
+  --color-status-success-outline-border: #85edbd; // 1.41:1
+  // The download tag's progress bar, which is a THIRD surface again — neither
+  // the container nor the tint. It used `--ant-color-success-border` (#d8f2e4),
+  // which measures 1.050 against the filled variant's own tint: on the default
+  // variant the bar was invisible. And its label reused the tint's `-text` step
+  // (#317658), which lands at 3.83 once the bar is strong enough to see.
+  // Bar solved to stay visible on BOTH surfaces (1.418 on the container, 1.258
+  // on the tint); label solved for 4.5:1 against the bar, its hardest segment —
+  // it also crosses the unfilled part, measuring 6.39 on the container and 5.67
+  // on the tint.
+  --color-status-success-progress-bg: #a8e6c7;
+  --color-status-success-progress-text: #006d4a; // 4.51:1 on the bar
+}
+
+html[data-theme='realDark'] {
+  --color-fill-1: #1f1f1f;
+  --color-logs-bg: #141414;
+  --color-white-1: #141414;
+  --color-bg-page: #141414;
+  --color-editor-dark: #00101f;
+  --color-editor-light: #fafafa;
+  --color-fill-spin-bg: rgba(55, 55, 55, 50%);
+  --color-editor-header-bg: #292929;
+  --color-progress-text: rgba(255, 255, 255, 80%);
+  --color-modal-content-bg: #1f1f1f;
+  --color-modal-box-shadow: none;
+  --color-spotlight-bg: #3e3e3e;
+  --color-esc-hint-bg: rgba(150, 150, 150, 75%);
+  --color-border-container: #3a3a3a;
+  // 5.52:1 on the dark header fill. The previous 30% white measured 2.35:1.
+  --color-text-table-header: rgba(255, 255, 255, 60%);
+  // 6.15:1 on the dark sider (#141414). See the light block for why .55.
+  --color-sider-item-text: rgba(255, 255, 255, 55%);
+  // Dark counterparts — all five, since the light block is now literal hex and
+  // nothing inverts on its own.
+  //
+  // The tints are NOT antd's dark `-1` steps. Those are built to sit on antd's
+  // own `#141414` container; this app sets `colorBgBase: '#0a0a0a'`, from which
+  // antd derives container `#1e1e1e` and elevated `#292929`. Against those the
+  // `-1` steps measured 1.04–1.08:1 — invisible — and `error` / `transitioning`
+  // were actually DARKER than the container, so the pill read as a hole punched
+  // in the surface rather than a tint laid on it.
+  //
+  // These are generated instead: each keeps its text colour's OKLCH hue at
+  // C 0.055, with L fixed at 0.336 — the ELEVATED surface's L (0.281) plus the
+  // ΔL 0.055 that the light tints sit at against white. Targeting elevated
+  // rather than container is deliberate: a drawer is the harder surface, and a
+  // tint tuned only for the table would vanish there.
+  //   vs elevated  error 1.19 · warning 1.21 · transitioning 1.21 · success 1.26
+  //                (light mode against white: 1.13–1.22 — same step)
+  //   vs container error 1.36 · warning 1.38 · transitioning 1.39 · success 1.44
+  //   text on tint error 4.77 · warning 7.46 · transitioning 5.33 · success 5.78
+  // `error` is the binding constraint: one more L step puts it at 4.50, so do
+  // not lighten these without re-measuring the text against them.
+  --color-status-error-text: #ff7875;
+  --color-status-error-bg: #502b29;
+  --color-status-warning-text: #ffc069;
+  --color-status-warning-bg: #483213;
+  --color-status-transitioning-text: #69b1ff;
+  --color-status-transitioning-bg: #213852;
+  --color-status-success-text: #54cc98;
+  --color-status-success-bg: #18402e;
+  --color-status-inactive-text: rgba(255, 255, 255, 45%);
+  --color-status-inactive-bg: rgba(255, 255, 255, 4%);
+  --color-status-inactive-border: #424242;
+  // On a dark canvas the text steps are already vivid enough to double as dot
+  // fills, so these match — unlike light mode, dark needed no separate ramp.
+  --color-status-error-dot: #ff7875;
+  --color-status-warning-dot: #ffc069;
+  --color-status-transitioning-dot: #69b1ff;
+  --color-status-success-dot: #54cc98;
+  // Same as `-text` here. On a dark container these steps are light-on-dark and
+  // already measure 6.51 / 10.32 / 7.41 / 8.31 with no tint under them, so the
+  // light block's problem — a step darkened for a tint overshooting on the
+  // container — simply does not arise.
+  // NOT the `-text` values above. The container (#1e1e1e) is DARKER than the
+  // tint those are tuned for, so reusing them overshot in the bright direction
+  // — error 6.51, transitioning 7.41, success 8.31 and warning a glaring 10.32
+  // against a 4.5 requirement. These are the dimmest step on each hue that
+  // still clears 4.5:1 on the container. Mirror image of the light block, where
+  // the same rule makes `outline` LIGHTER than `text`.
+  --color-status-error-outline: #dd5a59; // 4.51:1
+  --color-status-warning-outline: #b47913; // 4.51:1
+  --color-status-transitioning-outline: #4088d2; // 4.50:1
+  --color-status-success-outline: #009867; // 4.51:1
+  // Hairlines at dark `inactive`'s strength (`#424242`, 1.66:1) — but derived
+  // by mixing the ink above toward the surface, NOT by holding chroma and
+  // dropping lightness the way the light block does.
+  //
+  // Both methods land on the same luminance; they differ in chroma, and on a
+  // dark surface that decides everything. Holding red's chroma at the required
+  // luminance produces #8a0018 — a saturated maroon that reads as a different
+  // colour from the salmon label it encloses, not as a faint version of it. A
+  // hairline should be a whisper of the ink, so it has to be desaturated.
+  --color-status-error-outline-border: #653434; // 1.66:1
+  --color-status-warning-outline-border: #543f1a; // 1.67:1
+  --color-status-transitioning-outline-border: #2a4560; // 1.68:1
+  --color-status-success-outline-border: #134b39; // 1.66:1
+  // Dark download. Bar 1.264 on the dark tint (#18402e) / 1.818 on the
+  // container; label 4.52 on the bar, 8.21 on the container, 5.71 on the tint.
+  // Note the light/dark inversion: on a light surface the bar is DARKER than
+  // what surrounds it and the label darker still, while here the bar is darker
+  // than the container but the label has to go LIGHTER than the bar.
+  --color-status-success-progress-bg: #005336;
+  --color-status-success-progress-text: #52cb97;
+
+  background: var(--color-bg-page);
+
+  .ant-result-image {
+    opacity: 0.9;
+  }
+}
+
+html[data-theme='light'] {
+  background-color: var(--color-bg-page);
+}
+
+body {
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+
+  .ant-tabs-tab {
+    transition: none !important;
+  }
+
+  .ant-pro-page-container-affix {
+    .ant-affix {
+      top: 0 !important;
+    }
+  }
+
+  .ant-modal-confirm-title {
+    display: none;
+  }
+
+  .ant-slider:hover .ant-slider-handle::after {
+    box-shadow: 0 0 0 var(--ant-slider-handle-line-width)
+      var(--ant-slider-track-hover-bg);
+  }
+
+  // table
+  .ant-table-wrapper {
+    .ant-table {
+      background: transparent !important;
+      color: var(--ant-color-text-secondary);
+    }
+
+    .ant-table-selection-column {
+      padding-inline-start: 16px !important;
+    }
+  }
+
+  .ant-table .ant-table-container table {
+    .ant-table-thead th.ant-table-column-sort {
+      background-color: transparent;
+
+      &::before {
+        background-color: var(--ant-table-header-split-color) !important;
+      }
+    }
+
+    .ant-checkbox {
+      .ant-checkbox-inner::after {
+        display: flex !important;
+      }
+    }
+
+    .ant-checkbox-indeterminate .ant-checkbox-inner::after {
+      display: flex !important;
+    }
+
+    .ant-table-thead {
+      tr {
+        background-color: var(--ant-color-fill-tertiary);
+
+        > th {
+          border: none;
+          padding-block: 0;
+          height: 50px;
+          background-color: transparent;
+          color: var(--color-text-table-header);
+          font-weight: 500;
+
+          &::before {
+            transition: none !important;
+          }
+        }
+      }
+    }
+
+    tr > td {
+      border-bottom: none;
+      height: var(--seal-table-row-min-height);
+    }
+  }
+
+  .ant-input-outlined,
+  .ant-input-number {
+    background: transparent !important;
+  }
+
+  // set for the non-form item
+  .ant-input-outlined,
+  .ant-input-affix-wrapper,
+  .ant-select-lg,
+  .ant-picker {
+    height: 40px;
+  }
+
+  // icon
+  .anticon {
+    &.size-16 {
+      font-size: 16px;
+    }
+  }
+
+  // ============== new theme style start ===============
+  .ant-pro-layout {
+    height: 100%;
+
+    .ant-pro-sider {
+      --sider-logo-size: 18px;
+      --sider-logo-expanded-area-height: 56px;
+      --sider-logo-area-height: var(--sider-logo-expanded-area-height);
+      --sider-menu-icon-size: 16px;
+      --sider-menu-item-padding-inline: var(--ant-padding);
+
+      &.ant-pro-sider-collapsed {
+        --sider-logo-size: 24px;
+        --sider-logo-area-height: 48px;
+        --sider-logo-optical-offset: 1px;
+      }
+    }
+
+    .ant-pro-sider-footer {
+      padding-block: 4px 0;
+      padding-left: 8px;
+    }
+
+    .ant-pro-sider-actions-list-item {
+      padding: 0;
+
+      &:hover {
+        background-color: unset;
+      }
+    }
+
+    .ant-pro-sider-logo {
+      position: relative;
+      box-sizing: border-box;
+      // Give the expanded wordmark room while keeping the collapsed rail compact.
+      margin-block-start: 0;
+      height: var(--sider-logo-area-height);
+      flex-shrink: 0;
+      // Keep the logo's center fixed while the brand area changes height.
+      padding-block: calc(
+          var(--sider-logo-expanded-area-height) - var(--sider-logo-area-height)
+        )
+        0;
+      // Use the menu icons' axis with a small optical correction when collapsed.
+      padding-inline: calc(
+          var(--sider-menu-item-padding-inline) +
+            (var(--sider-menu-icon-size) - var(--sider-logo-size)) / 2 +
+            var(--sider-logo-optical-offset, 0px)
+        )
+        var(--sider-menu-item-padding-inline);
+      flex-direction: row;
+      justify-content: flex-start;
+      overflow: hidden;
+      border-block-end: none;
+      transition:
+        height var(--ant-motion-duration-mid),
+        padding-block-start var(--ant-motion-duration-mid);
+
+      @media (prefers-reduced-motion: reduce) {
+        transition: none;
+      }
+
+      > a {
+        min-width: 0;
+        max-width: 100%;
+        justify-content: flex-start;
+
+        > h1:empty {
+          display: none;
+        }
+      }
+
+      .sider-brand-logo {
+        display: block;
+        height: var(--sider-logo-size);
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+
+      .sider-brand-logo-padded {
+        // The built-in wordmark is 108px tall with 72px of visible artwork.
+        height: calc(var(--sider-logo-size) * 1.5);
+        // Let the sider reveal the wordmark without shrinking it mid-transition.
+        max-width: none;
+      }
+    }
+
+    .ant-pro-sider-logo {
+      .collapse-btn {
+        color: var(--ant-color-text-tertiary);
+        :hover {
+          color: var(--ant-color-text);
+        }
+      }
+    }
+  }
+
+  .ant-table .ant-table-tbody {
+    .ant-table-row {
+      border-radius: var(--table-td-radius);
+
+      > td {
+        border-bottom: 1px solid var(--ant-color-split);
+      }
+    }
+  }
+
+  // ============== new theme style end =================
+}
+
+// ======== menu style start ============
+.ant-pro-sider-collapsed-button {
+  display: none;
+}
+
+.ant-pro-base-menu-vertical-item-title,
+.ant-pro-base-menu-vertical-item-title-collapsed {
+  height: var(--ant-menu-item-height) !important;
+  line-height: var(--ant-menu-item-height) !important;
+}
+
+.ant-pro-layout {
+  height: 100vh;
+
+  .ant-menu-inline-collapsed {
+    .anticon {
+      font-size: 16px;
+    }
+  }
+
+  .ant-pro-sider-actions-list-collapsed {
+    margin-block-end: 0;
+  }
+
+  .ant-pro-page-container-children-container {
+    padding-block: var(--layout-content-blockpadding);
+    padding-inline: var(--layout-content-inlinepadding);
+  }
+
+  .ant-layout {
+    min-height: 100vh;
+    background: var(--ant-color-bg-container);
+  }
+
+  .ant-pro-layout-bg-list {
+    background: transparent !important;
+  }
+
+  .ant-pro-layout-container {
+    overflow-x: auto;
+    min-height: 100vh;
+  }
+
+  .ant-pro-sider {
+    .ant-pro-base-menu-inline-item-title {
+      gap: 12px;
+    }
+
+    .ant-menu {
+      .ant-menu-item.ant-menu-item-selected {
+        font-weight: 400;
+      }
+
+      .ant-menu-item-group-title.hide-submenu + .ant-menu-item-group-list {
+        display: none;
+      }
+    }
+  }
+}
+
+// ======== menu style end ============
+
+.ant-menu-submenu-popup {
+  .ant-menu-sub {
+    .ant-menu-item-only-child {
+      height: 40px;
+      line-height: 40px;
+
+      .anticon {
+        font-size: var(--font-size-base);
+      }
+    }
+  }
+}
+
+.user-menu-container {
+  .user-avatar.ant-menu-submenu {
+    .ant-menu-submenu-title {
+      padding-left: 10px;
+    }
+  }
+
+  &.user-menu-collapsed {
+    .ant-menu-submenu-title {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding-inline: unset !important;
+      width: 100%;
+      margin-inline: 0 !important;
+    }
+
+    .user-avatar.ant-menu-submenu {
+      .ant-menu-submenu-title {
+        padding: 0 !important;
+        display: flex;
+        justify-content: center;
+
+        .ant-menu-title-content {
+          display: none;
+        }
+      }
+    }
+
+    .sub-title {
+      display: none !important;
+    }
+  }
+
+  .ant-menu-submenu-title {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+  }
+}
+
+.ant-menu-submenu-popup > .ant-menu {
+  border-radius: var(--menu-border-radius-base);
+}
+
+// ======== monaco editor style ============
+.monaco-editor {
+  border-radius: 8px;
+}
+
+.ant-modal-centered.ant-modal-wrap {
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  &:hover {
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-handle-bg);
+      border-radius: 4px;
+    }
+  }
+}
+
+.custome-scrollbar {
+  &::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  &:hover {
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--color-scrollbar-thumb);
+      border-radius: 4px;
+    }
+  }
+}
+
+.custom-scrollbar-horizontal {
+  &::-webkit-scrollbar {
+    height: var(--scrollbar-size);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  &:hover {
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--color-scrollbar-thumb);
+      border-radius: 4px;
+    }
+  }
+}
+
+.rc-virtual-list-scrollbar {
+  width: var(--scrollbar-size) !important;
+}
+
+.ant-dropdown-menu
+  .ant-dropdown-menu-item.ant-dropdown-menu-item-danger:not(
+    .ant-dropdown-menu-item-disabled
+  ):hover {
+  background-color: var(--ant-color-error-bg) !important;
+  color: var(--color-status-error-text) !important;
+}
+
+.ant-image {
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+
+  .ant-image-mask {
+    background: rgba(0, 0, 0, 25%);
+  }
+}
+
+.ant-upload.ant-upload-drag {
+  background: none;
+}
+
+.background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background-color: var(--color-white-1);
+
+  &::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 1;
+    height: 100%;
+  }
+}
+
+.full-wrap::after {
+  content: '';
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.ant-pro-page-container {
+  .ant-page-header-heading {
+    min-width: max-content;
+  }
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.skeleton-loading {
+  animation: skeleton-loading 2.5s ease infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 4%) 25%,
+    rgba(0, 0, 0, 8%) 37%,
+    rgba(255, 255, 255, 4%) 63%
+  );
+  background-size: 400% 100%;
+}
+
+.ant-modal {
+  max-width: 100vw;
+
+  // 500, same as the drawer title below. A modal and a drawer are the same
+  // class of overlay, so leaving one at 600 would just move the inconsistency
+  // rather than remove it. Same reasoning as the drawer: an overlay title
+  // already gets its level from position.
+  .ant-modal-title {
+    font-weight: var(--font-weight-medium);
+  }
+}
+
+// 500, matching the inline weight `GSDrawer` puts on its own title. Without
+// this the two disagree: 55 files reach a drawer through `GSDrawer` /
+// `FormDrawer` and render 500, while the ~8 that use antd's `Drawer` directly
+// fall through to antd's default `fontWeightStrong` (600) — the same kind of
+// title rendering at two weights depending on which component the page picked.
+//
+// Not deleted, set: deleting this rule restores antd's 600 rather than
+// removing the override's effect.
+//
+// 500 rather than 600 because an overlay title already has all the hierarchy
+// it needs from position — it sits alone at the top of a panel with a rule
+// under it. Weight would be a second channel saying the same thing.
+.ant-drawer .ant-drawer-title {
+  font-weight: var(--font-weight-medium);
+}
+
+.ant-cascader-menu-item.ant-cascader-menu-item-active {
+  background-color: var(--ant-select-option-selected-bg) !important;
+}
+
+.ant-cascader-dropdown .ant-cascader-menu {
+  flex-grow: unset;
+}
+
+// Menu chrome shared by both placements of the model/GPU cascader dropdown.
+// Border is left to the caller: the pinned variant drops its top edge.
+.cascader-popup-menus() {
+  .ant-cascader-menus {
+    align-items: stretch;
+  }
+
+  &.gpu-selector {
+    .ant-cascader-menu {
+      max-height: 400px;
+      height: unset;
+    }
+    .ant-cascader-menu:last-child {
+      flex: auto;
+
+      .ant-cascader-menu-item {
+        display: flex;
+
+        .ant-cascader-checkbox {
+          align-self: flex-start;
+          margin-top: 5px;
+        }
+      }
+    }
+  }
+
+  .ant-cascader-menu {
+    overflow-x: hidden;
+
+    &::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: transparent;
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background-color: transparent;
+    }
+
+    &:hover {
+      &::-webkit-scrollbar-thumb {
+        background-color: var(--color-scrollbar-thumb);
+        border-radius: 4px;
+      }
+    }
+
+    .ant-cascader-menu-item-content {
+      width: 100%;
+      padding-right: 11px;
+    }
+  }
+}
+
+// Pinned placement: the popup is rendered into the field wrapper
+// (`getPopupContainer={(node) => node.parentNode}`), so it is hard-anchored to
+// the bottom edge of the 53px-tall labeled input and stretched to its width.
+.cascader-popup-wrapper {
+  width: 100%;
+  border: 1px solid var(--ant-color-border);
+  inset: 53px auto auto 0 !important;
+  border-radius: 0 0 var(--border-radius-base) var(--border-radius-base);
+  border-top: none;
+  .cascader-popup-menus();
+}
+
+// Floating placement: for a field inside a container that would clip a popup
+// parented to it (e.g. CollapseContainer animates height with overflow:
+// hidden), the popup goes to `document.body` and antd positions it. No inset
+// pin here — that is what would drop a body-rendered popup in the top-left
+// corner of the viewport.
+.cascader-popup-floating {
+  border: 1px solid var(--ant-color-border);
+  border-radius: var(--border-radius-base);
+  .cascader-popup-menus();
+}
+
+.ant-tooltip {
+  max-width: var(--width-tooltip-max);
+
+  .ant-tooltip-content {
+    .ant-tooltip-inner {
+      max-width: var(--width-tooltip-max);
+
+      .text-tertiary {
+        color: var(--color-white-secondary);
+      }
+
+      a {
+        color: var(--ant-blue);
+
+        &:hover {
+          color: var(--ant-blue-5);
+        }
+      }
+    }
+  }
+}
+
+.light-downloading-tooltip {
+  &.ant-tooltip .ant-tooltip-arrow::before {
+    background: var(--color-spotlight-bg);
+  }
+}
+
+.tooltip-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  background-color: transparent;
+  min-width: 100px;
+  max-width: 500px;
+
+  &.scatter {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(48%, 1fr));
+    gap: 8px;
+  }
+
+  &.tooltip-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+
+    .tooltip-x-name {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .tooltip-x-name {
+    font-size: var(--font-size-small);
+    color: var(--ant-color-text-tertiary);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  // BarChart emits this element only when tooltipTotalLabel is provided.
+  .tooltip-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--ant-color-border-secondary);
+    color: var(--ant-color-text);
+  }
+
+  .tooltip-item {
+    color: var(--ant-color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .tooltip-item-name {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .tooltip-item-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 5px;
+      flex-shrink: 0;
+    }
+
+    .tooltip-item-title {
+      margin-right: 2px;
+      display: inline-block;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tooltip-value {
+      margin-left: 10px;
+      flex-shrink: 0;
+      color: var(--ant-color-text);
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+  }
+
+  // BarChart emits this element only when a limited preview has hidden items.
+  .tooltip-overflow {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--ant-color-border-secondary);
+    color: var(--ant-color-text-tertiary);
+    white-space: normal;
+  }
+}
+
+// ECharts adds this class only for BarChart's opt-in scrollable HTML tooltip.
+.bar-chart-scrollable-tooltip {
+  max-height: min(60vh, 480px);
+  max-width: calc(100vw - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ant-color-fill) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--ant-color-fill);
+    border-radius: 4px;
+  }
+
+  .tooltip-wrapper {
+    background: inherit;
+  }
+
+  .tooltip-x-name {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: inherit;
+  }
+
+  @media (max-width: 600px) {
+    .tooltip-wrapper.tooltip-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+// This class is used only by the grouped usage details modal's Ant List.
+.usage-group-detail-list .ant-list-item {
+  padding-inline: 12px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--ant-color-fill-tertiary);
+  }
+}
+
+.usage-group-detail-list.ant-list-split .ant-list-item:last-child {
+  border-block-end: 1px solid var(--ant-color-split);
+}
+
+.ant-pro-sider-logo + div {
+  display: flex;
+  overflow: hidden;
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+}
+
+.ant-notification .ant-notification-notice-close {
+  width: fit-content !important;
+}
+
+.desc-block {
+  border-radius: var(--border-radius-mini);
+  background-color: rgb(89 89 89);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px;
+}
+
+.note-text {
+  font-size: var(--font-size-base);
+  color: var(--ant-color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.ant-progress-line {
+  font-size: var(--font-size-small);
+}
+
+.ant-pro-page-container-affix .ant-affix .ant-pro-page-container-warp {
+  box-shadow: none;
+  border-bottom: 1px solid var(--ant-color-split);
+
+  .ant-page-header-heading-title {
+    color: var(--ant-color-text) !important;
+  }
+}
+
+.ant-page-header .ant-page-header-heading-extra {
+  margin-block: 0;
+}
+
+.ant-pro-footer-bar {
+  padding-inline: 0 !important;
+}
+
+.ant-modal-root .ant-modal-mask.ant-modal-mask-blur {
+  backdrop-filter: blur(2px);
+}
+
+.ant-drawer .ant-drawer-mask.ant-drawer-mask-blur {
+  backdrop-filter: blur(2px);
+}
+
+.ant-pro-grid-content {
+  padding-right: 8px;
+  padding-block: 8px;
+}
+.ant-select-multiple .ant-select-content {
+  height: 100%;
+}

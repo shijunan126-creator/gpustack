@@ -1,0 +1,40 @@
+import { IconFont } from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, Space } from 'antd';
+import React from 'react';
+
+const ViewCodeButtons: React.FC<{
+  handleViewCode: () => void;
+  handleToggleCollapse: () => void;
+  activeKey: string;
+}> = ({ handleViewCode, handleToggleCollapse, activeKey }) => {
+  const intl = useIntl();
+
+  if (activeKey === 'compare') {
+    return null;
+  }
+
+  return (
+    <Space key="buttons">
+      <Button
+        size="middle"
+        onClick={handleViewCode}
+        icon={<IconFont type="icon-code" className="font-size-16"></IconFont>}
+      >
+        {intl.formatMessage({ id: 'playground.viewcode' })}
+      </Button>
+      <Button
+        size="middle"
+        onClick={handleToggleCollapse}
+        icon={
+          <IconFont
+            type="icon-a-layout6-line"
+            className="font-size-16"
+          ></IconFont>
+        }
+      ></Button>
+    </Space>
+  );
+};
+
+export default ViewCodeButtons;

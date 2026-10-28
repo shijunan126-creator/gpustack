@@ -1,0 +1,1151 @@
+import { PageAction } from '@/config';
+import { PageActionType } from '@/config/types';
+import { ceilMilliToCore, parseQuantityToGi } from '@/pages/gpu-service/utils';
+import { PlusOutlined } from '@ant-design/icons';
+import {
+  CheckboxField,
+  Input as CInput,
+  CollapsePanel,
+  IconFont,
+  MultipleSelect,
+  ScrollSpyTabs,
+  useAppUtils,
+  useFinishFailed,
+  useScrollActiveChange,
+  useWrapperContext
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, Flex, Form } from 'antd';
+import _ from 'lodash';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
+import { FormData as PublicKeyFormData } from '../../public-keys/config/types';
+import useQuerySshkeys from '../../public-keys/services/use-query-sshkeys';
+import { DefaultImagePullPolicy } from '../../templates/config';
+import TemplateBasicForm, {
+  BasicResourceMax
+} from '../../templates/forms/basic';
+import {
+  getPartitionPercentage,
+  getSelectablePartitionProfilesFromOverview,
+  isLogicalSliceable,
+  isPhysicalSliceable,
+  pickCandidateForAccelerator,
+  StorageModeValueMap
+} from '../config';
+import { FormContext } from '../config/form-context';
+import {
+  AcceleratorSlicedPhysicalDetailProfile,
+  FormData,
+  InstanceTypeItem,
+  InstanceTypeSnapshotSpec,
+  ListItem
+} from '../config/types';
+import instanceStyles from '../styles/instances.module.less';
+import { buildInstanceTypeSnapshot } from '../utils/type-snapshot';
+import Basic from './basic';
+import InstanceTypeFormItem from './instance-type';
+import PublicKeyOverlay from './public-key-overlay';
+import StorageVolume from './storage-volume';
+
+const SSH_PORT = 22;
+
+// Whole card / soft slice (percentage) / hardware partition (profile).
+type SliceMode = 'whole' | 'sliced' | 'partitioned';
+
+type InstanceFormValues = FormData & {
+  // ssh holder
+  enable_ssh?: boolean;
+};
+
+interface InstanceFormProps {
+  ref?: any;
+  open: boolean;
+  action: PageActionType;
+  // Present on edit / view.
+  currentData?: ListItem | null;
+  namespace?: string;
+  instanceTypeList?: InstanceTypeItem[];
+  // True when the (org-scoped) instance-type list is empty and not loading —
+  // surfaces a "no available instance type" message in the scheduling tab.
+  noAvailableInstanceTypes?: boolean;
+  disabled?: boolean;
+  // Editing a non-stopped instance: only displayName and the SSH public keys
+  // stay editable; the type / template / storage sections render disabled.
+  restrictedEdit?: boolean;
+  // Fired when the create-scope picker retargets the form to another
+  // org (or Global). Only emitted on genuine changes — never on the
+  // initial mount, and never in builds where the picker isn't mounted
+  // (the watched field stays undefined). Lets the parent re-scope the
+  // tenant-scoped instance-type / template offerings.
+  onScopeChange?: (orgId: number | null | undefined) => void;
+  onFinish: (values: FormData) => Promise<void>;
+  onFinishFailed?: (errorInfo: any) => void;
+}
+
+const TABKeysMap = {
+  BASIC: 'basic',
+  INSTANCE_TYPE: 'instanceType',
+  TEMPLATE: 'template',
+  STORAGE: 'storage'
+};
+
+const requiredFields = {
+  [TABKeysMap.BASIC]: {
+    sort: 1,
+    fields: ['name']
+  },
+  [TABKeysMap.INSTANCE_TYPE]: {
+    sort: 2,
+    fields: ['spec.type', 'spec.resources.accelerator']
+  },
+  [TABKeysMap.TEMPLATE]: {
+    sort: 3,
+    fields: ['spec.image', 'spec.ports', 'spec.env']
+  },
+  [TABKeysMap.STORAGE]: {
+    sort: 4,
+    fields: [
+      'spec.volume.persistent.name',
+      'spec.volume.ephemeral.capacity',
+      'spec.sshPublicKeys'
+    ]
+  }
+};
+
+const GPUServiceInstanceForm: React.FC<InstanceFormProps> = forwardRef(
+  (props, ref) => {
+    const {
+      action,
+      currentData,
+      disabled,
+      restrictedEdit,
+      open,
+      instanceTypeList = [],
+      noAvailableInstanceTypes,
+      onScopeChange,
+      onFinish,
+      onFinishFailed
+    } = props;
+    const intl = useIntl();
+    const { getRuleMessage } = useAppUtils();
+    const [form] = Form.useForm<InstanceFormValues>();
+    const scrollTabsRef = useRef<any>(null);
+    // Restricted (non-stopped) edit disables the type / template / storage
+    // sections; displayName and the SSH public keys keep following `disabled`.
+    const sectionDisabled = disabled || restrictedEdit;
+    const sshEnabled = Form.useWatch('enable_ssh', form);
+    // `organization_id` is owned by the create-scope picker slot; it only
+    // exists/changes when a platform admin retargets the form. Watch it
+    // so the parent can re-scope offerings (see onScopeChange).
+    const scopeOrgId = Form.useWatch('organization_id', form);
+    const ports = Form.useWatch(['spec', 'ports'], form) || [];
+    const scopeInitRef = useRef(true);
+    // Keep the latest callback in a ref so the scope-change effect can call it
+    // without depending on its identity (parent may pass a new fn each render).
+    const onScopeChangeRef = useRef(onScopeChange);
+    onScopeChangeRef.current = onScopeChange;
+    const { sshkeyOptions, fetchData: fetchSSHData } = useQuerySshkeys();
+    const [sshOverlayOpen, setSshOverlayOpen] = useState(false);
+    const { getScrollElementScrollableHeight } = useWrapperContext();
+    const {
+      activeKey,
+      collapseKeys,
+      handleActiveChange,
+      handleOnCollapseChange,
+      updateActiveKey
+    } = useScrollActiveChange({
+      initalActiveKeys: [TABKeysMap.BASIC],
+      initialCollapseKeys:
+        action === PageAction.EDIT
+          ? []
+          : [TABKeysMap.INSTANCE_TYPE, TABKeysMap.TEMPLATE, TABKeysMap.STORAGE]
+    });
+
+    const hasSSHPort = useMemo(
+      () =>
+        ports.some(
+          (item: any) => item?.protocol === 'TCP' && item?.port === SSH_PORT
+        ),
+      [ports]
+    );
+
+    const [selectedInstanceType, setSelectedInstanceType] = useState<
+      InstanceTypeItem | undefined
+    >(undefined);
+    const [onceMaxRequest, setOnceMaxRequest] = useState<BasicResourceMax>({
+      cpu: null,
+      memory: null,
+      localStorage: null
+    });
+
+    // A type picked this session (create, or a re-typed stopped edit) decides
+    // the form's shape — by selection, not truthiness, so a re-picked CPU
+    // type still turns the form CPU-shaped. With no pick, the row's
+    // server-resolved summary decides. The persisted description blob is not
+    // a source: edit init backfills it, so its spec cannot tell a fresh pick
+    // from a stale row.
+    const isGPUType = selectedInstanceType
+      ? !!selectedInstanceType.spec?.acceleratable
+      : !!currentData?.typeSnapshotDetail?.spec?.acceleratable;
+
+    useEffect(() => {
+      if (open) {
+        const initSSHKeys = async () => {
+          // await 200 ms
+          await new Promise((resolve) => {
+            setTimeout(resolve, 200);
+          });
+          fetchSSHData({ page: -1 });
+        };
+        initSSHKeys();
+      }
+    }, [open]);
+
+    // Skip the first run (initial mount value); thereafter notify the
+    // parent whenever the chosen create scope changes so it can reload
+    // the tenant-scoped instance-type / template lists.
+    useEffect(() => {
+      if (scopeInitRef.current) {
+        scopeInitRef.current = false;
+        return;
+      }
+      onScopeChangeRef.current?.(scopeOrgId);
+    }, [scopeOrgId]);
+
+    useEffect(() => {
+      if (
+        hasSSHPort &&
+        !form.getFieldValue('enable_ssh') &&
+        action === PageAction.CREATE
+      ) {
+        form.setFieldValue('enable_ssh', true);
+      }
+    }, [hasSSHPort, form, action]);
+
+    const segmentOptions = useMemo(
+      () => [
+        {
+          value: TABKeysMap.BASIC,
+          label: intl.formatMessage({
+            id: 'common.title.basicInfo'
+          }),
+          icon: <IconFont type="icon-basic" />,
+          field: 'name'
+        },
+        {
+          value: TABKeysMap.INSTANCE_TYPE,
+          label: intl.formatMessage({ id: 'gpuservice.instance.section.type' }),
+          icon: <IconFont type="icon-gpu1" />,
+          field: 'instanceType'
+        },
+        {
+          value: TABKeysMap.TEMPLATE,
+          label: intl.formatMessage({
+            id: 'gpuservice.instance.section.template'
+          }),
+          icon: <IconFont type="icon-model" />,
+          field: 'template'
+        },
+        {
+          value: TABKeysMap.STORAGE,
+          label: intl.formatMessage({
+            id: 'gpuservice.instance.section.storage'
+          }),
+          icon: <IconFont type="icon-storage-outlined" />,
+          field: 'storage'
+        }
+      ],
+      [intl]
+    );
+
+    const buildResourcesData = (
+      instanceType:
+        | {
+            spec?: InstanceTypeSnapshotSpec;
+          }
+        | InstanceTypeItem
+        | undefined,
+      options: {
+        count: number;
+      }
+    ) => {
+      const unitResourcesParsed = instanceType?.spec?.unitResourcesParsed;
+      const { count = 0 } = options;
+
+      console.log('building resources data with', {
+        unitResourcesParsed,
+        count
+      });
+
+      const result = {
+        accelerator: _.toString(count),
+        cpu: unitResourcesParsed?.cpu?.cores
+          ? count * unitResourcesParsed?.cpu?.cores
+          : null,
+        ram: unitResourcesParsed?.ram?.value
+          ? count * unitResourcesParsed?.ram?.value
+          : null
+      };
+      console.log('built resources data', result);
+      return result;
+    };
+
+    const buildResourcesDataForSubmit = (values: FormData) => {
+      const unitResourcesParsed = getUnitResources();
+      const resources = values.spec?.resources ?? ({} as any);
+      const accelerator = _.toNumber(resources.accelerator) || 0;
+      const cpuCount = _.toNumber(resources.cpu) || 0;
+
+      const cpuNum = unitResourcesParsed?.cpu?.num;
+      const ramNum = unitResourcesParsed?.ram?.num;
+
+      const fallbackCpu = resources.cpu;
+
+      const percentage = _.toNumber(
+        resources.acceleratorSlicedMemoryPercentage
+      );
+      const sliced = isGPUType && percentage > 0;
+      const wholeFactor = isGPUType ? accelerator : cpuCount;
+
+      // Partitioned mode: the instance gets the share of the card its profile
+      // occupies, so scale the unit resources by that same ratio — identical
+      // rounding to the sliced branch below.
+      const partitionPercentage = isGPUType
+        ? getPartitionPercentage(
+            resources.acceleratorPartitionedProfile,
+            getCardMemory(),
+            getCardProfiles()
+          )
+        : null;
+      if (partitionPercentage != null && unitResourcesParsed) {
+        const cpuCores = unitResourcesParsed.cpu?.cores ?? 0;
+        const ramValue = unitResourcesParsed.ram?.value ?? 0;
+        return {
+          cpu: `${Math.max(1, _.floor((cpuCores * partitionPercentage) / 100))}`,
+          ram: `${Math.max(1, _.floor((ramValue * partitionPercentage) / 100))}Gi`
+        };
+      }
+
+      // Sliced mode: scale a single card's unit resources by the chosen
+      // percentage, submitted as whole cores / whole Gi (floored, min 1) so
+      // the payload matches what the disabled CPU / RAM inputs display —
+      // e.g. 10% of a 4-core / 16Gi card → "1" / "1Gi".
+      if (sliced && unitResourcesParsed) {
+        const cpuCores = unitResourcesParsed.cpu?.cores ?? 0;
+        const ramValue = unitResourcesParsed.ram?.value ?? 0;
+        return {
+          cpu: `${Math.max(1, _.floor((cpuCores * percentage) / 100))}`,
+          ram: `${Math.max(1, _.floor((ramValue * percentage) / 100))}Gi`
+        };
+      }
+
+      // Whole / CPU mode: multiply the unit by the count.
+      return {
+        cpu: cpuNum
+          ? `${wholeFactor * cpuNum}${unitResourcesParsed?.cpu?.unit || ''}`
+          : // Don't stringify an unset value — `${undefined}` becomes the
+            // literal "undefined", which fails k8s quantity validation.
+            fallbackCpu
+            ? `${fallbackCpu}`
+            : undefined,
+        ram: ramNum
+          ? `${wholeFactor * ramNum}${unitResourcesParsed?.ram?.unit || ''}`
+          : resources.ram
+      };
+    };
+
+    // Sliced display: set the (disabled) CPU / RAM inputs to a single card's
+    // unit resources scaled by the chosen percentage, floored. Reads the
+    // percentage straight from the form so it can be re-run after any slider
+    // change without threading values through.
+    const applySlicedResourceScaling = (instanceType?: InstanceTypeItem) => {
+      const unitResourcesParsed = getUnitResources(instanceType);
+      const cpuCores = unitResourcesParsed?.cpu?.cores;
+      const ramValue = unitResourcesParsed?.ram?.value;
+      const percentage = _.toNumber(
+        form.getFieldValue([
+          'spec',
+          'resources',
+          'acceleratorSlicedMemoryPercentage'
+        ])
+      );
+
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            // Floor the scaled unit resources to whole units, never below 1 —
+            // a small slice (e.g. 8 GB × 10%) still shows a usable 1 vCPU /
+            // 1 GB instead of 0. Display-only: the submit path recomputes
+            // both precisely in millicores / Mi.
+            cpu:
+              cpuCores != null && percentage > 0
+                ? Math.max(1, _.floor((cpuCores * percentage) / 100))
+                : null,
+            ram:
+              ramValue != null && percentage > 0
+                ? Math.max(1, _.floor((ramValue * percentage) / 100))
+                : null
+          }
+        }
+      } as any);
+    };
+
+    // Whether the selected type allows the compute (cores) ratio to exceed
+    // the memory ratio. Without overcommit there is no cores selector and the
+    // cores ratio is locked to (mirrors) the memory ratio.
+    const coresOvercommit =
+      !!selectedInstanceType?.status?.detail?.slicedDetail?.logical
+        ?.coresPercentageOvercommit;
+
+    // Single entry point for the sliced memory ratio: write the ratio and
+    // rescale CPU / RAM off it. With cores overcommit the compute ratio must
+    // stay >= memory (bump it up when memory overtakes it); without it the
+    // compute ratio always mirrors memory. Reused by the slider onChange.
+    const applySliceMemoryPercentage = (value: number) => {
+      const currentCores = _.toNumber(
+        form.getFieldValue([
+          'spec',
+          'resources',
+          'acceleratorSlicedCoresPercentage'
+        ])
+      );
+      const coresPercentage = coresOvercommit
+        ? Math.max(currentCores, value)
+        : value;
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            acceleratorSlicedMemoryPercentage: value,
+            acceleratorSlicedCoresPercentage: coresPercentage
+          }
+        }
+      } as any);
+      applySlicedResourceScaling();
+    };
+
+    // Compute (cores) ratio — a GPU-slice-only parameter that rides along on
+    // submit. It does not scale CPU / RAM (those track the memory ratio), so
+    // just write the field.
+    const applySliceCoresPercentage = (value: number) => {
+      form.setFieldValue(
+        ['spec', 'resources', 'acceleratorSlicedCoresPercentage'],
+        value
+      );
+    };
+
+    // Partitioned display: a hardware partition gets the share of the card its
+    // profile occupies (profile VRAM / card VRAM), so scale the (disabled)
+    // CPU / RAM inputs by that ratio with the same floor / min-1 rule as the
+    // soft slice. Unknown ratio → keep a single card's unit resources.
+    const applyPartitionResourceScaling = (
+      profileName?: string | null,
+      instanceType?: InstanceTypeItem
+    ) => {
+      const unitResourcesParsed = getUnitResources(instanceType);
+      const cpuCores = unitResourcesParsed?.cpu?.cores;
+      const ramValue = unitResourcesParsed?.ram?.value;
+      const percentage = getPartitionPercentage(
+        profileName,
+        getCardMemory(instanceType),
+        getCardProfiles(instanceType)
+      );
+
+      const scale = (value?: number | null) => {
+        if (value == null) return null;
+        if (percentage == null) return value;
+        return Math.max(1, _.floor((value * percentage) / 100));
+      };
+
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            cpu: scale(cpuCores),
+            ram: scale(ramValue)
+          }
+        }
+      } as any);
+    };
+
+    // Single entry point for the partition profile: write the field, re-pick
+    // the candidate that still offers this profile, and rescale CPU / RAM.
+    const applyPartitionProfile = (profileName: string) => {
+      form.setFieldValue(
+        ['spec', 'resources', 'acceleratorPartitionedProfile'],
+        profileName
+      );
+      resolveAndApply(selectedInstanceType, 1, {
+        partitionedProfile: profileName
+      });
+      applyPartitionResourceScaling(profileName);
+    };
+
+    const resolveAndApply = (
+      instanceType: InstanceTypeItem | undefined,
+      count: number,
+      options?: { sliced?: boolean; partitionedProfile?: string | null }
+    ) => {
+      const { sliced, partitionedProfile } = options ?? {};
+      if (!instanceType) {
+        setSelectedInstanceType(undefined);
+        setOnceMaxRequest({ cpu: null, memory: null, localStorage: null });
+        const spec = form.getFieldValue('spec') || {};
+
+        form.setFieldsValue({
+          clusterId: null,
+          spec: {
+            ...spec,
+            type: null,
+            resources: {
+              ...spec.resources,
+              accelerator: null,
+              cpu: null,
+              ram: null
+            }
+          }
+        });
+        return;
+      }
+
+      setSelectedInstanceType(instanceType);
+
+      const candidate = pickCandidateForAccelerator(
+        instanceType.status?.tiers,
+        {
+          count,
+          acceleratable: instanceType.spec?.acceleratable,
+          sliced,
+          partitionedProfile
+        }
+      );
+
+      console.log('picked candidate', candidate, instanceType, count);
+
+      // The API carries no RAM max on onceMaxRequest — derive it from the
+      // per-unit RAM × the max requestable unit count (RAM always scales with
+      // the unit count). Disk max comes from spec.localStorage (UI-only cap).
+      const unitRamGi = instanceType.spec?.unitResourcesParsed?.ram?.value;
+      const maxUnits = instanceType.spec?.maxComputeUnitCount || 0;
+      setOnceMaxRequest({
+        cpu: ceilMilliToCore(candidate?.cpu?.onceMaxRequest)?.cores,
+        memory: unitRamGi && maxUnits ? unitRamGi * maxUnits : null,
+        localStorage:
+          parseQuantityToGi(instanceType.spec?.localStorage)?.value ?? null
+      });
+
+      form.setFieldsValue({
+        clusterId: candidate?.cluster ? _.toNumber(candidate.cluster) : null,
+        spec: {
+          type: candidate?.name || '',
+          resources: {
+            ...buildResourcesData(instanceType, {
+              count
+            })
+          }
+        } as any
+      });
+    };
+
+    // Whole-card (exclusive) vs sliced (soft, percentage) vs partitioned
+    // (hardware profile) mode. Only meaningful for sliceable accelerator
+    // types; derived (no persisted field) — on edit it is inferred from
+    // acceleratorSlicedMemoryPercentage > 0 / acceleratorPartitionedProfile.
+    const [sliceMode, setSliceMode] = useState<SliceMode>('whole');
+
+    const handleAcceleratorChange = (count: number) => {
+      resolveAndApply(selectedInstanceType, count);
+    };
+
+    // Seed the sliced-mode defaults for an instance type: memory ratio at 10%
+    // (never above the type's max sliceable ratio, status.onceMaxRequest
+    // .acceleratorSliced), and the cores ratio defaulting to the same value
+    // (cores >= memory). Set both together so a fresh selection doesn't carry a
+    // stale cores value from a previous type.
+    const applySlicedDefaults = (instanceType?: InstanceTypeItem) => {
+      const slicedMax =
+        _.toNumber(instanceType?.status?.onceMaxRequest?.acceleratorSliced) ||
+        0;
+      const memoryPercentage = slicedMax ? Math.min(10, slicedMax) : 10;
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            acceleratorSlicedMemoryPercentage: memoryPercentage,
+            acceleratorSlicedCoresPercentage: memoryPercentage
+          }
+        }
+      } as any);
+      applySlicedResourceScaling(instanceType);
+    };
+
+    // Seed the partitioned default: the first profile the fleet can still BUILD,
+    // from the live ledger. Reading the capability catalog here would pre-fill a
+    // profile the pool can no longer build — one the ledger-backed dropdown does
+    // not even list, so the form would open on a value the user cannot re-pick.
+    // Returns the chosen profile (null when nothing is obtainable).
+    const applyPartitionedDefaults = (instanceType?: InstanceTypeItem) => {
+      const profile = getSelectablePartitionProfilesFromOverview(
+        instanceType?.status?.remaining,
+        instanceType?.status?.detail?.slicedDetail
+      )[0];
+      form.setFieldValue(
+        ['spec', 'resources', 'acceleratorPartitionedProfile'],
+        profile ?? undefined
+      );
+      return profile ?? null;
+    };
+
+    // Switch between whole-card, sliced (soft) and partitioned (hardware)
+    // mode. Both slice modes fix the accelerator count to 1 (a single card is
+    // divided) and are mutually exclusive on the payload, so entering one
+    // clears the other's fields.
+    const handleSliceModeChange = (mode: SliceMode) => {
+      setSliceMode(mode);
+      if (mode === 'sliced') {
+        form.setFieldValue(
+          ['spec', 'resources', 'acceleratorPartitionedProfile'],
+          undefined
+        );
+        resolveAndApply(selectedInstanceType, 1, { sliced: true });
+        applySlicedDefaults(selectedInstanceType);
+        return;
+      }
+
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            acceleratorSlicedMemoryPercentage: undefined,
+            acceleratorSlicedCoresPercentage: undefined
+          }
+        }
+      } as any);
+
+      if (mode === 'partitioned') {
+        const profile = applyPartitionedDefaults(selectedInstanceType);
+        resolveAndApply(selectedInstanceType, 1, {
+          partitionedProfile: profile
+        });
+        // resolveAndApply refills CPU / RAM for a whole card — rescale after.
+        applyPartitionResourceScaling(profile);
+        return;
+      }
+
+      form.setFieldValue(
+        ['spec', 'resources', 'acceleratorPartitionedProfile'],
+        undefined
+      );
+      resolveAndApply(selectedInstanceType, 1);
+    };
+
+    // Apply a chosen instance type to the form: default to a slice mode for a
+    // sliceable type with no whole-card capacity, otherwise whole-card with a
+    // count of 1. Shared by the create card selection (imperative handle) and
+    // the edit change-type overlay.
+    const applyInstanceType = (instanceType?: InstanceTypeItem) => {
+      if (!instanceType) {
+        setSliceMode('whole');
+        resolveAndApply(undefined, 0);
+        return;
+      }
+
+      const slicedDetail = instanceType.status?.detail?.slicedDetail;
+      // A sliceable type with no whole-card capacity (Max < 1) defaults to a
+      // slice mode — whole mode would have nothing selectable. Soft slicing
+      // wins when both are on offer (the finer-grained request).
+      const wholeMax = instanceType.spec?.maxComputeUnitCount ?? 0;
+      const slicedMax =
+        _.toNumber(instanceType.status?.onceMaxRequest?.acceleratorSliced) || 0;
+      // Obtainable, not merely offered: this decides whether to auto-enter
+      // partitioned mode and which profile to seed, so the capability catalog
+      // would switch the form into a mode that has nothing to hand out.
+      const partitionProfiles = getSelectablePartitionProfilesFromOverview(
+        instanceType.status?.remaining,
+        slicedDetail
+      );
+
+      if (wholeMax < 1 && isLogicalSliceable(slicedDetail) && slicedMax > 0) {
+        setSliceMode('sliced');
+        resolveAndApply(instanceType, 1, { sliced: true });
+        applySlicedDefaults(instanceType);
+        return;
+      }
+
+      if (
+        wholeMax < 1 &&
+        isPhysicalSliceable(slicedDetail) &&
+        partitionProfiles.length > 0
+      ) {
+        const profile = partitionProfiles[0];
+        setSliceMode('partitioned');
+        form.setFieldValue(
+          ['spec', 'resources', 'acceleratorPartitionedProfile'],
+          profile
+        );
+        resolveAndApply(instanceType, 1, { partitionedProfile: profile });
+        applyPartitionResourceScaling(profile, instanceType);
+        return;
+      }
+
+      // Otherwise default to whole-card mode (a new type may not be
+      // sliceable); set count to 1 for all instance types: GPU or non-GPU.
+      // Drop any slice fields the previously selected type left behind — they
+      // would otherwise ride the submit and read as a slice request.
+      setSliceMode('whole');
+      form.setFieldsValue({
+        spec: {
+          resources: {
+            acceleratorSlicedMemoryPercentage: undefined,
+            acceleratorSlicedCoresPercentage: undefined,
+            acceleratorPartitionedProfile: undefined
+          }
+        }
+      } as any);
+      resolveAndApply(instanceType, 1);
+    };
+
+    const onTargetChange = (key: string) => {
+      scrollTabsRef.current?.handleTargetChange(key);
+    };
+
+    const { handleOnFinishFailed: rawHandleOnFinishFailed } = useFinishFailed({
+      requiredFields,
+      onTargetChange,
+      updateActiveKey
+    });
+
+    const handleOnFinishFailed = (errorInfo: any) => {
+      console.log('formvalues===', form.getFieldsValue());
+      const errorFields = (errorInfo?.errorFields || []).map((field: any) => ({
+        ...field,
+        name: [
+          Array.isArray(field.name) ? field.name.join('.') : String(field.name)
+        ]
+      }));
+      rawHandleOnFinishFailed({ ...errorInfo, errorFields });
+      onFinishFailed?.(errorInfo);
+    };
+    const detectMode = (volume?: FormData['spec']['volume']) => {
+      if (volume?.persistent?.name || volume?.persistentTemplate?.name) {
+        return StorageModeValueMap.Persistent;
+      }
+      return StorageModeValueMap.Temporary;
+    };
+
+    useEffect(() => {
+      if (!open) {
+        form.resetFields();
+        return;
+      }
+
+      // Prefill from the source row on edit / view.
+      if (currentData) {
+        console.log('currentData', currentData);
+        const typeSnapshot = buildInstanceTypeSnapshot(
+          currentData?.typeSnapshotDetail
+        );
+
+        const count = typeSnapshot?.acceleratable
+          ? _.toNumber(currentData?.spec?.resources?.accelerator)
+          : _.toNumber(currentData?.spec?.resources?.cpu) || 0;
+
+        // Infer the mode from the persisted slice fields (edit/view render a
+        // readonly card).
+        const persistedSliced =
+          _.toNumber(
+            currentData?.spec?.resources?.acceleratorSlicedMemoryPercentage
+          ) > 0;
+        const persistedProfile =
+          currentData?.spec?.resources?.acceleratorPartitionedProfile;
+        setSliceMode(
+          persistedProfile
+            ? 'partitioned'
+            : persistedSliced
+              ? 'sliced'
+              : 'whole'
+        );
+
+        form.setFieldsValue({
+          ...currentData,
+          spec: {
+            ...currentData?.spec,
+            resources: typeSnapshot
+              ? {
+                  ...currentData?.spec?.resources,
+                  ...buildResourcesData(
+                    { spec: typeSnapshot },
+                    {
+                      count
+                    }
+                  )
+                }
+              : // No server-resolved summary (older server, or the type row
+                // is gone): there is no unit shape to rebuild CPU / RAM
+                // from, so the persisted resources stand as they are.
+                currentData?.spec?.resources
+          },
+          enable_ssh: !!currentData?.spec?.sshPublicKeys?.length,
+          storageMode: detectMode(currentData?.spec?.volume)
+        });
+
+        // buildResourcesData above filled CPU / RAM for the whole card; rescale
+        // them off the persisted percentage / profile for a divided instance.
+        // Without a summary there is no unit shape to scale from — the
+        // persisted figures already say what the slice holds.
+        if (typeSnapshot && persistedProfile) {
+          applyPartitionResourceScaling(persistedProfile);
+        } else if (typeSnapshot && persistedSliced) {
+          applySlicedResourceScaling();
+        }
+      }
+    }, [action, currentData, form, open, instanceTypeList]);
+
+    // `instanceType` overrides the selected-type state: setSelectedInstanceType
+    // only lands on the next render, so a handler that picks a type and scales
+    // in the same tick must pass the type it just picked — reading the state
+    // there yields the previously selected card.
+    const getUnitResources = (instanceType?: InstanceTypeItem) => {
+      const parsed = (instanceType ?? selectedInstanceType)?.spec
+        ?.unitResourcesParsed;
+      if (parsed) {
+        return parsed;
+      }
+      return buildInstanceTypeSnapshot(currentData?.typeSnapshotDetail)
+        ?.unitResourcesParsed;
+    };
+
+    // Whole-card VRAM (status.detail.memory, e.g. "80Gi") — the denominator of
+    // the partition ratio. Falls back to the server-resolved type summary so a
+    // not-yet-re-typed edit can still scale.
+    const getCardMemory = (
+      instanceType?: InstanceTypeItem
+    ): string | undefined => {
+      return (
+        (instanceType ?? selectedInstanceType)?.status?.detail?.memory ??
+        buildInstanceTypeSnapshot(currentData?.typeSnapshotDetail)?.memory ??
+        undefined
+      );
+    };
+
+    // The pool's partition profiles — the numerator of the partition ratio comes
+    // from a profile's reported `memoryMib`, not from parsing its name (which is
+    // the rounded marketing size and would disagree with what metering bills).
+    //
+    // Live type only, unlike getCardMemory: the profile list is NOT persisted in
+    // the description snapshot (it would overflow its 1024-char cap — see
+    // buildInstanceTypeSnapshotSpec). When it is unavailable, getPartitionPercentage
+    // falls back to the name, so the scaled CPU / RAM land a few percent high.
+    // That is a resource-sizing rounding, not a billing one: the server bills the
+    // reported memoryMib regardless of what the form submitted.
+    const getCardProfiles = (
+      instanceType?: InstanceTypeItem
+    ): AcceleratorSlicedPhysicalDetailProfile[] | undefined =>
+      (instanceType ?? selectedInstanceType)?.status?.detail?.slicedDetail
+        ?.physical?.profiles ??
+      // No fresh pick: an untouched partitioned edit still needs the ratio,
+      // which only the summary's ledger can supply — same precedence as
+      // getCardMemory above.
+      currentData?.typeSnapshotDetail?.status?.detail?.slicedDetail?.physical
+        ?.profiles ??
+      undefined;
+
+    const handleFinish = async (values: InstanceFormValues) => {
+      const submittedPorts = [...(values.spec?.ports ?? [])];
+      const submittedHasSSHPort = submittedPorts.some(
+        (item: any) => item?.protocol === 'TCP' && item?.port === SSH_PORT
+      );
+
+      if (!submittedHasSSHPort) {
+        submittedPorts.push({
+          protocol: 'TCP',
+          port: SSH_PORT,
+          name: 'SSH'
+        });
+      }
+
+      // Without a server-resolved summary the form falls back to the CPU
+      // shape, so the accelerator count never registers as a field and the
+      // submitted values drop it. The resources are not editable in that
+      // state — submit the persisted ones verbatim.
+      const keepExistingResources =
+        action === PageAction.EDIT &&
+        !!currentData &&
+        !selectedInstanceType &&
+        !currentData.typeSnapshotDetail;
+
+      // Hardware and soft slices can't land on the same card, so only one set
+      // of slice fields may ride the payload.
+      const resources = keepExistingResources
+        ? { ...currentData?.spec?.resources }
+        : {
+            ...values.spec?.resources,
+            ...buildResourcesDataForSubmit(values)
+          };
+      const exclusiveResources = resources.acceleratorPartitionedProfile
+        ? _.omit(resources, [
+            'acceleratorSlicedMemoryPercentage',
+            'acceleratorSlicedCoresPercentage'
+          ])
+        : _.omit(resources, ['acceleratorPartitionedProfile']);
+
+      await onFinish({
+        ..._.omit(values, ['enable_ssh']),
+        spec: {
+          ...values.spec,
+          ports: submittedPorts,
+          resources: exclusiveResources as FormData['spec']['resources']
+        }
+      });
+    };
+
+    const segmentedTop =
+      action === PageAction.EDIT
+        ? {
+            top: 0,
+            offsetTop: 100
+          }
+        : {
+            top: 40,
+            offsetTop: 130
+          };
+
+    useImperativeHandle(ref, () => ({
+      submit: () => {
+        form.submit();
+      },
+      resetFields: () => {
+        form.resetFields();
+      },
+      setFieldsValue: (values: Partial<InstanceFormValues>) => {
+        form.setFieldsValue(values as any);
+      },
+      getFieldsValue: () => form.getFieldsValue(),
+      applyInstanceType
+    }));
+
+    const handleAddSSHKey = () => {
+      setSshOverlayOpen(true);
+    };
+
+    const handleCreateSSHKey = async (values: PublicKeyFormData) => {
+      try {
+        await fetchSSHData({ page: -1 });
+        const current: Array<{ name: string } | string> =
+          form.getFieldValue(['spec', 'sshPublicKeys']) || [];
+        form.setFieldValue(
+          ['spec', 'sshPublicKeys'],
+          [...current, { name: values.name }]
+        );
+
+        setSshOverlayOpen(false);
+      } catch (error) {
+        // it's handled in interceptor
+      }
+    };
+
+    const handleOnEnableSSHChange = (e: any) => {
+      const checked = e.target.checked;
+      if (!checked) {
+        form.setFieldValue(['spec', 'sshPublicKeys'], []);
+      }
+    };
+
+    return (
+      <ScrollSpyTabs
+        ref={scrollTabsRef}
+        defaultTarget={TABKeysMap.BASIC}
+        segmentOptions={segmentOptions}
+        activeKey={activeKey}
+        setActiveKey={handleActiveChange}
+        segmentedTop={segmentedTop}
+        getScrollElementScrollableHeight={getScrollElementScrollableHeight}
+      >
+        <FormContext.Provider
+          value={{
+            action: action,
+            currentData: currentData,
+            isGPUType: isGPUType
+          }}
+        >
+          <Form
+            name="gpuServiceInstanceForm"
+            form={form}
+            disabled={disabled}
+            onFinish={handleFinish}
+            onFinishFailed={handleOnFinishFailed}
+            preserve={false}
+            initialValues={{
+              spec: {
+                description: '',
+                displayName: '',
+                image: '',
+                imagePullPolicy: DefaultImagePullPolicy,
+                command: [],
+                ports: [
+                  {
+                    protocol: 'TCP',
+                    port: SSH_PORT,
+                    name: 'SSH'
+                  }
+                ],
+                env: [],
+                volumeMount: '',
+                resources: {
+                  accelerator: 1
+                },
+                volume: {
+                  ephemeral: {
+                    capacity: '50Gi'
+                  },
+                  persistent: {
+                    name: ''
+                  }
+                }
+              },
+              enable_ssh: false,
+              storageMode: StorageModeValueMap.Temporary
+            }}
+          >
+            <Basic action={action} disabled={disabled} />
+            <Form.Item name="clusterId" hidden>
+              <CInput.Input />
+            </Form.Item>
+            <CollapsePanel
+              activeKey={collapseKeys}
+              accordion={false}
+              onChange={handleOnCollapseChange}
+              items={[
+                {
+                  key: TABKeysMap.INSTANCE_TYPE,
+                  label: intl.formatMessage({
+                    id: 'gpuservice.instance.section.type'
+                  }),
+                  forceRender: true,
+                  children: (
+                    <InstanceTypeFormItem
+                      action={action}
+                      disabled={sectionDisabled}
+                      selectedInstanceType={selectedInstanceType}
+                      currentData={currentData as any}
+                      onceMaxRequest={onceMaxRequest}
+                      noAvailableTypes={noAvailableInstanceTypes}
+                      sliceMode={sliceMode}
+                      onSliceModeChange={handleSliceModeChange}
+                      onSliceMemoryPercentageChange={applySliceMemoryPercentage}
+                      onSliceCoresPercentageChange={applySliceCoresPercentage}
+                      onPartitionProfileChange={applyPartitionProfile}
+                      onGPUCountChange={handleAcceleratorChange}
+                    />
+                  )
+                },
+                {
+                  key: TABKeysMap.TEMPLATE,
+                  label: intl.formatMessage({
+                    id: 'gpuservice.instance.section.template'
+                  }),
+                  forceRender: true,
+                  children: (
+                    <TemplateBasicForm
+                      page="instance"
+                      disabled={sectionDisabled}
+                      onceMaxRequest={onceMaxRequest}
+                    />
+                  )
+                },
+                {
+                  key: TABKeysMap.STORAGE,
+                  label: intl.formatMessage({
+                    id: 'gpuservice.instance.section.storage'
+                  }),
+                  forceRender: true,
+                  children: (
+                    <StorageVolume disabled={sectionDisabled} action={action} />
+                  )
+                }
+              ]}
+            />
+
+            <Flex align="center" justify="space-between">
+              <Form.Item<FormData>
+                name="enable_ssh"
+                valuePropName="checked"
+                style={{ marginBottom: 8 }}
+              >
+                <CheckboxField
+                  onChange={handleOnEnableSSHChange}
+                  disabled={disabled}
+                  label={intl.formatMessage({
+                    id: 'gpuservice.instance.ssh.enable'
+                  })}
+                ></CheckboxField>
+              </Form.Item>
+              <Button
+                size="small"
+                type="link"
+                icon={<PlusOutlined />}
+                onClick={handleAddSSHKey}
+              >
+                {intl.formatMessage({
+                  id: 'gpuservice.instance.ssh.addKey'
+                })}
+              </Button>
+            </Flex>
+
+            <div className={instanceStyles.sshkeySelection}>
+              <Form.Item<FormData>
+                name={['spec', 'sshPublicKeys']}
+                style={{
+                  marginBottom: 12
+                }}
+                hidden={!sshEnabled}
+                normalize={(value) =>
+                  Array.isArray(value)
+                    ? value?.map((item) => ({ name: item }))
+                    : []
+                }
+                getValueProps={(value) => ({
+                  value: Array.isArray(value)
+                    ? value.map((item) => item?.name ?? item)
+                    : []
+                })}
+                rules={[
+                  {
+                    required: sshEnabled,
+                    message: getRuleMessage('select', 'gpuservice.publicKey')
+                  }
+                ]}
+              >
+                <MultipleSelect
+                  required
+                  disabled={disabled}
+                  mode="multiple"
+                  maxTagCount={'responsive'}
+                  label={intl.formatMessage({
+                    id: 'gpuservice.instance.ssh.assignKey'
+                  })}
+                  styles={{
+                    wrapper: {
+                      width: '100%'
+                    }
+                  }}
+                  options={sshkeyOptions}
+                ></MultipleSelect>
+              </Form.Item>
+            </div>
+          </Form>
+        </FormContext.Provider>
+        <PublicKeyOverlay
+          open={sshOverlayOpen}
+          onCancel={() => setSshOverlayOpen(false)}
+          onSubmit={handleCreateSSHKey}
+        />
+      </ScrollSpyTabs>
+    );
+  }
+);
+
+export default GPUServiceInstanceForm;

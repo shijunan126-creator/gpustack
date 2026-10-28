@@ -1,0 +1,55 @@
+// Utilization column: a row of small half-ring gauges, plus the per-card
+// breakdown a multi-card gauge shows on hover.
+
+// "No sample is coming" (stopped, stopping, initializing). Carries the weight
+// and tone of the gauge's own text, so a column of stopped and running rows
+// reads as one column — it just has no ring around it.
+.noData {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ant-color-text-secondary);
+}
+
+// Hover target for the gauge's tooltip / popover, and the reason the svg is
+// wrapped at all — HalfArcGauge forwards no ref. Sized to the svg exactly, so
+// the hover area is the gauge and not the whole cell.
+.gauge {
+  display: inline-flex;
+}
+
+// One row per accelerator. A CSS grid rather than Row/Col: the tracks size to
+// their content so the bars and the used/total figures line up across rows,
+// which percentage columns cannot do.
+.cardGrid {
+  display: inline-grid;
+  grid-template-columns: auto;
+  column-gap: var(--ant-margin-lg);
+  row-gap: var(--ant-margin-xs);
+}
+
+// Up to 2 cards read fine in one column; beyond that a second column keeps the
+// popover from outgrowing the viewport (4 cards → 2×2, 8 cards → 4×2).
+.cardGridSplit {
+  grid-template-columns: repeat(2, auto);
+}
+
+.cardIndex {
+  min-width: 12px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--ant-color-text-tertiary);
+}
+
+.cardPercent {
+  display: inline-block;
+  min-width: 34px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--ant-color-text-secondary);
+}
+
+.cardFigures {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ant-color-text-tertiary);
+}

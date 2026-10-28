@@ -1,0 +1,84 @@
+.messageInput {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  padding-inline: 16px 16px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--ant-color-split);
+  transition: all 0.2s ease;
+
+  .tool-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 40px;
+    width: 100%;
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  }
+
+  textarea {
+    padding-inline: 6px 0;
+    padding-block: 0;
+    background-color: transparent;
+  }
+
+  textarea::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+
+  textarea::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  textarea::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 6px;
+  }
+
+  textarea:hover {
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--color-scrollbar-thumb);
+      border-radius: 6px;
+    }
+  }
+
+  .send-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform: rotate(-30deg);
+  }
+
+  .input-box {
+    width: 100%;
+    display: flex;
+    position: relative;
+    border-radius: var(--border-radius-base);
+
+    textarea {
+      padding-block-start: var(--ant-padding-xxs);
+    }
+
+    .holder {
+      pointer-events: none;
+      position: absolute;
+      top: var(--ant-padding-xxs);
+      left: 6px;
+      color: var(--ant-color-text-quaternary);
+
+      kbd {
+        border: 1px solid var(--ant-color-border);
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+    }
+  }
+}

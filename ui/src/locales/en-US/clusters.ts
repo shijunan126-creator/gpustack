@@ -1,0 +1,403 @@
+export default {
+  'clusters.title': 'Cluster',
+  'clusters.table.provider': 'Provider',
+  'clusters.table.deployments': 'Deployments',
+  'clusters.button.add': 'Add Cluster',
+  'clusters.button.addCredential': 'Add Cloud Credential',
+  'clusters.button.editCredential': 'Edit Cloud Credential',
+  'clusters.filterBy.cluster': 'Filter by cluster',
+  'clusters.add.cluster': 'Add {cluster} Cluster',
+  'clusters.edit.cluster': 'Edit {cluster}',
+  'clusters.provider.custom': 'Custom',
+  'clusters.button.register': 'Register Cluster',
+  'clusters.button.addNodePool': 'Add Worker Pool',
+  'clusters.button.add.credential': 'Add {provider} Credential',
+  'clusters.credential.title': 'Cloud Credential',
+  'clusters.credential.signinToCreate':
+    'No {name} yet? <a href="{link}" target="_blank">Sign in or sign up</a> to create one.',
+  'clusters.credential.token': 'Access Token',
+  'clusters.workerpool.region': 'Region',
+  'clusters.workerpool.zone': 'Zone',
+  'clusters.workerpool.instanceType': 'Instance Type',
+  'clusters.workerpool.replicas': 'Replicas',
+  'clusters.workerpool.batchSize': 'Batch Size',
+  'clusters.workerpool.osImage': 'OS Image',
+  'clusters.workerpool.volumes': 'Volumes',
+  'clusters.workerpool.format': 'Format',
+  'clusters.workerpool.size': 'Size (GiB)',
+  'clusters.workerpool.title': 'Worker Pools',
+  'clusters.workerpool.cloudOptions': 'Add Cloud Options',
+  'clusters.workerpool.volumes.add': 'Add Volume',
+  'clusters.create.provider.self': 'Self-Hosted',
+  'clusters.create.provider.cloud': 'Cloud Provider',
+  'clusters.create.steps.selectProvider': 'Select Provider',
+  'clusters.create.configBasic': 'Basic Configuration',
+  'clusters.create.execCommand': 'Execute Command',
+  'clusters.create.supportedGpu': 'Supported GPUs',
+  'clusters.create.skipfornow': 'Skip for Now',
+  'clusters.create.noImages': 'No images available',
+  'clusters.create.noInstanceTypes': 'No instance types available',
+  'clusters.create.noRegions': 'No regions available',
+  'clusters.workerpool.batchSize.desc':
+    'Number of workers created simultaneously in the Worker pool',
+  'clusters.create.addworker.tips':
+    'Please make sure the <a href={link} target="_blank">prerequisites</a> are met before executing the following command.',
+  'clusters.create.addCommand.tips':
+    'On the Worker that needs to be added, run the following command to join it to the cluster.',
+  'clusters.create.addCommand.k8s.tips':
+    'On the Kubernetes cluster that needs to be registered, run the following command to create the Kubernetes resources and register the cluster.',
+  'clusters.create.addCommand.k8s.version.warning':
+    'The minimum supported Kubernetes version is 1.23. To use the GPU Service feature, the minimum supported Kubernetes version is 1.27.',
+  'clusters.create.register.tips':
+    'On the Kubernetes cluster that needs to be added, run the following command to join its nodes to the cluster.',
+  'cluster.create.checkEnv.tips':
+    'Use the following command to check if the environment is ready.',
+  'cluster.provider.comingsoon': 'Coming soon',
+  'clusters.addworker.nvidiaNotes-01':
+    'If multiple outbound IPs exist, specify the one you want the worker to use. Please double-check with <span class="bold-text">hostname -I | xargs -n1</span>.',
+  'clusters.addworker.nvidiaNotes-02':
+    'If a model directory already exists on the worker, you can specify the path to mount it.',
+  'clusters.addworker.hygonNotes': `If <span class="bold-text">/opt/hyhal</span> or <span class="bold-text">/opt/dtk</span> does not exist, create symbolic links pointing to the corresponding Hygon installation paths, for example: 
+  <span class="desc-fill">ln -s /path/to/hyhal /opt/hyhal</span>
+  <span class="desc-fill">ln -s /path/to/dtk /opt/dtk</span>.`,
+  'clusters.addworker.corexNotes': `If the <span class="bold-text">/usr/local/corex</span> directory does not exist, create a symbolic link to the Iluvatar SDK installation path:  
+<span class="bold-text">ln -s /path/to/corex /usr/local/corex</span>.`,
+  'clusters.addworker.metaxNotes': `If the <span class="bold-text">/opt/mxdriver</span> or <span class="bold-text">/opt/maca</span> directory does not exist, create a symbolic link to the MetaX driver and SDK installation path:  
+<span class="desc-fill">ln -s /path/to/mxdriver /opt/mxdriver</span>
+<span class="desc-fill">ln -s /path/to/maca /opt/maca</span>.`,
+  'clusters.addworker.cambriconNotes': `If the <span class="bold-text">/usr/local/neuware</span> directory does not exist, create a symbolic link to the Cambricon installation path:  
+<span class="bold-text">ln -s /path/to/neuware /usr/local/neuware</span>.`,
+  'clusters.addworker.hygonNotes-02':
+    'If device detection fails, try removing <span class="bold-text">--env ROCM_SMI_LIB_PATH=/opt/hyhal/lib</span>.',
+  'clusters.addworker.selectCluster': 'Select Cluster',
+  'clusters.addworker.selectCluster.tips':
+    'For <span class="bold-text">non-Docker</span> clusters, please register clusters or manage worker pools from the Clusters page.',
+  'clusters.addworker.selectGPU': 'Select GPU Vendor',
+  'clusters.addworker.selectGPU.multiTag': 'Multi-select',
+  'clusters.addworker.selectHardware': 'Select Hardware Type',
+  'clusters.addworker.selectHardware.subtitle':
+    'Select every hardware type this cluster should run workers on',
+  'clusters.addworker.cpuNode.tips':
+    'Deploys a worker on every node without a GPU. Leave it unselected when your control plane shares the cluster with the GPU nodes and you do not want workers running on the CPU nodes.',
+  'clusters.addworker.noWorkerSelected.error':
+    'Select at least one hardware type — with neither CPU Node nor a GPU vendor selected, no worker would be deployed at all.',
+  'clusters.addworker.checkEnv': 'Check Environment',
+  'clusters.addworker.checkEnv.cpuOnlyTips':
+    'Use the following command to verify that the Kubernetes cluster has at least one ready node. You are registering a CPU-only cluster.',
+  'clusters.addworker.specifyArgs': 'Specify Arguments',
+  'clusters.addworker.dtkVersion': 'DTK Version',
+  'clusters.addworker.runCommand': 'Run Command',
+  'clusters.addworker.specifyWorkerIP': 'Worker IP',
+  'clusters.addworker.detectWorkerIP': 'Auto-detect Worker IP',
+  'clusters.addworker.specifyWorkerAddress': 'Worker External Address',
+  'clusters.addworker.detectWorkerAddress': 'Worker External Address',
+  'clusters.addworker.detectWorkerAddress.tips':
+    'Defaults to Worker IP if not specified.',
+  'clusters.addworker.externalIP.tips':
+    'If running in a VPC or private network, please specify the Worker external address reachable by the GPUStack Server.',
+  'clusters.addworker.enterWorkerIP': 'Enter worker IP',
+  'clusters.addworker.enterWorkerIP.error': 'Please enter the worker IP.',
+  'clusters.addworker.enterWorkerAddress': 'Enter worker external address',
+  'clusters.addworker.enterWorkerAddress.error':
+    'Please enter the worker external address.',
+  'clusters.addworker.rdma': 'RDMA / InfiniBand',
+  'clusters.addworker.rdma.tips':
+    'Enable if the worker has InfiniBand/RoCE NICs. Required for cross-node KV cache transfer.',
+  'clusters.addworker.extraVolume': 'Additional Volume Mount',
+  'clusters.addworker.cacheVolume': 'Model Cache Volume Mount',
+  'clusters.addworker.cacheVolume.tips':
+    'If you want to customize the model cache directory, you can specify the path to mount it.',
+  'clusters.addworker.configSummary': 'Configuration Summary',
+  'clusters.addworker.gpuVendor': 'GPU Vendor',
+  'clusters.addworker.workerIP': 'Worker IP',
+  'clusters.addworker.workerExternalIP': 'Worker External Address',
+  'clusters.addworker.notSpecified': 'Not Specified',
+  'clusters.addworker.autoDetect': 'Auto',
+  'clusters.addworker.extraVolume.holder':
+    'e.g. /data/models (path must start with /). Use commas to separate multiple paths.',
+  'clusters.addworker.cacheVolume.holder':
+    'e.g. /data/cache (path must start with /)',
+  'clusters.addworker.vendorNotes.title': 'Notes for {vendor} Device',
+  'clusters.addworker.amdNotes-01': `If the <span class="bold-text">/opt/rocm</span> directory does not exist, please create a symbolic link pointing to the ROCm installed path: <span class="bold-text">ln -s /path/to/rocm /opt/rocm</span>.`,
+  'clusters.addworker.amdNotes-02': `If multiple ROCm versions are managed on the host, you must mount <span class="bold-text">/opt/rocm/lib</span> to avoid detection failures.`,
+  'clusters.addworker.message.success_single':
+    '{count} new worker has been added to the cluster.',
+  'clusters.addworker.message.success_multiple':
+    '{count} new workers have been added to the cluster.',
+  'clusters.create.serverUrl': 'GPUStack Server URL',
+  'clusters.create.workerConfig': 'Worker Configuration',
+  'clusters.chartValues.title': 'Chart Values (YAML)',
+  'clusters.chartValues.tip':
+    'Values for the GPUStack Helm chart, keyed exactly as the chart keys them and merged over the values the server derives. Use it to reach anything the chart and its subcharts offer that has no field above — for example turning off a component the cluster already provides. Lists replace rather than append, as in Helm itself.',
+  'clusters.chartValues.reapply.tip':
+    'Saving the cluster changes nothing in Kubernetes. Re-run Register Cluster to get the manifest and apply it again — the in-cluster Job compares what the manifest asks for against what the release has installed, and upgrades only on a difference.',
+  'clusters.chartValues.doc.chart': 'Chart values',
+  'clusters.chartValues.doc.operator': 'Operator chart',
+  'clusters.chartValues.error.invalidYaml': 'Invalid YAML: {reason}',
+  'clusters.chartValues.error.notJson':
+    'The value at {path} is not a string, number, boolean, list or map — YAML read it as a date or binary value, which cannot be passed through unchanged. Quote it to keep it as text.',
+  'clusters.chartValues.error.unsafeInteger':
+    'The whole number at {path} is larger than can be carried exactly — reading the YAML already rounded it, so a different value would be sent. Quote it to keep the digits.',
+  'clusters.chartValues.error.notMapping':
+    'Chart values must be a YAML mapping of keys, not a single value or a list.',
+  'clusters.edit.registration.changed.tip':
+    'You have changed settings that are applied when a worker registers. Re-run the registration command on the target cluster for the changes to take effect.',
+  'clusters.addworker.containerName': 'Worker Container Name',
+  'clusters.addworker.containerName.tips':
+    'Specify a name for the worker container.',
+  'clusters.addworker.dataVolume': 'GPUStack Data Volume',
+  'clusters.addworker.dataVolume.tips':
+    'Specify a data storage path for GPUStack.',
+  'clusters.table.ip.internal': 'Internal',
+  'clusters.table.ip.external': 'External',
+  'clusters.form.serverUrl.tips':
+    'Specify an externally accessible GPUStack service URL if the worker cannot access GPUStack Server directly. For example: {example}',
+  'clusters.form.setDefault': 'Set as Default',
+  'clusters.form.setDefault.tips': 'Default for deployment.',
+  'clusters.addworker.noClusters': 'No available Docker clusters found',
+  'clusters.create.steps.complete.tips': 'Cluster created successfully!',
+  'clusters.create.steps.complete': 'Complete',
+  'clusters.create.steps.configure': 'Configure',
+  'clusters.create.dockerTips1': 'Next, add worker to this cluster.',
+  'clusters.create.dockerTips2':
+    'You can also skip this step and add them later from the cluster list.',
+  'clusters.create.k8sTips1': 'Next, register existing Kubernetes cluster.',
+  'clusters.create.k8sTips2':
+    'You can also skip this step and register it later from the cluster list.',
+  'clusters.addworker.theadNotes':
+    'If the <span class="bold-text">/usr/local/PPU_SDK</span> directory does not exist, please create a symbolic link pointing to the T-Head PPU SDK installed path: <span class="bold-text">ln -s /path/to/PPU_SDK /usr/local/PPU_SDK</span>.',
+  'clusters.addworker.theadNotes-02':
+    'T-Head PPU uses the Container Device Interface (CDI) for device injection and requires the <span class="bold-text">/var/run/cdi</span> directory to be available for CDI generation.',
+  'clusters.addworker.nvidiaNotes':
+    'The built-in inference backends in GPUStack require <span class="bold-text">CUDA 12.8+</span>. Please ensure your NVIDIA driver version is <span class="bold-text">570</span> or newer.',
+  'clusters.volume.title': 'Volume Mounts',
+  'clusters.volume.name': 'Volume Name',
+  'clusters.volume.mountPath': 'Container Path',
+  'clusters.volume.mountPath.format': 'Path must start with /',
+  'clusters.volume.readOnly': 'Read Only',
+  'clusters.volume.sourceType': 'Source Type',
+  'clusters.volume.sourceType.hostPath': 'Host Path',
+  'clusters.volume.sourceType.pvc': 'Persistent Volume Claim (PVC)',
+  'clusters.volume.sourceType.configMap': 'ConfigMap',
+  'clusters.volume.hostPath.path': 'Host Path',
+  'clusters.volume.hostPath.type': 'Path Type',
+  'clusters.volume.hostPath.type.directory': 'Directory',
+  'clusters.volume.hostPath.type.directoryOrCreate':
+    'Directory (create if not exists)',
+  'clusters.volume.hostPath.type.file': 'File',
+  'clusters.volume.hostPath.type.fileOrCreate': 'File (create if not exists)',
+  'clusters.volume.hostPath.type.socket': 'Socket',
+  'clusters.volume.hostPath.type.charDevice': 'Character Device',
+  'clusters.volume.hostPath.type.blockDevice': 'Block Device',
+  'clusters.volume.pvc.claimName': 'PVC Name',
+  'clusters.volume.pvc.readOnly': 'Read Only',
+  'clusters.volume.configMap.name': 'ConfigMap Name',
+  'clusters.volume.configMap.optional': 'Optional',
+  'clusters.volume.add': 'Add Volume Mount',
+  'clusters.systemDefaultContainerRegistry.title': 'Default Container Registry',
+  'clusters.systemDefaultContainerRegistry.tip':
+    'Default registry used to resolve GPUStack images for this cluster. Falls back to the server default when unset.',
+  'clusters.systemDefaultContainerRegistry.dockerHubUnreachable':
+    '{provider} instances cannot reach Docker Hub. Use a mirror or a private registry.',
+  'clusters.k8sOptions.title': 'Kubernetes Deployment Options',
+  'clusters.imageCredentials.title': 'Image Credentials',
+  'clusters.imageCredentials.add': 'Add Credential',
+  'clusters.imageCredentials.registry': 'Registry',
+  'clusters.imageCredentials.username': 'Username',
+  'clusters.imageCredentials.password': 'Password',
+  'clusters.nodeSelector.title': 'Node Selector',
+  'clusters.nodeSelector.tip':
+    'Pod nodeSelector applied to every worker DaemonSet — only nodes whose labels match are eligible to run the worker.',
+  'clusters.operatorImage.title': 'Operator Image',
+  'clusters.operatorImage.tip':
+    'Override for the GPUStack Operator container image. Leave empty to use the server default.',
+  'clusters.namespace.title': 'Namespace',
+  'clusters.namespace.tip':
+    'Kubernetes namespace the cluster’s manifests render into. Leave empty to use gpustack-system.',
+  'clusters.clusterType.title': 'Cluster Type',
+  'clusters.modelService.title': 'Model Service',
+  'clusters.modelService.tip':
+    'For LLM inference and API serving — e.g. exposing model APIs and token-based services.',
+  'clusters.gpuInstances.title': 'GPU Service',
+  'clusters.gpuInstances.tip':
+    'For on-demand GPU compute — e.g. interactive development, training jobs, or custom environments.',
+  'clusters.gpuInstances.staticAddress': 'GPU Service Static Access Address',
+  'clusters.gpuInstances.staticAddress.tip':
+    'Static address the operator uses to access GPU instances in this cluster (e.g. a LoadBalancer VIP). Operator default: empty — the access address is generated from host IPs. Changing it does not re-address GPU instances that are already deployed; it applies to newly created ones.',
+  'clusters.gpuInstances.derivedFromNode': 'Derive Instance Types from Nodes',
+  'clusters.gpuInstances.derivedFromNode.tip':
+    'Whether the operator auto-derives instance types (and their backing queues) from node hardware. Enabled: the operator authors a derived instance type for each node flavor. Disabled: it only aligns the resource flavor, and you define every instance type yourself. Operator default: Enabled.',
+  'clusters.gpuInstances.mixedOnNode': 'Allow Mixed Instance Types on a Node',
+  'clusters.gpuInstances.mixedOnNode.tip':
+    'Whether one node may serve both an accelerated and a CPU-only instance type. Enabled: a node is summarized into every type it can serve. Disabled: a node with accelerators yields only an accelerated type, and a CPU-only node only a general one. Operator default: Enabled.',
+  'clusters.gpuInstances.setting.enabled': 'Enabled',
+  'clusters.gpuInstances.setting.disabled': 'Disabled',
+  'clusters.gpuInstances.setting.unmanaged':
+    'Unmanaged (the cluster keeps its own value)',
+
+  // Topology: where this cluster's workers sit.
+  'clusters.topology.title': 'Topology Configuration',
+  'clusters.topology.noRebalance':
+    'Locations only affect later scheduling. Running deployments are not moved.',
+  'clusters.topology.load.failed': 'Could not load the topology.',
+  'clusters.topology.save.failed': 'Could not save.',
+  'clusters.topology.preview.failed': 'Could not preview this mapping.',
+  'clusters.topology.preview.noWorkers': 'This cluster has no workers yet.',
+  'clusters.topology.preview.capacity':
+    '{workers} workers · {gpus} GPUs · {free} free',
+  'clusters.topology.cluster': 'Cluster',
+  'clusters.topology.discard.ok': 'Discard',
+  'clusters.topology.field.region': 'Region',
+  'clusters.topology.field.zone': 'Zone',
+  'clusters.topology.field.room': 'Room',
+  'clusters.topology.field.row': 'Row',
+  'clusters.topology.field.rack': 'Rack',
+  'clusters.topology.field.switch': 'Access switch',
+  'clusters.topology.field.acceleratorDomain': 'Accelerator domain',
+  'clusters.topology.field.host': 'Host',
+  'clusters.topology.field.region.tips': 'Cloud region or datacentre',
+  'clusters.topology.field.zone.tips': 'Cloud availability zone or hall',
+  'clusters.topology.field.room.tips': 'Machine room',
+  'clusters.topology.field.row.tips': 'Row of racks',
+  'clusters.topology.field.rack.tips': 'Rack or cabinet',
+  'clusters.topology.field.switch.tips':
+    'Filled by hand, or written by a tool such as Topograph',
+  'clusters.topology.field.acceleratorDomain.tips':
+    'Fill by hand when the device does not report one',
+  'clusters.topology.overview.workers': '{count} workers',
+  'clusters.topology.overview.domains': '{count} {field}(s)',
+  'clusters.topology.overview.unfilled': '{count} without a {field}',
+  'clusters.topology.previewing': '● Previewing',
+  'clusters.topology.previewing.long':
+    '● Previewing: the main drawer shows the unsaved mapping',
+  'clusters.topology.view.table': 'Table',
+  'clusters.topology.view.tree': 'Tree',
+  'clusters.topology.search.placeholder': 'Search hosts…',
+  'clusters.topology.columns': 'Columns',
+  'clusters.topology.columns.fields': 'Topology Layers',
+  'clusters.topology.columns.manage': 'Manage layers',
+  'clusters.topology.columns.mapping': 'Label key mapping…',
+  'clusters.topology.columns.deleteCustom': 'Delete field “{name}”',
+  'clusters.topology.columns.deleteCustom.confirm':
+    'Delete field “{name}”? Filled values stay on the workers’ labels.',
+  'clusters.topology.columns.deleted': 'Field “{name}” deleted',
+  'clusters.topology.selected': '{count} selected',
+  'clusters.topology.clearSelection': 'Clear selection',
+  'clusters.topology.batch.button': 'Set Topology Layers',
+  'clusters.topology.batch.title': 'Set Topology Layers · {count} selected',
+  'clusters.topology.batch.field': 'Field',
+  'clusters.topology.batch.value': 'Value',
+  'clusters.topology.batch.overwrite':
+    'Overwrites {count} existing value(s): {names}',
+  'clusters.topology.batch.overwriteAuto':
+    '{count} of these have a device-reported {field}; it will be overridden',
+  'clusters.topology.batch.more': '{names} and {count} more',
+  'clusters.topology.batch.apply': 'Apply to {count}',
+  'clusters.topology.batch.partial': 'The write failed on {failed} cluster(s).',
+  'clusters.topology.toast.setOne': '{field} of {host} set to {value}',
+  'clusters.topology.toast.clearedOne': '{field} of {host} cleared',
+  'clusters.topology.toast.set': '{field} of {count} workers set to {value}',
+  'clusters.topology.toast.cleared': '{field} of {count} workers cleared',
+  'clusters.topology.toast.firstWrite': ' (only affects later scheduling)',
+  'clusters.topology.undo': 'Undo',
+  'clusters.topology.undo.done': 'Undone',
+  'clusters.topology.undo.failed': 'Undo failed: {reason}',
+  'clusters.topology.cell.fill': 'Fill in {field}',
+  'clusters.topology.cell.aria': '{field}, {state}, {host}',
+  'clusters.topology.state.unfilled': 'unfilled',
+  'clusters.topology.state.discovered.aria': '{value}, reported by the device',
+  'clusters.topology.state.override.aria':
+    '{value}, hand-filled over a reported value',
+  'clusters.topology.state.discovered.tips':
+    'Reported by the device ({key}). Filling it in overrides this.',
+  'clusters.topology.state.override.tips':
+    'Hand-filled. Clearing restores the reported value {value}',
+  'clusters.topology.state.user.tips': 'Hand-filled ({key})',
+  'clusters.topology.override.confirm':
+    'This value was reported by the device; filling it in overrides it.',
+  'clusters.topology.override.ok': 'Override',
+  'clusters.topology.value.count': '{count} workers',
+  'clusters.topology.value.create': 'Create “{value}”',
+  'clusters.topology.value.clear': 'Clear',
+  'clusters.topology.column.menu': '{field} column menu',
+  'clusters.topology.column.fillUnfilled': 'Fill the {count} unfilled…',
+  'clusters.topology.column.fillBySwitch':
+    'Fill by access switch ({count} groups)…',
+  'clusters.topology.source.user': 'hand-filled',
+  'clusters.topology.source.discovered': 'auto',
+  'clusters.topology.source.node': 'K8s node',
+  'clusters.topology.host.online': 'Online',
+  'clusters.topology.host.offline': 'Offline',
+  'clusters.topology.tree.byLayer': 'By layer',
+  'clusters.topology.tree.byField': 'By {field}',
+  'clusters.topology.tree.expandAll': 'Expand all',
+  'clusters.topology.tree.collapseAll': 'Collapse all',
+  'clusters.topology.tree.unfilled': 'No {field} yet',
+  'clusters.topology.tree.unfilled.why':
+    'Missing the label {key} (or any of its alternatives)',
+  'clusters.topology.tree.more': '{count} more',
+  'clusters.topology.tree.hostCapacity': '{gpus} GPUs · {free} free',
+  'clusters.topology.onboarding.hosts': '{hosts} hosts found.',
+  'clusters.topology.onboarding.goal':
+    'To keep the members of a disaggregated group together:',
+  'clusters.topology.onboarding.steps':
+    '① Select the machines in one rack → ② Use “Set Topology Layers” to enter the rack name → ③ Choose “same rack” when deploying',
+  'clusters.topology.onboarding.domains':
+    'A device-reported accelerator domain (multi-node NVLink, an Ascend super pod) can be a layer too: add one under “Add layer”, point it at the matching label key, and it fills itself in.',
+  'clusters.topology.onboarding.dismiss': 'Got it',
+  'clusters.topology.mapping.title': 'Label key mapping',
+  'clusters.topology.mapping.intro':
+    'Which worker label each field reads its value from',
+  'clusters.topology.mapping.showUnused': 'Show the {count} unused field(s)',
+  'clusters.topology.mapping.hideUnused': 'Hide unused fields',
+  'clusters.topology.mapping.moreKeys': '+ {count} more key(s)',
+  'clusters.topology.mapping.classified': 'Resolved {classified} / {total}',
+  'clusters.topology.mapping.noKeys': 'No label keys',
+  'clusters.topology.layer.labelKeys': 'Label keys',
+  'clusters.topology.layer.addKey': 'Add key',
+  'clusters.topology.layer.rename': 'Rename',
+  'clusters.topology.layer.rename.tips':
+    "Changes the display name only. The layer's identity, its label keys and any topology affinity already saved on a model are untouched. Leave it empty to restore the default. Layer id:",
+  'clusters.topology.layer.rename.taken':
+    'Another layer on this chain is already called that.',
+  'clusters.topology.layer.disable': 'Disable',
+  'clusters.topology.layer.disabled': ' (disabled)',
+  'clusters.topology.layer.enable': 'Enable',
+  'clusters.topology.layer.inUse': 'This layer is still in use',
+  'clusters.topology.layer.inUse.tips':
+    'These models set their topology affinity to this layer and would lose it: {models}. Change those models first.',
+  'clusters.topology.layer.name': 'Name',
+  'clusters.topology.advanced.hostKeys': 'Built in, by worker name',
+  'clusters.topology.advanced.locked':
+    'GPUStack’s own key: hand-filled values are written here. Cannot be removed or moved.',
+  'clusters.topology.advanced.suggestions': 'Discovered label keys',
+  'clusters.topology.advanced.suggestion':
+    '{workers} workers · {values} values · looks like {field}',
+  'clusters.topology.advanced.discard':
+    'Discard the changes to the field mapping?',
+  'clusters.topology.advanced.discard.tips':
+    'Values filled in the table are not affected.',
+  'clusters.topology.advanced.saved':
+    'Saved. Only affects later scheduling; running groups are not moved.',
+  'clusters.topology.keys.placeholder': 'Type a label key, or pick one below',
+  'clusters.topology.keys.invalid':
+    'Not a valid Kubernetes label key (prefix ≤ 253, name ≤ 63, alphanumerics - _ .)',
+  'clusters.topology.keys.usage':
+    '{count} workers carry this key ({values} values)',
+  'clusters.topology.keys.exists': 'This key is already added',
+  'clusters.topology.custom.title': 'Add layer',
+  'clusters.topology.custom.name.required': 'Enter a name',
+  'clusters.topology.custom.name.taken': 'This name is taken or reserved',
+  'clusters.topology.custom.name.tips':
+    'Appears as a choice in the deployment form',
+  'clusters.topology.custom.position': 'Where in the chain',
+  'clusters.topology.custom.slot.insert': 'Insert here',
+  'clusters.topology.custom.slot.placeholder': 'New layer',
+  'clusters.topology.custom.slot.explain':
+    'A {parent} holds several {name}; a {name} holds several {child}',
+  'clusters.topology.custom.slot.explain.top': 'A {name} holds several {child}',
+  'clusters.topology.custom.keys.tips':
+    'A custom layer has no key of its own; to fill it in from the table, make the first key the one you intend to write.',
+  'clusters.topology.custom.referenced':
+    'Cannot delete “{name}”: these models gather on it'
+};

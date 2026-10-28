@@ -1,0 +1,117 @@
+.containerWrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+
+  :global {
+    .ant-affix {
+      top: 0 !important;
+      height: auto;
+    }
+
+    .ant-page-header {
+      padding-block-end: 8px;
+
+      .ant-page-header-heading {
+        padding-block-start: 0;
+      }
+    }
+
+    .ant-page-header-heading-title {
+      font-size: var(--font-size-large);
+    }
+
+    .ant-pro-page-container {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .ant-pro-grid-content,
+    .ant-pro-grid-content-children {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .ant-pro-page-container-children-container {
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--color-border-container);
+      // Was a bare `8px`: the app's outermost content container carried the one
+      // radius value that had no token at all.
+      border-radius: var(--border-radius-container);
+      overflow: hidden;
+      background-color: var(--ant-color-bg-container);
+      padding: 0;
+    }
+  }
+
+  .contentWrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding-block: var(--layout-content-blockpadding);
+    padding-inline: var(--layout-content-inlinepadding);
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding-inline: var(--layout-content-inlinepadding);
+    font-size: var(--font-size-large);
+    color: var(--ant-color-text);
+    // 600 was heavier than this aesthetic wants for a page title; the size and
+    // the primary ink already separate it from everything around it.
+    font-weight: var(--font-weight-medium);
+    padding-block: 9px 8px;
+    height: 56px;
+    border-bottom: 1px solid var(--ant-color-split);
+
+    // `.left` claims all the space between the title's left edge and `.right`.
+    // Because the container width is fixed regardless of inner content, the
+    // right side never shifts during route transitions and the content inside
+    // .left is anchored to the left edge — no horizontal jitter.
+    .left {
+      display: flex;
+      align-items: center;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .right {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .leftSlot,
+    .rightSlot {
+      display: contents;
+    }
+
+    .defaultTitle {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    // Portal-driven visibility: when a page's HeaderLeft / HeaderRight
+    // portal target has children, hide the default title / show the divider.
+    // Using `:empty` (rather than React state) keeps visibility synchronous
+    // with the DOM mutation, so there is no inter-frame flicker on route
+    // transitions.
+    .leftSlot:not(:empty) ~ .defaultTitle {
+      display: none;
+    }
+
+    .rightSlot:empty ~ .divider {
+      display: none;
+    }
+  }
+}

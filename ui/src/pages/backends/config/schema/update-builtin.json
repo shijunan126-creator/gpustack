@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": ["string", "null"],
+      "description": "backend description"
+    },
+    "default_backend_param": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "default backend parameter"
+    },
+    "parameter_format": {
+      "type": ["string", "null"],
+      "enum": ["space", "equal", null],
+      "description": "parameter output format: 'space' -> --key value, 'equal' -> --key=value"
+    },
+    "common_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "commonly used parameters shown as hints in deployment UI"
+    },
+    "default_run_command": {
+      "type": ["string", "null"],
+      "description": "default start command"
+    },
+    "health_check_path": {
+      "type": ["string", "null"],
+      "description": "health check path"
+    },
+    "default_env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "environment variables"
+    },
+    "version_configs": {
+      "type": "object",
+      "patternProperties": {
+        "-custom$": {
+          "type": "object",
+          "properties": {
+            "image_name": {
+              "type": "string",
+              "description": "image name"
+            },
+            "run_command": {
+              "type": ["string", "null"],
+              "description": "start command"
+            },
+            "entrypoint": {
+              "type": "string",
+              "description": "Override the default ENTRYPOINT of the image"
+            },
+            "custom_framework": {
+              "type": ["string", "null"],
+              "description": "custom framework"
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "environment variables"
+            }
+          },
+          "required": ["image_name", "run_command"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "multiple backend versions"
+    }
+  },
+  "required": ["version_configs"],
+  "additionalProperties": false
+}

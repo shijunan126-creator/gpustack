@@ -1,0 +1,240 @@
+.title {
+  min-width: 0;
+  max-width: calc(min(1440px, 96vw) - 104px);
+}
+
+.titleText {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.title .titleSubtitle {
+  min-width: 0;
+  padding-block: 0;
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+  font-weight: 400;
+  line-height: var(--ant-line-height-sm);
+  border-radius: 4px;
+}
+
+.body {
+  height: 100%;
+  min-height: 0;
+  padding: var(--ant-padding) var(--ant-padding-lg);
+  padding-bottom: 24px;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+.titleName {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.secondary {
+  color: var(--ant-color-text-tertiary);
+  font-size: var(--ant-font-size-sm);
+}
+
+.toolbar {
+  flex-shrink: 0;
+  min-height: 28px;
+}
+
+.selection {
+  min-width: 0;
+
+  .secondary {
+    color: var(--ant-color-text-secondary);
+  }
+}
+
+.selectionName {
+  flex-shrink: 0;
+  font-size: var(--font-size-small);
+  font-weight: 500;
+}
+
+.nav {
+  flex: none;
+  width: clamp(200px, 18%, 260px);
+  min-height: 0;
+  border-right: 1px solid var(--ant-color-border-secondary);
+}
+
+.navHeader {
+  flex: none;
+  height: 40px;
+  padding-inline: var(--ant-padding-sm);
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+  font-weight: 500;
+  background-color: var(--ant-color-fill-quaternary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.paneHeaders {
+  font-weight: 500;
+}
+
+.paneVersion {
+  color: var(--ant-color-text);
+}
+
+.navScroller {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.navItems {
+  padding: var(--ant-padding-xs);
+}
+
+.navOption {
+  flex-shrink: 0;
+  width: 100%;
+  padding: var(--ant-padding-sm);
+  border-radius: var(--ant-border-radius);
+  background-color: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border);
+
+  &:hover {
+    background-color: var(--ant-color-fill-tertiary);
+  }
+
+  &:hover,
+  &:focus-within,
+  &.selected {
+    .rollbackAction {
+      opacity: 1;
+    }
+  }
+
+  &.selected {
+    background-color: var(--ant-color-fill-secondary);
+
+    .revisionName {
+      color: var(--ant-color-text);
+      font-weight: 600;
+    }
+  }
+}
+
+.selectRevision {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--ant-color-text);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--ant-border-radius-sm);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--ant-color-primary);
+    outline-offset: -2px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+.rollbackAction {
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.revisionHeader {
+  min-height: var(--ant-control-height-sm);
+}
+
+.revisionName {
+  flex-shrink: 0;
+  font-size: var(--font-size-small);
+  font-weight: 500;
+}
+
+.latestTag {
+  font-weight: 500;
+}
+
+.timestamp {
+  overflow: hidden;
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.loading {
+  padding: var(--ant-padding);
+}
+
+.placeholder {
+  flex: 1;
+  min-height: 0;
+}
+
+.snapshot {
+  flex: 1;
+  min-height: 0;
+}
+
+.snapshotNote {
+  padding: var(--ant-padding-sm);
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+  background-color: var(--ant-color-fill-quaternary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.snapshotContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (hover: none) {
+  .rollbackAction {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .body {
+    padding: var(--ant-padding-sm);
+  }
+
+  .workspace {
+    flex-direction: column;
+  }
+
+  .nav {
+    width: 100%;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid var(--ant-color-border-secondary);
+  }
+
+  .navItems {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .navOption {
+    width: 180px;
+  }
+}

@@ -1,0 +1,32 @@
+.ant-pro-layout {
+  .ant-pro-sider {
+    .ant-layout-sider-children {
+      border-inline: none;
+      border-radius: 0;
+      padding-inline-end: 0;
+      padding-block-end: 8px;
+    }
+
+    .umi-plugin-layout-right {
+      width: 100%;
+
+      .umi-plugin-layout-action {
+        padding: 12px;
+        width: 100%;
+        border-radius: var(--menu-border-radius-base);
+
+        &:hover {
+          background-color: var(--color-white-1);
+        }
+      }
+    }
+  }
+}
+
+// slider styles
+
+.ant-slider .ant-slider-handle:hover::after,
+.ant-slider .ant-slider-handle:active::after,
+.ant-slider .ant-slider-handle:focus::after {
+  outline-width: 3px;
+}

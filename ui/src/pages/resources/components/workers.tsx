@@ -1,0 +1,413 @@
+import { PaginationKey, TABLE_SORT_DIRECTIONS } from '@/config/settings';
+import useTableFetch from '@/hooks/use-table-fetch';
+import PageBox from '@/pages/_components/page-box';
+import { DockerStepsFromWorker } from '@/pages/cluster-management/components/add-worker/config';
+import { ClusterListItem } from '@/pages/cluster-management/config/types';
+import useAddWorker from '@/pages/cluster-management/hooks/use-add-worker';
+import { useQueryClusterList } from '@/pages/cluster-management/services/use-query-cluster-list';
+import useNoResourceResult from '@/pages/llmodels/hooks/use-no-resource-result';
+import useGranfanaLink from '@/pages/resources/hooks/use-grafana-link';
+import {
+  DeleteModal,
+  FilterBar,
+  Table as SealTable,
+  type TableOrder
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { useMemoizedFn } from 'ahooks';
+import { message } from 'antd';
+import { useEffect, useState } from 'react';
+import {
+  WORKERS_API,
+  deleteWorker,
+  queryWorkersList,
+  updateWorker,
+  updateWorkerLabels
+} from '../apis';
+import { ListItem, WorkerLabelsFormData } from '../config/types';
+import useWorkerColumns from '../hooks/use-worker-columns';
+import useWorkerMaintenance from '../hooks/use-worker-maintenance';
+import UpdateLabels from './update-labels';
+import WorkerDetailModal from './worker-detail-modal';
+import WorkerRightActions from './worker-right-actions';
+import WorkerSSHModal from './worker-ssh-modal';
+
+// Optional ``clusterId`` pins the list to a single cluster (used by
+// the cluster-detail page) and hides the cluster-filter dropdown so
+// the user can't change scope away from the cluster they're already
+// inside.
+interface WorkersProps {
+  clusterId?: number;
+  source?: 'clusterDetail';
+}
+
+const Workers: React.FC<WorkersProps> = ({ clusterId, source }) => {
+  const {
+    dataSource,
+    rowSelection,
+    queryParams,
+    modalRef,
+    extraStatus,
+    sortOrder,
+    handleDelete,
+    handleDeleteBatch,
+    fetchData,
+    handlePageChange,
+    handleTableChange,
+    handleSearch,
+    handleQueryChange,
+    handleNameChange
+  } = useTableFetch<ListItem>({
+    key: PaginationKey.Workers,
+    events: ['UPDATE', 'DELETE', 'CREATE'],
+    fetchAPI: queryWorkersList,
+    deleteAPI: deleteWorker,
+    contentForDelete: 'resources.worker',
+    watch: true,
+    API: WORKERS_API,
+    updateManually: true,
+    defaultQueryParams: clusterId ? { cluster_id: clusterId } : undefined
+  });
+  const { goToGrafana, ActionButton } = useGranfanaLink({
+    type: 'worker'
+  });
+  const { MaintenanceModal, handleStopMaintenance, setOpenStatus } =
+    useWorkerMaintenance({ fetchData: handleSearch });
+  const { fetchClusterList } = useQueryClusterList({
+    useStateData: false
+  });
+
+  const intl = useIntl();
+  // Non-empty means the labels modal is writing to the selection rather than
+  // to one row. Send every selected id, independent of the visible page.
+  const [batchLabelTargets, setBatchLabelTargets] = useState<number[]>([]);
+  const [updateLabelsData, setUpdateLabelsData] = useState<{
+    open: boolean;
+    data: ListItem;
+  }>({
+    open: false,
+    data: {} as ListItem
+  });
+  const [clusterData, setClusterData] = useState<{
+    list: Global.BaseOption<number, ClusterListItem>[];
+    loading: boolean;
+    data: Record<number, string>;
+  }>({
+    list: [],
+    loading: false,
+    data: {}
+  });
+  const [workerDetailStatus, setWorkerDetailStatus] = useState<{
+    open: boolean;
+    currentData: ListItem | null;
+  }>({
+    open: false,
+    currentData: null
+  });
+  const [workerSSHStatus, setWorkerSSHStatus] = useState<{
+    open: boolean;
+    currentData: ListItem | null;
+  }>({
+    open: false,
+    currentData: null
+  });
+  const { handleAddWorker, checkDefaultCluster, AddWorkerModal, setStepList } =
+    useAddWorker({
+      clusterList: clusterData.list,
+      clusterLoading: clusterData.loading
+    });
+
+  const getClusterList = async () => {
+    try {
+      // Own-org clusters only (mine=true). A worker can only join a cluster
+      // its org owns, so another org's cluster (e.g. the Default org's
+      // "shared with everyone" clusters) must not be offered in the picker.
+      // The worker list is owner-scoped too, so this list also covers every
+      // cluster the table's name column can reference.
+      const params = {
+        page: -1,
+        mine: true
+      };
+      const items = await fetchClusterList(params);
+      const clusterMap = items?.reduce(
+        (acc: Record<number, string>, item: any) => {
+          acc[item.id] = item.name;
+          return acc;
+        },
+        {}
+      );
+      const list = items?.map((item: any) => ({
+        label: item.name,
+        value: item.id,
+        id: item.id,
+        state: item.state,
+        is_default: item.is_default,
+        provider: item.provider
+      }));
+      setClusterData({
+        list,
+        loading: false,
+        data: clusterMap
+      });
+    } catch (error) {
+      setClusterData({
+        list: [],
+        loading: false,
+        data: {}
+      });
+    }
+  };
+
+  const handleUpdateLabelsOk = async (values: WorkerLabelsFormData) => {
+    try {
+      if (batchLabelTargets.length) {
+        if (!Object.keys(values.labels).length) {
+          return;
+        }
+        await updateWorkerLabels({
+          worker_ids: batchLabelTargets,
+          labels: values.labels
+        });
+        message.success(intl.formatMessage({ id: 'common.message.success' }));
+        rowSelection?.clearSelections?.();
+      } else {
+        await updateWorker(updateLabelsData.data.id, {
+          ...updateLabelsData.data,
+          labels: values.labels
+        });
+        message.success(intl.formatMessage({ id: 'common.message.success' }));
+      }
+      fetchData();
+      setBatchLabelTargets([]);
+      setUpdateLabelsData({ open: false, data: {} as ListItem });
+    } catch {
+      // The global request handler reports the error; keep the form for retry.
+    }
+  };
+
+  const handleCancelUpdateLabels = () => {
+    setBatchLabelTargets([]);
+    setUpdateLabelsData({
+      ...updateLabelsData,
+      open: false
+    });
+  };
+
+  const handleUpdateLabels = (record: ListItem) => {
+    setBatchLabelTargets([]);
+    setUpdateLabelsData({
+      open: true,
+      data: {
+        ...record
+      }
+    });
+  };
+
+  /**
+   * Bulk labelling: the same modal, pointed at the selection.
+   *
+   * Topology is declared once and maintained by labelling, and a fleet is
+   * labelled forty machines at a time — a modal per host is not a workflow.
+   */
+  const handleUpdateLabelsByBatch = () => {
+    const ids = (rowSelection?.selectedRowKeys || []) as number[];
+    if (!ids.length) {
+      return;
+    }
+    setBatchLabelTargets(ids);
+    setUpdateLabelsData({
+      open: true,
+      data: {} as ListItem
+    });
+  };
+
+  const handleViewDetail = (record: ListItem) => {
+    setWorkerDetailStatus({
+      open: true,
+      currentData: record
+    });
+  };
+
+  const handleSelect = useMemoizedFn((val: any, record: ListItem) => {
+    if (val === 'edit') {
+      handleUpdateLabels(record);
+      return;
+    }
+    if (val === 'delete') {
+      handleDelete(record);
+    }
+    if (val === 'details') {
+      handleViewDetail(record);
+    }
+    if (val === 'view_ssh') {
+      setWorkerSSHStatus({
+        open: true,
+        currentData: record
+      });
+    }
+
+    if (val === 'star_maintenance') {
+      setOpenStatus({
+        open: true,
+        currentData: record
+      });
+    }
+
+    if (val === 'stop_maintenance') {
+      handleStopMaintenance(record);
+    }
+    if (val === 'metrics') {
+      goToGrafana(record);
+    }
+  });
+
+  const handleOnAddWorker = () => {
+    const targetCluster = checkDefaultCluster(clusterData.list);
+    if (targetCluster) {
+      handleAddWorker(targetCluster as ClusterListItem, true);
+    } else {
+      message.info(intl.formatMessage({ id: 'noresult.resources.cluster' }));
+    }
+  };
+
+  const { noResourceResult } = useNoResourceResult({
+    loadend: dataSource.loadend,
+    loading: dataSource.loading,
+    dataSource: dataSource.dataList,
+    queryParams: queryParams,
+    iconType: 'icon-resources',
+    title: intl.formatMessage({ id: 'noresult.workers.title' }),
+    noClusters: !clusterData.list.length,
+    noWorkers: dataSource.dataList.length === 0 && clusterData.list.length > 0,
+    defaultContent: {
+      subTitle: intl.formatMessage({ id: 'noresult.workers.subTitle' }),
+      noFoundText: intl.formatMessage({ id: 'noresult.workers.nofound' }),
+      buttonText: intl.formatMessage({ id: 'noresult.workers.button.add' }),
+      onClick: handleOnAddWorker
+    }
+  });
+
+  // SealTable reports a sort as a `TableOrder` (or a list of them) instead of
+  // antd's `(pagination, filters, sorter, extra)`, so feed `handleTableChange`
+  // the shape it expects — the sorter slot plus an explicit `sort` action.
+  const handleTableSort = (order: TableOrder | Array<TableOrder>) => {
+    handleTableChange({}, {}, order, { action: 'sort' });
+  };
+
+  const handleClusterChange = (value: number) => {
+    handleQueryChange({
+      page: 1,
+      cluster_id: value
+    });
+  };
+
+  const columns = useWorkerColumns({
+    clusterData,
+    loadend: dataSource.loadend,
+    firstLoad: extraStatus.firstLoad,
+    sortOrder,
+    source,
+    handleSelect
+  });
+
+  useEffect(() => {
+    getClusterList();
+    setStepList(DockerStepsFromWorker);
+  }, []);
+
+  return (
+    <>
+      <PageBox>
+        <FilterBar
+          showSelect={source !== 'clusterDetail'}
+          selectHolder={intl.formatMessage({ id: 'clusters.filterBy.cluster' })}
+          buttonText={intl.formatMessage({ id: 'resources.button.create' })}
+          handleDeleteByBatch={handleDeleteBatch}
+          handleSearch={handleSearch}
+          handleSelectChange={handleClusterChange}
+          handleClickPrimary={handleOnAddWorker}
+          handleInputChange={handleNameChange}
+          rowSelection={rowSelection}
+          selectOptions={clusterData.list}
+          widths={
+            source !== 'clusterDetail'
+              ? { select: 230, input: 230 }
+              : { input: 300 }
+          }
+          right={
+            source === 'clusterDetail' ? (
+              <></>
+            ) : (
+              <WorkerRightActions
+                handleDeleteByBatch={handleDeleteBatch}
+                handleUpdateLabelsByBatch={handleUpdateLabelsByBatch}
+                handleClickPrimary={handleOnAddWorker}
+                rowSelection={rowSelection}
+                MonitorButton={ActionButton()}
+              ></WorkerRightActions>
+            )
+          }
+        ></FilterBar>
+        <SealTable
+          rowKey="id"
+          columns={columns}
+          dataSource={dataSource.dataList}
+          loading={dataSource.loading}
+          loadend={dataSource.loadend}
+          sortDirections={TABLE_SORT_DIRECTIONS}
+          showSorterTooltip={false}
+          onTableSort={handleTableSort}
+          // `true` widens the row to the columns' own floors (sum of their
+          // `minWidth` + the prefix gutter) and scrolls past that. Not
+          // `'max-content'`: on a grid of `fr` tracks the greediest cell — the
+          // wrap-happy labels column — sets the `fr` unit for every track, which
+          // blows the table up to ~3.4x the width it actually needs.
+          scroll={{ x: true }}
+          rowSelection={source === 'clusterDetail' ? undefined : rowSelection}
+          empty={noResourceResult}
+          // Matches the `<NoResult minHeight>` inside `noResourceResult` so the
+          // first-load spinner, the empty state and the eventual rows occupy
+          // one stable block instead of jumping on entry.
+          emptyMinHeight="calc(100vh - 300px)"
+          pagination={{
+            size: 'middle',
+            showSizeChanger: true,
+            pageSize: queryParams.perPage,
+            current: queryParams.page,
+            total: dataSource.total,
+            hideOnSinglePage: queryParams.perPage === 10,
+            onChange: handlePageChange
+          }}
+        ></SealTable>
+        <DeleteModal ref={modalRef}></DeleteModal>
+        <UpdateLabels
+          open={updateLabelsData.open}
+          onOk={handleUpdateLabelsOk}
+          onCancel={handleCancelUpdateLabels}
+          batch={batchLabelTargets.length > 0}
+          count={batchLabelTargets.length}
+          data={{
+            name: updateLabelsData.data.name,
+            labels: updateLabelsData.data.labels
+          }}
+        ></UpdateLabels>
+        <WorkerDetailModal
+          open={workerDetailStatus.open}
+          currentData={workerDetailStatus.currentData}
+          onClose={() =>
+            setWorkerDetailStatus({ currentData: null, open: false })
+          }
+        />
+        <WorkerSSHModal
+          open={workerSSHStatus.open}
+          currentData={workerSSHStatus.currentData}
+          onClose={() => setWorkerSSHStatus({ currentData: null, open: false })}
+        />
+        {MaintenanceModal}
+        {AddWorkerModal}
+      </PageBox>
+    </>
+  );
+};
+
+export default Workers;

@@ -1,0 +1,313 @@
+import ascendLogo from '@/assets/logo/ascend.png';
+import CambriconPNG from '@/assets/logo/cambricon.png';
+import hyponPNG from '@/assets/logo/hygon.png';
+import iluvatarWEBP from '@/assets/logo/Iluvatar.png';
+import metaxLogo from '@/assets/logo/metax.png';
+import mooreLogo from '@/assets/logo/moore-logo.png';
+import nvidiaLogo from '@/assets/logo/nvidia.png';
+import theadLogoEN from '@/assets/logo/t-head-en.png';
+import theadLogoZH from '@/assets/logo/t-head-zh.png';
+import useUserSettings from '@/hooks/use-user-settings';
+import {
+  AddWorkerDockerNotes,
+  GPUDriverMap
+} from '@/pages/resources/config/gpu-driver';
+import { getDocumentationUrl } from '@/utils/documentation';
+import { IconFont } from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import styled from 'styled-components';
+import ProviderCatalog from './provider-catalog';
+
+const Box = styled.div`
+  .template-card-wrapper {
+    position: relative;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.1);
+    &.active {
+      background-color: var(--ant-color-fill-tertiary);
+      border-color: var(--ant-color-primary);
+    }
+    .template-card-icon {
+      margin-right: 0;
+    }
+    .template-card-inner {
+      line-height: 1;
+      flex-direction: row;
+      height: auto;
+      width: 0;
+      overflow: visible;
+      .template-card-content {
+        font-size: 13px;
+      }
+    }
+    .extra {
+      position: absolute;
+      right: 2px;
+      top: 2px;
+      padding: 2px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 400;
+      background-color: var(--ant-blue-1);
+    }
+  }
+  /* Vertical rule drawn in the grid gap to the left of the CPU card, splitting
+     it off from the GPU vendors. The class sits on CardBox, which clips by
+     default — hence overflow: visible. */
+  .has-divider {
+    overflow: visible;
+    &::before {
+      content: '';
+      position: absolute;
+      /* 2px centred in the 16px grid gap: the gap spans -16..0, so its middle
+         is -8, and a 2px rule starts 1px before that. */
+      left: -9px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      border-radius: 1px;
+      /* Not colorSplit (~6% black, lost next to the cards' own borders) and
+         not colorBorder (a fixed grey that goes dim on the dark theme).
+         colorTextQuaternary is 25% of the text colour, so it inverts with the
+         theme and stays legible in both. */
+      background-color: var(--ant-color-text-quaternary);
+    }
+  }
+  &.dark-theme {
+    .template-card-wrapper {
+      background-color: rgba(255, 255, 255, 0.05);
+      &:hover {
+        background-color: var(--ant-color-bg-solid);
+      }
+      &.active {
+        background-color: var(--ant-color-bg-solid);
+        border-color: var(--ant-color-primary);
+      }
+    }
+    /* The CPU card is a text label rather than a logo, so it takes the theme's
+       text colour — near-white here — and would vanish once the rule above
+       flips the card to colorBgSolid, which the dark algorithm resolves to
+       rgba(255,255,255,0.95). Only the label needs fixing: colorBgSolid is
+       derived from colorTextBase, so colorBgBase is its paired on-top colour,
+       and the light surface stays as it is for the vendor cards, whose
+       dark-on-transparent logos depend on it. */
+    .has-divider .template-card-wrapper.active,
+    .has-divider .template-card-wrapper:hover {
+      color: var(--ant-color-bg-base);
+    }
+  }
+`;
+
+const ProviderImage = ({ src, height }: { src: string; height?: number }) => {
+  return (
+    <img
+      src={src}
+      style={{
+        height: height || 20,
+        objectFit: 'contain'
+      }}
+    />
+  );
+};
+
+interface SupportedHardwareProps {
+  onSelect?: (provider: string, item: any) => void;
+  // Single (legacy) or array of selected GPU driver keys (multi-select).
+  current?: string | string[];
+  clickable?: boolean;
+  // Set of GPU driver keys that are valid to pick. When provided, items
+  // outside this set render as disabled. Undefined means "no restriction".
+  availableKeys?: Set<string>;
+  // Renders the CPU Node card beside the GPU vendors. Kubernetes only: the
+  // CPU worker DaemonSet is a K8s-manifest concept, and Docker's Add Worker
+  // installs onto a single host with nothing to opt out of.
+  includeCPU?: boolean;
+}
+
+/**
+ * The CPU Node card's key. Not a GPU driver key — it maps to the manifest
+ * endpoint's `disable_cpu_worker` flag rather than to a `runtime`.
+ */
+export const CPU_NODE_KEY = 'cpu';
+
+/**
+ * The vendor catalog rendered by the cards. Exported because a vendor can also
+ * be selected without a click — the register flow preselects the cluster's
+ * already-registered vendors — and that path needs the same label/link.
+ */
+export const useSupportedGPUList = () => {
+  const intl = useIntl();
+
+  return [
+    {
+      label: 'NVIDIA',
+      hiddenTitle: true,
+      value: GPUDriverMap.NVIDIA,
+      description: '',
+      key: GPUDriverMap.NVIDIA,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.NVIDIA],
+      link: 'installation/requirements/#nvidia-gpu',
+      icon: <ProviderImage src={nvidiaLogo} height={18} />
+    },
+    {
+      label: `AMD `,
+      hiddenTitle: true,
+      description: '',
+      value: GPUDriverMap.AMD,
+      key: GPUDriverMap.AMD,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.AMD],
+      link: 'installation/requirements/#amd-gpu',
+      icon: (
+        <IconFont
+          type="icon-amd-logo"
+          style={{ fontSize: 64, color: '#000' }}
+        />
+      )
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.ascend' }),
+      hiddenTitle: true,
+      description: '',
+      value: GPUDriverMap.ASCEND,
+      key: GPUDriverMap.ASCEND,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.ASCEND],
+      link: 'installation/requirements/#ascend-npu',
+      icon: <ProviderImage src={ascendLogo} height={30} />
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.hygon' }),
+      hiddenTitle: true,
+      description: '',
+      value: GPUDriverMap.HYGON,
+      key: GPUDriverMap.HYGON,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.HYGON],
+      link: 'installation/requirements/#hygon-dcu',
+      icon: <ProviderImage src={hyponPNG} height={18} />
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.metax' }),
+      hiddenTitle: true,
+      value: GPUDriverMap.METAX,
+      key: GPUDriverMap.METAX,
+      locale: false,
+      link: 'installation/requirements/#metax-gpu',
+      notes: AddWorkerDockerNotes[GPUDriverMap.METAX],
+      icon: <ProviderImage src={metaxLogo} height={20} />
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.moorthreads' }),
+      hiddenTitle: true,
+      extra: intl.formatMessage({ id: 'common.tag.experimental' }),
+      value: GPUDriverMap.MOORE_THREADS,
+      key: GPUDriverMap.MOORE_THREADS,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.MOORE_THREADS],
+      link: 'installation/requirements/#mthreads-gpu',
+      icon: <ProviderImage src={mooreLogo} height={24} />
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.iluvatar' }),
+      hiddenTitle: true,
+      extra: intl.formatMessage({ id: 'common.tag.experimental' }),
+      value: GPUDriverMap.ILUVATAR,
+      key: GPUDriverMap.ILUVATAR,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.ILUVATAR],
+      link: 'installation/requirements/#iluvatar-gpu',
+      icon: <ProviderImage src={iluvatarWEBP} height={24} />
+    },
+    {
+      label: intl.formatMessage({ id: 'vendor.cambricon' }),
+      hiddenTitle: true,
+      extra: intl.formatMessage({ id: 'common.tag.experimental' }),
+      value: GPUDriverMap.CAMBRICON,
+      key: GPUDriverMap.CAMBRICON,
+      locale: false,
+      notes: AddWorkerDockerNotes[GPUDriverMap.CAMBRICON],
+      link: 'installation/requirements/#cambricon-mlu',
+      icon: <ProviderImage src={CambriconPNG} height={24} />
+    },
+    {
+      label: `${intl.formatMessage({ id: 'vendor.thead' })} `,
+      hiddenTitle: true,
+      extra: intl.formatMessage({ id: 'common.tag.experimental' }),
+      value: GPUDriverMap.THEAD,
+      key: GPUDriverMap.THEAD,
+      locale: false,
+      link: 'installation/requirements/#t-head-ppu',
+      notes: AddWorkerDockerNotes[GPUDriverMap.THEAD],
+      icon: (
+        <ProviderImage
+          src={intl?.locale === 'zh-CN' ? theadLogoZH : theadLogoEN}
+          height={22}
+        />
+      )
+    }
+  ].map((item) => ({
+    ...item,
+    link: getDocumentationUrl(item.link, intl.locale)
+  }));
+};
+
+const SupportedHardware: React.FC<SupportedHardwareProps> = ({
+  onSelect,
+  clickable,
+  current,
+  availableKeys,
+  includeCPU
+}) => {
+  const intl = useIntl();
+  const { userSettings } = useUserSettings();
+  const supportedHardPlatforms = useSupportedGPUList();
+
+  const platformsWithDisabled = availableKeys
+    ? supportedHardPlatforms.map((p) => ({
+        ...p,
+        disabled: !availableKeys.has(p.value)
+      }))
+    : supportedHardPlatforms;
+
+  // Appended last so the 9 vendors keep their order and the 5-column grid
+  // fills to exactly two rows — which also puts the CPU card in the last cell,
+  // with the divider falling between it and the vendor beside it.
+  const platforms = includeCPU
+    ? [
+        ...platformsWithDisabled,
+        {
+          label: 'CPU Node',
+          hiddenTitle: true,
+          value: CPU_NODE_KEY,
+          key: CPU_NODE_KEY,
+          locale: false,
+          dividerBefore: true,
+          tooltip: intl.formatMessage({
+            id: 'clusters.addworker.cpuNode.tips'
+          }),
+          // Text only — the vendor cards are logos, so an icon here would read
+          // as a tenth brand rather than as the odd one out. Bold to carry the
+          // weight the logos have.
+          icon: <span style={{ fontSize: 15, fontWeight: 600 }}>CPU Node</span>
+        }
+      ]
+    : platformsWithDisabled;
+
+  return (
+    <Box className={userSettings?.theme === 'realDark' ? 'dark-theme' : ''}>
+      <ProviderCatalog
+        onSelect={onSelect}
+        height={60}
+        current={current}
+        dataList={platforms}
+        clickable={clickable}
+        showTooltip={true}
+        cols={5}
+      />
+    </Box>
+  );
+};
+
+export default SupportedHardware;

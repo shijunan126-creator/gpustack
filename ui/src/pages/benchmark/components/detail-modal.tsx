@@ -1,0 +1,29 @@
+import { FormDrawer } from '@gpustack/core-ui';
+import { BenchmarkListItem } from '../config/types';
+import DetailContent from './detail-content';
+
+interface DetailModalProps {
+  open: boolean;
+  currentData?: BenchmarkListItem;
+  onClose: () => void;
+}
+
+const DetailModal: React.FC<DetailModalProps> = ({
+  open,
+  currentData,
+  onClose
+}) => {
+  return (
+    <FormDrawer
+      title={currentData?.name}
+      open={open}
+      onCancel={onClose}
+      width={960}
+      footer={null}
+    >
+      <DetailContent />
+    </FormDrawer>
+  );
+};
+
+export default DetailModal;

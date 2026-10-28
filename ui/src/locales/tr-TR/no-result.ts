@@ -1,0 +1,88 @@
+export default {
+  'noresult.button.add': 'Şimdi Ekle',
+  'noresult.mymodels.title': 'Erişilebilir Model Yok',
+  'noresult.mymodels.subTitle':
+    'Erişim için lütfen yöneticiyle iletişime geçin.',
+  'noresult.mymodels.nofound': 'Eşleşen model bulunamadı',
+  'noresult.deployments.title': 'Dağıtılmış Model Yok',
+  'noresult.deployments.subTitle':
+    'Henüz hiç model dağıtmadınız. Başlamak için aşağıdaki düğmeye tıklayın.',
+  'noresult.gpus.title': 'GPU Cihazı Algılanamadı',
+  'noresult.gpus.subTitle':
+    'Lütfen İşçi Düğüm durumunun HAZIR olup olmadığını kontrol edin.',
+  'noresult.gpus.nofound': 'Eşleşen GPU cihazı bulunamadı.',
+  'noresult.workers.title': 'İşçi Düğüm Yok',
+  'noresult.workers.subTitle': 'Hiçbir kümede işçi düğüm bulunamadı.',
+  'noresult.workers.nofound': 'Eşleşen işçi düğüm bulunamadı.',
+  'noresult.workers.button.add': 'İşçi Düğüm Ekle',
+  'noresult.modelfiles.title': 'Model Dosyası Yok',
+  'noresult.modelfiles.subTitle': 'Henüz model dosyası eklenmedi.',
+  'noresult.modelfiles.nofound': 'Eşleşen model dosyası bulunamadı.',
+  'noresult.backend.title': 'Çıkarım Altyapısı Yok',
+  'noresult.backend.subTitle': 'Henüz çıkarım altyapısı eklenmedi.',
+  'noresult.backend.nofound': 'Eşleşen çıkarım altyapısı bulunamadı.',
+  'noresult.cluster.title': 'Küme Yok',
+  'noresult.cluster.subTitle': 'Henüz küme eklenmedi.',
+  'noresult.cluster.nofound': 'Eşleşen küme bulunamadı.',
+  'noresult.credentials.title': 'Bulut Kimlik Bilgisi Yok',
+  'noresult.credentials.subTitle': 'Henüz bulut kimlik bilgisi eklenmedi.',
+  'noresult.credentials.nofound': 'Eşleşen kimlik bilgisi bulunamadı.',
+  'noresult.users.title': 'Kullanıcı Yok',
+  'noresult.users.subTitle': 'Henüz kullanıcı eklenmedi.',
+  'noresult.users.nofound': 'Eşleşen kullanıcı bulunamadı.',
+  'noresult.keys.title': 'API Anahtarı Yok',
+  'noresult.keys.subTitle': 'Henüz API anahtarı eklenmedi.',
+  'noresult.keys.nofound': 'Eşleşen API anahtarı bulunamadı.',
+  'noresult.catalog.title': 'Model Yok',
+  'noresult.catalog.subTitle': 'Henüz model yapılandırılmadı.',
+  'noresult.catalog.nofound': 'Eşleşen model bulunamadı.',
+  'noresult.resources.cluster':
+    'Kullanılabilir küme yok. Başlamak için bir küme ekleyin.',
+  'noresult.resources.k8sCluster':
+    'Kullanılabilir küme yok. Başlamak için GPU Hizmeti için bir Kubernetes kümesi kaydedin.',
+  'noresult.resources.worker':
+    'Kullanılabilir işçi düğüm yok. Başlamak için bir işçi düğüm ekleyin.',
+  'noresult.resources.gotocluster': 'İlk Kümenizi Oluşturun',
+  'noresult.resources.addk8scluster': 'Kubernetes Kümesi Ekle',
+  'noresult.resources.gotoworker': 'İşçi Düğüm Ekle',
+  'noresult.benchmark.title': 'Kıyaslama Yok',
+  'noresult.benchmark.subTitle': 'Henüz kıyaslama eklenmedi.',
+  'noresult.benchmark.nofound': 'Eşleşen kıyaslama bulunamadı.',
+  'noresult.routes.title': 'Yönlendirme Yok',
+  'noresult.routes.subTitle': 'Henüz yönlendirme eklenmedi.',
+  'noresult.routes.nofound': 'Eşleşen yönlendirme bulunamadı.',
+  'noresult.instances.title': 'Örnek yok',
+  'noresult.instances.subTitle':
+    'Çalışan model örneği yok. Otomatik olarak bir tane oluşturmak için bir model dağıtın.',
+  'noresult.instances.nofound': 'Eşleşen örnek bulunamadı.',
+  'noresult.gpuservice.template.title': 'Örnek Şablonu Yok',
+  'noresult.gpuservice.template.subTitle': 'Henüz örnek şablonu eklenmedi.',
+  'noresult.gpuservice.template.nofound': 'Eşleşen örnek şablonu bulunamadı.',
+  'noresult.gpuservice.instance.title': 'GPU Örneği Yok',
+  'noresult.gpuservice.instance.subTitle': 'Henüz GPU örneği eklenmedi.',
+  'noresult.gpuservice.instance.nofound': 'Eşleşen GPU örneği bulunamadı.',
+  'noresult.gpuservice.storage.title': 'Depolama Yok',
+  'noresult.gpuservice.storage.subTitle': 'Henüz depolama eklenmedi.',
+  'noresult.gpuservice.storage.nofound': 'Eşleşen depolama bulunamadı.',
+  'noresult.gpuservice.instanceType.title': 'Örnek Türü Yok',
+  'noresult.gpuservice.instanceType.subTitle':
+    'Başlamak için bir örnek türü oluşturun',
+  'noresult.gpuservice.instanceType.nofound': 'Örnek türü bulunamadı',
+  'noresult.gpuservice.storageType.title': 'Depolama Türü Yok',
+  'noresult.gpuservice.storageType.subTitle': 'Henüz depolama türü eklenmedi.',
+  'noresult.gpuservice.storageType.nofound':
+    'Eşleşen depolama türü bulunamadı.',
+  'noresult.gpuservice.sshkey.title': 'SSH Açık Anahtarı Yok',
+  'noresult.gpuservice.sshkey.subTitle': 'Henüz SSH açık anahtarı eklenmedi.',
+  'noresult.gpuservice.sshkey.nofound': 'Eşleşen SSH açık anahtarı bulunamadı.',
+  'noresult.kvCache.title': 'Henüz önbellek hizmeti yok',
+  'noresult.kvCache.subTitle':
+    'KV önbelleğini hızlandırmak için yönetilen bir önbellek hizmeti oluşturun veya harici bir tane kaydedin.',
+  'noresult.kvCache.nofound': 'Eşleşen önbellek hizmeti bulunamadı.'
+};
+
+// ========== To-Do: Translate Keys (Remove After Translation) ==========
+// 1. 'noresult.instances.title': 'No instances',
+// 2. 'noresult.instances.subTitle': 'There are no running model instances. Deploy a model to create one automatically.',
+// 3. 'noresult.instances.nofound': 'No matching instances found.'
+// ========== End of To-Do List ==========

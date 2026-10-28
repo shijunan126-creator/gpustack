@@ -1,0 +1,471 @@
+import { setRouteCache } from '@/atoms/route-cache';
+import routeCachekey from '@/config/route-cachekey';
+import { HEADER_HEIGHT } from '@/config/settings';
+import { readAudioFile } from '@/utils/load-audio-file';
+import { SendOutlined } from '@ant-design/icons';
+import {
+  AlertInfo,
+  AudioAnimation,
+  AudioPlayer,
+  CopyButton,
+  IconFont,
+  UploadAudio,
+  useCancelToken,
+  useOverlayScroller
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, Spin, Tooltip } from 'antd';
+import _ from 'lodash';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
+import { AUDIO_SPEECH_TO_TEXT_API } from '../apis';
+import AudioInput from '../components/audio-input';
+import RightContainer from '../components/right-container';
+import ViewCommonCode from '../components/view-common-code';
+import { SpeechToTextFormat } from '../config';
+import '../style/ground-llm.less';
+import '../style/speech-to-text.less';
+import '../style/system-message-wrap.less';
+import { speechToTextCode } from '../view-code/audio';
+import STTForm from './forms/stt-form';
+import { useNonStreamSTT, useStreamSTT } from './hooks';
+
+interface MessageProps {
+  modelList: Global.BaseOption<string>[];
+  ref?: any;
+}
+
+const GroundSTT: React.FC<MessageProps> = forwardRef((props, ref) => {
+  const intl = useIntl();
+  const { modelList } = props;
+  const messageId = useRef<number>(0);
+  const [messageList, setMessageList] = useState<
+    { uid: number; content: string }[]
+  >([]);
+  const [parameters, setParams] = useState<any>({
+    model: '',
+    language: 'auto'
+  });
+  const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [tokenResult, setTokenResult] = useState<any>(null);
+  const [collapse, setCollapse] = useState(false);
+  const scroller = useRef<any>(null);
+  const [audioPermissionOn, setAudioPermissionOn] = useState(true);
+  const [audioData, setAudioData] = useState<any>(null);
+  const [audioChunks, setAudioChunks] = useState<any>({
+    data: [],
+    analyser: null
+  });
+  const [isRecording, setIsRecording] = useState(false);
+  const formRef = useRef<any>(null);
+  const { updateCancelToken, getCanceltToken, cancelRequest } =
+    useCancelToken();
+
+  const { initialize, updateScrollerPosition } = useOverlayScroller();
+
+  const nonStreamSTT = useNonStreamSTT({
+    onSuccess: (result) => {
+      setMessageList([
+        {
+          content: result.text,
+          uid: messageId.current
+        }
+      ]);
+    },
+    onError: (error) => {
+      setTokenResult({
+        error: true,
+        errorMessage: error
+      });
+    }
+  });
+
+  const streamSTT = useStreamSTT({
+    onChunk: (text) => {
+      setMessageList([
+        {
+          content: text,
+          uid: messageId.current
+        }
+      ]);
+    },
+    onComplete: () => {
+      console.log('Stream transcription completed');
+    },
+    onError: (error) => {
+      setTokenResult({
+        error: true,
+        errorMessage: error?.message || _.toString(error)
+      });
+    }
+  });
+
+  useImperativeHandle(ref, () => {
+    return {
+      viewCode() {
+        setShow(true);
+      },
+      setCollapse() {
+        setCollapse(!collapse);
+      },
+      collapse: collapse
+    };
+  });
+
+  const setMessageId = () => {
+    messageId.current = messageId.current + 1;
+  };
+
+  const viewCodeContent = useMemo(() => {
+    return speechToTextCode({
+      api: AUDIO_SPEECH_TO_TEXT_API,
+      parameters: {
+        ...parameters
+      }
+    });
+  }, [parameters]);
+
+  const handleStopConversation = () => {
+    cancelRequest();
+    streamSTT.abort();
+    setLoading(false);
+  };
+
+  const submitMessage = async () => {
+    try {
+      await formRef.current?.form.validateFields();
+      if (!parameters.model) return;
+      setLoading(true);
+      setMessageId();
+      setTokenResult(null);
+      setMessageList([]);
+
+      updateCancelToken();
+
+      setRouteCache(routeCachekey['/playground/speech'], true);
+      const params = {
+        ...parameters,
+        file: new File([audioData.data], audioData.name, {
+          type: audioData.type
+        })
+      };
+
+      if (parameters.stream) {
+        await streamSTT.generate(params);
+      } else {
+        await nonStreamSTT.generate(params, getCanceltToken());
+      }
+    } catch (error: any) {
+      setTokenResult({
+        error: true,
+        errorMessage: error?.message || _.toString(error)
+      });
+    } finally {
+      setLoading(false);
+      setIsRecording(false);
+      setRouteCache(routeCachekey['/playground/speech'], false);
+    }
+  };
+  const handleClear = () => {
+    setMessageId();
+    setMessageList([]);
+    setTokenResult(null);
+  };
+
+  const handleCloseViewCode = () => {
+    setShow(false);
+  };
+
+  const handleOnAudioData = useCallback(
+    (data: {
+      chunks: Blob[];
+      url: string;
+      name: string;
+      duration: number;
+      type: string;
+    }) => {
+      setAudioData(() => {
+        return {
+          url: data.url,
+          name: data.name,
+          data: data.chunks,
+          type: data.type,
+          duration: data.duration
+        };
+      });
+    },
+    []
+  );
+
+  const handleOnAudioPermission = useCallback((permission: boolean) => {
+    setAudioPermissionOn(permission);
+  }, []);
+
+  const handleUploadChange = useCallback(
+    async (data: { file: any; fileList: any }) => {
+      try {
+        const res = await readAudioFile(data.file);
+        setAudioData(res);
+        setTokenResult(null);
+      } catch (error) {}
+    },
+    []
+  );
+
+  const handleOnAnalyse = useCallback((data: any, analyser: any) => {
+    setAudioChunks(() => {
+      return {
+        data: data,
+        analyser: analyser
+      };
+    });
+  }, []);
+  const handleOnRecord = useCallback((val: boolean) => {
+    setIsRecording(val);
+    setAudioData(null);
+    setTokenResult(null);
+    setMessageList([]);
+  }, []);
+
+  const handleOnGenerate = async () => {
+    if (loading) {
+      handleStopConversation();
+      return;
+    }
+    submitMessage();
+  };
+
+  const renderAniamtion = () => {
+    if (!audioPermissionOn) {
+      return (
+        <div className="tips-text">
+          <IconFont type={'icon-audio'} style={{ fontSize: 20 }}></IconFont>
+          <span>
+            {intl.formatMessage({ id: 'playground.audio.enablemic' })}
+          </span>
+        </div>
+      );
+    }
+    if (isRecording) {
+      return (
+        <AudioAnimation
+          fixedHeight={true}
+          height={82}
+          width={500}
+          analyserData={audioChunks}
+        ></AudioAnimation>
+      );
+    }
+
+    return (
+      <div className="tips-text">
+        <IconFont type={'icon-audio'} style={{ fontSize: 18 }}></IconFont>
+        <span>
+          {intl.formatMessage({ id: 'playground.audio.speechtotext.tips' })}
+        </span>
+      </div>
+    );
+  };
+
+  const updateParams = (values: any) => {
+    setParams((pre: Record<string, any>) => {
+      return {
+        ...pre,
+        ...values
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (scroller.current) {
+      initialize(scroller.current);
+    }
+  }, [initialize]);
+
+  useEffect(() => {
+    if (loading) {
+      updateScrollerPosition();
+    }
+  }, [messageList, loading]);
+
+  return (
+    <div
+      className="ground-left-wrapper"
+      style={{
+        height: `calc(100vh - var(--app-banner-height, 0px) - ${HEADER_HEIGHT}px)`
+      }}
+    >
+      <div className="ground-left">
+        <div className="ground-left-footer" style={{ flex: 1 }}>
+          <div className="speech-to-text">
+            <div className="speech-box">
+              {!isRecording && (
+                <UploadAudio
+                  type="default"
+                  accept={SpeechToTextFormat.join(', ')}
+                  onChange={handleUploadChange}
+                ></UploadAudio>
+              )}
+              <AudioInput
+                type="default"
+                voiceActivity={true}
+                onAudioData={handleOnAudioData}
+                onAudioPermission={handleOnAudioPermission}
+                onAnalyse={handleOnAnalyse}
+                onRecord={handleOnRecord}
+              ></AudioInput>
+            </div>
+
+            {audioData ? (
+              <div className="flex-between flex-center justify-center relative">
+                <div style={{ width: 600 }}>
+                  <AudioPlayer
+                    url={audioData.url}
+                    name={audioData.name}
+                    duration={audioData.duration}
+                    extra={
+                      <Tooltip
+                        title={
+                          loading
+                            ? intl.formatMessage({
+                                id: 'common.button.stop'
+                              })
+                            : intl.formatMessage({
+                                id: 'playground.audio.button.generate'
+                              })
+                        }
+                      >
+                        {
+                          <Button
+                            disabled={!audioData}
+                            type="primary"
+                            size="middle"
+                            shape="circle"
+                            onClick={handleOnGenerate}
+                            icon={
+                              loading ? (
+                                <IconFont
+                                  type="icon-stop1"
+                                  className="font-size-14"
+                                ></IconFont>
+                              ) : (
+                                <SendOutlined></SendOutlined>
+                              )
+                            }
+                          ></Button>
+                        }
+                      </Tooltip>
+                    }
+                  ></AudioPlayer>
+                </div>
+              </div>
+            ) : (
+              renderAniamtion()
+            )}
+          </div>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            overflow: 'auto'
+          }}
+        >
+          <div
+            className="message-list-wrap"
+            style={{
+              flex: 1,
+              position: 'relative'
+            }}
+          >
+            {messageList?.length > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 20,
+                  right: 32,
+                  zIndex: 10
+                }}
+              >
+                <CopyButton
+                  text={messageList[0]?.content}
+                  type="default"
+                  size="small"
+                ></CopyButton>
+              </span>
+            )}
+            <div
+              className="content"
+              style={{ height: '100%', overflow: 'auto' }}
+              ref={scroller}
+            >
+              <div>
+                {!tokenResult && (
+                  <div
+                    style={{
+                      padding: '8px 14px',
+                      lineHeight: '22px',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      wordBreak: 'break-word'
+                    }}
+                  >
+                    {messageList.length ? (
+                      messageList[0]?.content
+                    ) : (
+                      <span className="text-tertiary">
+                        {intl.formatMessage({
+                          id: 'playground.audio.generating.tips'
+                        })}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {tokenResult && (
+                  <div style={{ minHeight: 40 }}>
+                    <AlertInfo
+                      type="danger"
+                      message={tokenResult?.errorMessage}
+                    ></AlertInfo>
+                  </div>
+                )}
+              </div>
+            </div>
+            {loading && (
+              <div style={{ width: '100%', flex: 1 }}>
+                <Spin size="small">
+                  <div style={{ height: '46px' }}></div>
+                </Spin>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <RightContainer collapsed={collapse}>
+        <STTForm
+          ref={formRef}
+          updateParams={updateParams}
+          modelList={modelList}
+        />
+      </RightContainer>
+      <ViewCommonCode
+        open={show}
+        viewCodeContent={viewCodeContent}
+        onCancel={handleCloseViewCode}
+        title={intl.formatMessage({ id: 'playground.viewcode' })}
+      ></ViewCommonCode>
+    </div>
+  );
+});
+
+export default GroundSTT;

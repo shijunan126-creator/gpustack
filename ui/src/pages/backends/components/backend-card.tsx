@@ -1,0 +1,335 @@
+import PluginExtraFields from '@/components/plugin-extra-fields';
+import sortVersions from '@/utils/sort-versions';
+import {
+  AutoTooltip,
+  DropdownActions,
+  IconFont,
+  TagsWrapper,
+  TemplateCard,
+  ThemeTag
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, Tag } from 'antd';
+import _ from 'lodash';
+import { useMemo } from 'react';
+import styled from 'styled-components';
+import {
+  backendActions,
+  BackendSourceLabelMap,
+  BackendSourceValueMap,
+  backendVisualIndex,
+  builtInBackendLogos,
+  customColors,
+  customIcons,
+  getGpuColor,
+  TagColorMap
+} from '../config';
+import { ListItem } from '../config/types';
+const StyledCard = styled(TemplateCard)`
+  &:hover {
+    .operations {
+      background-color: var(--ant-color-fill-tertiary);
+      border-radius: var(--ant-border-radius-lg);
+    }
+  }
+`;
+
+// add height props
+const TagInner = styled(Tag)<{ height?: number }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  height: ${({ height }) => (height ? `${height}px` : '28px')};
+  width: ${({ height }) => (height ? `${height}px` : '28px')};
+  border-radius: var(--ant-border-radius-lg);
+  font-weight: 400;
+`;
+
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  width: 100%;
+  .title {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+`;
+
+const CardName = styled.div`
+  font-weight: 500;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  color: var(--ant-color-text);
+  margin-bottom: 8px;
+  gap: 8px;
+`;
+
+const Content = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 12px;
+  gap: 8px;
+  color: var(--ant-color-text-secondary);
+  .description {
+    margin-block: 12px;
+    color: var(--ant-color-text-tertiary);
+  }
+  .text {
+    margin-left: 4px;
+    color: var(--ant-color-text);
+  }
+  .title {
+    color: var(--ant-color-text);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .info {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: center;
+    gap: 8px;
+    color: var(--ant-color-text-tertiary);
+    .icon {
+      color: var(--ant-color-text-tertiary);
+    }
+    .label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+`;
+
+const InfoItem = styled.div`
+  display: grid;
+  width: 100%;
+  grid-template-columns: max-content 1fr minmax(0, max-content);
+  align-items: end;
+  gap: 8px;
+  color: var(--ant-color-text-tertiary);
+  .icon {
+    color: var(--ant-color-text-quaternary);
+  }
+  .label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+`;
+
+interface BackendCardProps {
+  onClick?: (data: any) => void;
+  onSelect?: (item: any) => void;
+  actionsRenderer?: (data: ListItem) => React.ReactNode;
+  data: ListItem;
+  layout?: 'default' | 'community';
+  active?: boolean;
+}
+
+export const generateIcon = (data: ListItem, height?: number) => {
+  const innHeight = height || 20;
+  if (builtInBackendLogos[data.backend_name]) {
+    return (
+      <img src={builtInBackendLogos[data.backend_name]} height={innHeight} />
+    );
+  }
+  if (data.icon) {
+    return <img src={data.icon} height={innHeight} />;
+  }
+  // Hashed on the name so a backend keeps its identity across environments —
+  // `data.id % n` re-rolled both the colour and the glyph whenever ids differed.
+  const color =
+    customColors[backendVisualIndex(data.backend_name, customColors.length)];
+  const icon =
+    customIcons[backendVisualIndex(data.backend_name, customIcons.length)];
+
+  return (
+    <TagInner color={color} variant="filled" height={height || 28}>
+      {icon}
+    </TagInner>
+  );
+};
+
+const BackendCard: React.FC<BackendCardProps> = ({
+  data,
+  onClick,
+  onSelect,
+  actionsRenderer,
+  layout = 'default',
+  active
+}) => {
+  const intl = useIntl();
+
+  const handleOnSelect = (item: any) => {
+    onSelect?.({ action: item.key, data: data });
+  };
+
+  const handleClick = () => {
+    onSelect?.({ action: 'view_versions', data: data });
+    onClick?.(data);
+  };
+
+  const renderIcon = () => {
+    return generateIcon(data);
+  };
+
+  const actions = useMemo(() => {
+    return backendActions.filter((item) => {
+      if (item.show) {
+        return item.show(data);
+      }
+      return true;
+    });
+  }, [data]);
+
+  const handleonClickAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const renderTag = (item: any) => {
+    return (
+      <AutoTooltip
+        ghost
+        minWidth={20}
+        showTitle
+        title={
+          _.join(data.framework_index_map?.[item].sort(sortVersions), ', ') ||
+          false
+        }
+      >
+        <ThemeTag
+          key={item}
+          style={{ marginRight: 0 }}
+          color={getGpuColor(item)}
+        >
+          {item}
+        </ThemeTag>
+      </AutoTooltip>
+    );
+  };
+
+  const renderFrameworks = () => {
+    const frameworks = _.keys(data.framework_index_map || {});
+
+    return (
+      <InfoItem>
+        <span className="label">
+          <IconFont className="icon" type="icon-gpu1" />
+          <span>
+            {intl.formatMessage({ id: 'backend.availableFrameworks' })}:{' '}
+          </span>
+        </span>
+        <TagsWrapper
+          gap={8}
+          dataList={frameworks}
+          renderTag={renderTag}
+        ></TagsWrapper>
+      </InfoItem>
+    );
+  };
+
+  const renderSource = () => {
+    if (layout === 'community') {
+      return null;
+    }
+    const source = data.is_built_in
+      ? BackendSourceLabelMap[BackendSourceValueMap.BUILTIN] || ''
+      : BackendSourceLabelMap[data.backend_source] || '';
+    const ownerTag = (
+      <PluginExtraFields
+        name="BackendOwnerTag"
+        context={{ ownerPrincipalId: data.owner_principal_id }}
+      />
+    );
+    if (!source) {
+      return ownerTag;
+    }
+    return (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <Tag
+          color={
+            TagColorMap[
+              data.is_built_in
+                ? BackendSourceValueMap.BUILTIN
+                : data.backend_source
+            ]
+          }
+          className="font-400"
+          variant="filled"
+          style={{
+            borderRadius: 'var(--ant-border-radius)',
+            margin: 0,
+            width: 'max-content'
+          }}
+        >
+          {intl.formatMessage({
+            id: source
+          })}
+        </Tag>
+        {ownerTag}
+      </div>
+    );
+  };
+
+  const renderActions = () => {
+    return actionsRenderer ? (
+      actionsRenderer(data)
+    ) : (
+      <span onClick={handleonClickAction} className="operations">
+        <DropdownActions
+          menu={{
+            items: actions,
+            onClick: handleOnSelect
+          }}
+        >
+          <Button
+            icon={<IconFont type="icon-more"></IconFont>}
+            size="small"
+            type="text"
+            // Icon-only: without this the button has no accessible name at all.
+            aria-label={intl.formatMessage({ id: 'common.button.more' })}
+            title={intl.formatMessage({ id: 'common.button.more' })}
+          ></Button>
+        </DropdownActions>
+      </span>
+    );
+  };
+
+  return (
+    <StyledCard
+      onClick={handleClick}
+      clickable={true}
+      hoverable={true}
+      disabled={false}
+      active={active}
+      height={136}
+      ghost
+      header={
+        <Header>
+          <div className="title">{renderIcon()}</div>
+          {renderActions()}
+        </Header>
+      }
+    >
+      <Content>
+        <CardName>
+          <span>
+            {data.backend_source === BackendSourceValueMap.CUSTOM
+              ? data.backend_name.replace(/-custom$/g, '')
+              : data.backend_name}
+          </span>
+          {renderSource()}
+        </CardName>
+        {renderFrameworks()}
+      </Content>
+    </StyledCard>
+  );
+};
+
+export default BackendCard;

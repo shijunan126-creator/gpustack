@@ -1,0 +1,150 @@
+import {
+  audioTypeMap,
+  convertFileToBase64,
+  readAudioFile
+} from '@/utils/load-audio-file';
+import {
+  CustomerServiceOutlined,
+  EditOutlined,
+  MinusCircleOutlined
+} from '@ant-design/icons';
+import { CopyButton, UploadAudio } from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, Tooltip } from 'antd';
+import classNames from 'classnames';
+import _ from 'lodash';
+import React from 'react';
+import { Roles } from '../../config';
+import {
+  AudioFormat,
+  MessageItem,
+  MessageItemAction
+} from '../../config/types';
+import useAddImage from '../../hooks/use-add-image';
+
+interface MessageActionsProps {
+  data: MessageItem;
+  actions: MessageItemAction[];
+  loading?: boolean;
+  updateMessage?: (message: MessageItem) => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
+}
+
+const MessageActions: React.FC<MessageActionsProps> = ({
+  actions,
+  data,
+  loading,
+  updateMessage,
+  onDelete,
+  onEdit
+}) => {
+  const intl = useIntl();
+
+  const handleUpdateImgList = (
+    list: { uid: number | string; dataUrl: string }[]
+  ) => {
+    updateMessage?.({
+      role: data.role,
+      content: data.content,
+      uid: data.uid,
+      audio: data.audio || [],
+      imgs: [...(data.imgs || []), ...list]
+    });
+  };
+
+  const handleUploadAudioChange = async (audio: {
+    file: any;
+    fileList: any[];
+  }) => {
+    try {
+      const base64Audio = await convertFileToBase64(audio.file);
+      const audioData = await readAudioFile(audio.file);
+      updateMessage?.({
+        role: data.role,
+        content: data.content,
+        uid: data.uid,
+        imgs: data.imgs || [],
+        audio: [
+          {
+            uid: audio.file.uid || audio.fileList[0].uid,
+            format: audioTypeMap[audio.file.type] as AudioFormat,
+            base64: base64Audio.split(',')[1],
+            data: _.pick(audioData, ['url', 'name', 'duration'])
+          }
+        ]
+      });
+    } catch (error) {
+      console.log('error uploading audio file', error);
+    }
+  };
+
+  const { ImageURLInput, UploadImageButton, isFromUrl } = useAddImage({
+    size: 'small',
+    handleUpdateImgList: handleUpdateImgList,
+    updateUidCount: () => `img-${Date.now()}`
+  });
+
+  return (
+    <>
+      {ImageURLInput}
+      {actions.length > 1 && !loading ? (
+        <div
+          className={classNames('actions', {
+            'has-url-input': isFromUrl
+          })}
+        >
+          <div className="actions-wrap gap-4">
+            {actions.includes('upload') &&
+              data.role === Roles.User &&
+              UploadImageButton}
+            {actions.includes('upload') && data.role === Roles.User && (
+              <UploadAudio
+                type="text"
+                maxFileSize={1024 * 1024}
+                accept={'.mp3,.wav'}
+                size="small"
+                shape="default"
+                icon={<CustomerServiceOutlined />}
+                onChange={handleUploadAudioChange}
+              ></UploadAudio>
+            )}
+            {actions.includes('edit') && data.role === Roles.Assistant && (
+              <Tooltip title={intl.formatMessage({ id: 'common.button.edit' })}>
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={onEdit}
+                />
+              </Tooltip>
+            )}
+            {data.content && actions.includes('copy') && (
+              <CopyButton
+                text={data.content}
+                size="small"
+                shape="default"
+                type="text"
+                fontSize="12px"
+              />
+            )}
+            {actions.includes('delete') && (
+              <Tooltip
+                title={intl.formatMessage({ id: 'common.button.delete' })}
+              >
+                <Button
+                  size="small"
+                  type="text"
+                  onClick={onDelete}
+                  icon={<MinusCircleOutlined />}
+                />
+              </Tooltip>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+};
+
+export default MessageActions;

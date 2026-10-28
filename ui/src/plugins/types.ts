@@ -1,0 +1,201 @@
+import { ComponentType } from 'react';
+
+/**
+ * routes
+ */
+export interface RouteConfig {
+  path: string;
+  component?: ComponentType;
+  routes?: RouteConfig[];
+  [key: string]: any;
+}
+
+/**
+ * dependency kit passed from host to plugin's custom login component
+ */
+export interface LoginKit {
+  useLocalAuth: (opts: any) => {
+    handleLogin: (values: any) => void;
+    submitLoading: boolean;
+  };
+  useSSOAuth: (opts: any) => {
+    options: {
+      // Active external auth provider (e.g. ``{type: "CAS", login_url:
+      // "/auth/cas/login"}``) or ``null`` when only local login is
+      // configured. The login UI renders an SSO button only when this
+      // is non-null and navigates to ``login_url``.
+      external_auth: {
+        type: string;
+        login_url: string;
+        display_name: string;
+      } | null;
+      first_time_setup: boolean;
+      get_initial_password_command: string;
+    };
+    // Provider label for the SSO button: ``display_name`` if the backend
+    // set one, else the provider ``type``, else ``SSO``. Prefer this over
+    // reading ``external_auth`` — the fallback chain lives in the hook.
+    displayName: string;
+    loginWithExternalAuth: () => void;
+  };
+  userInfo: any;
+  setUserInfo: (info: any) => void;
+  fetchUserInfo: () => Promise<any>;
+  checkDefaultPage: (userInfo: any, replace: boolean) => Promise<void>;
+  initialPassword: string;
+  setInitialPassword: (val: string) => void;
+  decryptInitialPassword: (encrypted: string) => string;
+  updatePassword: (data: any) => Promise<any>;
+  passwordReg: RegExp;
+  onPasswordChanged: () => void;
+  resetPasswordUrl: string;
+  formLogoUrl: string;
+}
+
+/**
+ * login module configuration
+ */
+export interface LoginPlugin {
+  shouldUseCustomLogin?: (enterpriseSettings: any) => boolean;
+  CustomLoginComponent?: ComponentType<{ kit: LoginKit }>;
+  /**
+   * Seam for plugins to override the default landing path after login.
+   * Returning a path overrides both the admin and non-admin defaults;
+   * returning null/undefined falls back to the built-in behavior.
+   */
+  resolveDefaultPath?: (
+    userInfo: any,
+    ctx: { request: <T = any>(url: string, options?: any) => Promise<T> }
+  ) => Promise<string | null | undefined> | string | null | undefined;
+  /**
+   * Lifecycle hook fired inside `fetchUserInfo` after the server
+   * confirms identity but before any caller (boot path, LoginForm)
+   * commits that identity to `initialState`.
+   *
+   * The host's access function is memoized on `initialState` and
+   * runs exactly once per commit. Plugins that maintain
+   * identity-scoped caches (e.g. an org context cache the access
+   * predicate reads from) MUST seed those caches synchronously
+   * here — any work that happens after the caller's
+   * `setInitialState` won't influence the access predicate until
+   * the next identity change.
+   *
+   * Errors thrown from the hook are swallowed and logged; they
+   * never block fetchUserInfo.
+   */
+  onUserFetched?: (
+    userInfo: any,
+    ctx: { request: <T = any>(url: string, options?: any) => Promise<T> }
+  ) => Promise<void> | void;
+}
+
+/**
+ * resolved logo URLs for sidebar and collapsed-state mini icon
+ */
+export interface LogoSet {
+  sidebarLogo?: string;
+  miniLogo?: string;
+}
+
+/**
+ * branding module configuration
+ */
+export interface BrandingPlugin {
+  ConfigPage?: ComponentType;
+  resolveLogos?: (userSettings: any, isDarkTheme: boolean) => LogoSet;
+}
+
+/**
+ * localization configuration
+ */
+export interface LocalesConfig {
+  [locale: string]: Record<string, any>;
+}
+
+/**
+ * lazily fetched language packs, one async chunk per entry. A plugin puts the
+ * languages that carry the bulk of its usage in `locales` (bundled with the
+ * plugin) and the rest here, so a boot in English does not pay for the others.
+ */
+export interface LocaleLoaders {
+  [locale: string]: () => Promise<{ default: Record<string, any> }>;
+}
+
+/**
+ * runtime context passed to plugin lifecycle hooks
+ */
+export interface AppPluginContext {
+  request: <T = any>(url: string, options?: Record<string, any>) => Promise<T>;
+  setUserSettings?: (value: Record<string, any>) => void;
+  setStorageUserSettings?: (value: Record<string, any>) => void;
+  defaultColorPrimary?: string;
+}
+
+/**
+ * application plugin interface
+ */
+export interface AppPlugin {
+  /**
+   * application initialization hook
+   * called when the application starts, can return initialization data
+   */
+  onAppInit?: (
+    context: AppPluginContext
+  ) => Promise<Record<string, any>> | Record<string, any>;
+
+  /**
+   * application ready hook
+   * called when the application is fully loaded
+   */
+  onAppReady?: () => void | Promise<void>;
+
+  /**
+   * login module
+   */
+  login?: LoginPlugin;
+
+  /**
+   * branding module
+   */
+  branding?: BrandingPlugin;
+
+  /**
+   * localization configuration
+   */
+  locales?: LocalesConfig;
+
+  /**
+   * localization packs fetched on demand, for the languages kept out of `locales`
+   */
+  localeLoaders?: LocaleLoaders;
+
+  /**
+   * routes extension
+   */
+  routes?: RouteConfig[];
+
+  /**
+   * components extension
+   */
+  components?: Record<string, ComponentType<any>>;
+
+  /**
+   * Hooks extension
+   */
+  hooks?: Record<string, (...args: unknown[]) => unknown>;
+
+  /**
+   * other custom fields for future extensions
+   */
+  [key: string]: any;
+}
+
+/**
+ * plugin manager interface
+ */
+export interface IPluginManager {
+  register(name: string, plugin: AppPlugin): void;
+  get(name: string): AppPlugin | undefined;
+  has(name: string): boolean;
+  getAll(): Map<string, AppPlugin>;
+}

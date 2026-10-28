@@ -1,0 +1,440 @@
+import { systemConfigAtom } from '@/atoms/system';
+import PluginExtraFields from '@/components/plugin-extra-fields';
+import { PageAction } from '@/config';
+import { PageActionType } from '@/config/types';
+import { json2Yaml, yaml2Json } from '@/pages/backends/config';
+import {
+  Input as CInput,
+  CollapsePanel,
+  Textarea as SealTextArea
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Form } from 'antd';
+import { useAtomValue } from 'jotai';
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useState
+} from 'react';
+import { isCloudProvider, ProviderType, ProviderValueMap } from '../config';
+import { FormContext } from '../config/form-context';
+import {
+  ClusterFormData as FormData,
+  ClusterListItem as ListItem
+} from '../config/types';
+import AdvanceConfig from '../step-forms/advance-config';
+import CloudProvider from './cloud-provider-form';
+import DefaultRegistryField from './default-registry-field';
+import K8sAdvancedOptions, {
+  ClusterTypeSelector,
+  K8sOptionsChangeWatcher
+} from './k8s-pod-spec';
+import ServerUrlField from './server-url-field';
+
+type AddModalProps = {
+  action: PageActionType;
+  currentData?: ListItem; // Used when action is EDIT
+  provider: ProviderType;
+  credentialList: Global.BaseOption<number>[];
+  onFinish: (values: FormData) => void;
+  onFinishFailed?: (errorInfo: any) => void;
+  // Reports whether the user has changed any k8s_options field, so the parent
+  // can show the "re-run registration" notice in the footer.
+  onK8sOptionsChange?: (changed: boolean) => void;
+  ref?: any;
+};
+const ClusterForm: React.FC<AddModalProps> = forwardRef(
+  (
+    {
+      action,
+      provider,
+      currentData,
+      credentialList,
+      onFinish,
+      onFinishFailed,
+      onK8sOptionsChange
+    },
+    ref
+  ) => {
+    const [form] = Form.useForm();
+    const intl = useIntl();
+    const [activeKey, setActiveKey] = React.useState<string[]>([]);
+    // Chart Values are edited in monaco, outside the form store, so the
+    // watcher below is told about them rather than watching for them.
+    const [chartValuesDirty, setChartValuesDirty] = useState(false);
+    const [submitAttempted, setSubmitAttempted] = useState(false);
+    // Single source of truth for the K8s cluster type, seeded from the cluster
+    // being edited. Shared via FormContext so the type selector and the
+    // GPU-only fields stay in sync deterministically (no cross-component watch).
+    const [clusterType, setClusterType] = useState<'model' | 'gpu'>(() =>
+      currentData?.k8s_options?.gpuInstanceOptions ? 'gpu' : 'model'
+    );
+    const advanceConfigRef = React.useRef<any>(null);
+    const systemConfig = useAtomValue(systemConfigAtom);
+
+    const handleChartValuesDirty = () => setChartValuesDirty(true);
+
+    const handleOnCollapseChange = async (keys: string | string[]) => {
+      setActiveKey(Array.isArray(keys) ? keys : [keys]);
+    };
+
+    useEffect(() => {
+      if (
+        activeKey?.includes?.('advanceConfig') &&
+        action === PageAction.EDIT
+      ) {
+        const el = document.querySelector('.scroller-to-holder');
+        if (!el) return;
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+    }, [activeKey, action]);
+
+    // Every Chart Values error — a local parse failure or the backend's 422 —
+    // is rendered *inside* the Advanced panel. The panel starts collapsed and
+    // is not an antd Form.Item, so `scrollToFirstError` will not reveal it:
+    // without this, a submit blocked by that field looks like a dead button.
+    const revealAdvanced = () =>
+      setActiveKey((prev) =>
+        prev.includes('advanceConfig') ? prev : [...prev, 'advanceConfig']
+      );
+
+    // Chart Values live in a monaco editor, not the form store, so they are
+    // read at submit like `worker_config`. Throws (after showing the reason
+    // under the editor) when the YAML does not parse to a mapping, which is
+    // what keeps a broken override from being requested.
+    const readHelmValues = () =>
+      provider === ProviderValueMap.Kubernetes
+        ? (advanceConfigRef.current?.getChartValues() ?? null)
+        : undefined;
+
+    const normalizeOutgoing = (values: any, helmValues?: any): any => {
+      const base: any = { ...values };
+
+      const opts = base.k8s_options;
+      // Chart Values are read from the editor, not the store, so they must
+      // survive a payload that carries no `k8s_options` at all. `null` when
+      // the editor is empty: the backend stores `{}` verbatim, so sending it
+      // would persist an empty override instead of no override.
+      if (!opts) {
+        return provider === ProviderValueMap.Kubernetes
+          ? { ...base, k8s_options: { helmValues: helmValues ?? null } }
+          : base;
+      }
+
+      const next: any = { ...opts };
+
+      if (provider === ProviderValueMap.Kubernetes) {
+        next.helmValues = helmValues ?? null;
+      }
+
+      // "model" clusters must not carry GPU-instance config. The field's UI is
+      // unmounted when model is selected, but strip it here too so the payload
+      // never keeps a stale gpuInstanceOptions shape from a prior "gpu" choice.
+      if (clusterType === 'model') {
+        next.gpuInstanceOptions = null;
+      } else if (clusterType === 'gpu' && !next.gpuInstanceOptions) {
+        // gpuInstanceOptions has no always-mounted Form.Item (its only child,
+        // the optional static address, may be unmounted or empty), so with
+        // preserve={false} onFinish's `values` can omit it. Read it straight
+        // from the store so a "gpu" cluster always carries the field.
+        next.gpuInstanceOptions =
+          form.getFieldValue(['k8s_options', 'gpuInstanceOptions']) ?? {};
+      }
+
+      const creds = opts.imageCredentials;
+      if (Array.isArray(creds)) {
+        next.imageCredentials = creds.map((c: any) => ({
+          ...c,
+          username: c?.username || null,
+          password: c?.password || null
+        }));
+      }
+
+      return { ...base, k8s_options: next };
+    };
+
+    const handleOnFinish = (values: FormData) => {
+      const workerConfig = yaml2Json(advanceConfigRef.current?.getYamlValue());
+      let helmValues: any;
+      try {
+        helmValues = readHelmValues();
+      } catch (e) {
+        // The editor is already showing why. Bail out the same way a failed
+        // field validation does, so nothing is requested.
+        setSubmitAttempted(true);
+        revealAdvanced();
+        onFinishFailed?.(e);
+        return;
+      }
+      onFinish(
+        normalizeOutgoing(
+          {
+            ...values,
+            worker_config: {
+              ...workerConfig
+            }
+          },
+          helmValues
+        )
+      );
+    };
+
+    useEffect(() => {
+      if (currentData) {
+        const volumeMounts = currentData?.k8s_options?.volumeMounts || [];
+        const realVolumeList = (volumeMounts || []).map(
+          (item: any, index: number) => ({
+            ...item,
+            sourceType: Object.keys(item.volumeSource || {})[0] || 'hostPath'
+          })
+        );
+        form.setFieldsValue({
+          ...currentData,
+          k8s_options: {
+            ...(currentData?.k8s_options || {}),
+            volumeMounts: realVolumeList
+          }
+        });
+      } else {
+        const defaultRegistry = systemConfig?.system_default_container_registry;
+        form.setFieldsValue({
+          k8s_options: {
+            volumeMounts: [
+              {
+                name: 'gpustack-data-dir',
+                mountPath: '/var/lib/gpustack',
+                readOnly: false,
+                sourceType: 'hostPath',
+                volumeSource: {
+                  hostPath: {
+                    path: '/var/lib/gpustack',
+                    type: 'DirectoryOrCreate'
+                  }
+                }
+              }
+            ],
+            ...(defaultRegistry
+              ? {
+                  imageCredentials: [
+                    { registry: defaultRegistry, username: '', password: '' }
+                  ]
+                }
+              : {})
+          }
+        });
+      }
+    }, [currentData, systemConfig?.system_default_container_registry]);
+
+    useImperativeHandle(ref, () => ({
+      resetFields: () => {
+        form.resetFields();
+      },
+      submit: () => {
+        form.submit();
+      },
+      setFieldsValue: (values: any) => {
+        form.setFieldsValue({
+          ...values,
+          worker_config: undefined
+        });
+        const workerConfigYaml = json2Yaml(values.worker_config || {});
+        advanceConfigRef.current?.setYamlValue(workerConfigYaml);
+      },
+      getFieldsValue: () => {
+        const workerConfig = yaml2Json(
+          advanceConfigRef.current?.getYamlValue()
+        );
+        return {
+          ...form.getFieldsValue(),
+          worker_config: {
+            ...workerConfig
+          }
+        };
+      },
+      // Surfaces the backend's message for the Chart Values field under the
+      // editor. The rejected paths follow the chart, so the server's own text
+      // is the only list that stays correct.
+      setChartValuesError: (message: string) => {
+        advanceConfigRef.current?.setChartValuesError(message);
+        if (message) revealAdvanced();
+      },
+      validateFields: async () => {
+        try {
+          await form.validateFields();
+        } catch (e) {
+          setSubmitAttempted(true);
+          throw e;
+        }
+        const values = form.getFieldsValue(true);
+
+        const workerConfig = yaml2Json(
+          advanceConfigRef.current?.getYamlValue()
+        );
+
+        // Throws on unparseable Chart Values, so the wizard's step gate treats
+        // it exactly like a failed field validation.
+        let helmValues: any;
+        try {
+          helmValues = readHelmValues();
+        } catch (e) {
+          setSubmitAttempted(true);
+          revealAdvanced();
+          // Carry the store on the rejection, the way antd's own
+          // `validateFields` does. The wizard keeps each step's snapshot from
+          // `reason.values` and falls back to `{}` without it — and a `{}`
+          // snapshot is fed back in as `currentData`, which resets this form's
+          // fields, wiping the volume mounts over a missing bracket in YAML.
+          throw Object.assign(e as Error, { values });
+        }
+
+        return normalizeOutgoing(
+          {
+            ...values,
+            worker_config: {
+              ...workerConfig
+            }
+          },
+          helmValues
+        );
+      }
+    }));
+
+    const descriptionIsLastField =
+      provider !== ProviderValueMap.Kubernetes &&
+      provider !== ProviderValueMap.Shuihua;
+
+    const handleOnFinishFailed = (errorInfo: any) => {
+      setSubmitAttempted(true);
+      onFinishFailed?.(errorInfo);
+    };
+
+    return (
+      <FormContext.Provider
+        // `action` is what tells a nested field whether it is registering or
+        // editing; `currentData` only says whether values are present, which in
+        // the wizard is also true for a step the user has merely revisited.
+        value={{
+          action,
+          currentData,
+          submitAttempted,
+          clusterType,
+          setClusterType
+        }}
+      >
+        <Form
+          name="clusterForm"
+          form={form}
+          onFinish={handleOnFinish}
+          onFinishFailed={handleOnFinishFailed}
+          preserve={false}
+          scrollToFirstError={true}
+          initialValues={currentData}
+        >
+          <Form.Item<FormData>
+            name="name"
+            rules={[
+              {
+                required: true,
+                message: intl.formatMessage(
+                  { id: 'common.form.rule.input' },
+                  {
+                    name: intl.formatMessage({ id: 'common.table.name' })
+                  }
+                )
+              }
+            ]}
+          >
+            <CInput.Input
+              label={intl.formatMessage({ id: 'common.table.name' })}
+              required
+              trim={false}
+            ></CInput.Input>
+          </Form.Item>
+          <PluginExtraFields name="CreateOrgScopeField" context={{ action }} />
+          {isCloudProvider(provider) && (
+            <CloudProvider
+              provider={provider}
+              action={action}
+              credentialID={currentData?.credential_id}
+              credentialList={credentialList}
+            ></CloudProvider>
+          )}
+
+          <Form.Item<FormData>
+            name="description"
+            rules={[{ required: false }]}
+            style={{
+              // The tight gap is only right when the description is the last
+              // field before the "Advanced" collapse. Kubernetes (cluster
+              // type) and Shuihua (default registry) both render a field after
+              // it, which has to keep the normal 24px field rhythm.
+              marginBottom: descriptionIsLastField ? 8 : undefined
+            }}
+          >
+            <SealTextArea
+              scaleSize
+              label={intl.formatMessage({ id: 'common.table.description' })}
+            ></SealTextArea>
+          </Form.Item>
+
+          {/* Shuihua pulls the registry out of "Advanced" and requires it. */}
+          {provider === ProviderValueMap.Shuihua && (
+            <DefaultRegistryField provider={provider} />
+          )}
+
+          {provider === ProviderValueMap.Kubernetes && <ClusterTypeSelector />}
+
+          <CollapsePanel
+            accordion={false}
+            activeKey={activeKey}
+            onChange={handleOnCollapseChange}
+            items={[
+              {
+                key: 'advanceConfig',
+                label: intl.formatMessage({ id: 'resources.form.advanced' }),
+                forceRender: true,
+                children: (
+                  <>
+                    {/* Docker and Kubernetes register their own workers, so the
+                        server URL is an optional override here. Cloud providers
+                        get a required copy in the basic form instead. */}
+                    {!isCloudProvider(provider) && (
+                      <ServerUrlField provider={provider} />
+                    )}
+                    {provider === ProviderValueMap.Kubernetes && (
+                      <K8sAdvancedOptions
+                        key={currentData?.id ?? 'new'}
+                        action={action}
+                      ></K8sAdvancedOptions>
+                    )}
+                    <AdvanceConfig
+                      action={action}
+                      provider={provider}
+                      currentData={currentData}
+                      onChartValuesDirty={handleChartValuesDirty}
+                      ref={advanceConfigRef}
+                    ></AdvanceConfig>
+                  </>
+                )
+              }
+            ]}
+          ></CollapsePanel>
+
+          {provider === ProviderValueMap.Kubernetes && onK8sOptionsChange && (
+            <K8sOptionsChangeWatcher
+              action={action}
+              currentData={currentData}
+              extraChanged={chartValuesDirty}
+              onChange={onK8sOptionsChange}
+            />
+          )}
+        </Form>
+      </FormContext.Provider>
+    );
+  }
+);
+
+export default ClusterForm;

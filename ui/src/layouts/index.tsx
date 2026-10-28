@@ -1,0 +1,494 @@
+import { routeCacheAtom, setRouteCache } from '@/atoms/route-cache';
+import { userAtom } from '@/atoms/user';
+import DarkMask from '@/components/dark-mask';
+import '@/components/iconfont/iconfont.js';
+import PluginExtraFields from '@/components/plugin-extra-fields';
+import routeCachekey from '@/config/route-cachekey';
+import { DEFAULT_ENTER_PAGE, GPUSTACK_API_BASE_URL } from '@/config/settings';
+import { COLOR_PRIMARY } from '@/config/theme';
+import useCurrentUser from '@/hooks/use-current-user';
+import useTableFetch from '@/hooks/use-table-fetch';
+import useUserSettings from '@/hooks/use-user-settings';
+import useUserSettingsStorage from '@/hooks/use-user-settings-storage';
+import useAddResource from '@/pages/dashboard/hooks/use-add-resource';
+import { logout } from '@/pages/login/apis';
+import { didInitialStateProbe, probeAccessFlags } from '@/utils/access-probes';
+import {
+  readColumnSettings,
+  readState,
+  writeColumnSettings,
+  writeState
+} from '@/utils/localstore';
+import { useAccessMarkedRoutes } from '@@/plugin-access';
+import { useModel } from '@@/plugin-model';
+import { ProLayout } from '@ant-design/pro-components';
+import { CoreUIProvider, IconFont } from '@gpustack/core-ui';
+import {
+  Access,
+  Outlet,
+  dropByCacheKey,
+  getAllLocales,
+  history,
+  matchRoutes,
+  request,
+  setLocale,
+  useAccess,
+  useAppData,
+  useIntl,
+  useLocation,
+  useNavigate,
+  type IRoute
+} from '@umijs/max';
+import { App, Button, ConfigProvider, Modal } from 'antd';
+import { useAtom } from 'jotai';
+import 'overlayscrollbars/overlayscrollbars.css';
+import { useEffect, useMemo, useRef } from 'react';
+import { PageContainerInner } from '../pages/_components/page-box';
+import Exception from './Exception';
+import './Layout.css';
+import { LogoIcon, SLogoIcon } from './Logo';
+import ErrorBoundary from './error-boundary';
+import { ExtraContent } from './extraRender';
+import SiderMenu from './sider-menu';
+
+const CHECK_RESOURCE_PATH = [
+  '/resources/workers',
+  '/resources/clusters/list',
+  '/resources/credentials',
+  '/resources/clusters/create'
+];
+
+type NewRoute = IRoute & {
+  children?: IRoute[];
+  routes?: IRoute[];
+};
+
+const loginPath = DEFAULT_ENTER_PAGE.login;
+
+// Filter out the routes that need to be displayed, where filterFn indicates the levels that should not be shown
+const filterRoutes = (
+  routes: IRoute[],
+  filterFn: (route: IRoute) => boolean
+): any[] => {
+  if (routes.length === 0) {
+    return [];
+  }
+
+  const newRoutes: NewRoute[] = [];
+  for (const route of routes) {
+    const newRoute = { ...route };
+    if (filterFn(route)) {
+      if (Array.isArray(newRoute.routes)) {
+        newRoutes.push(...filterRoutes(newRoute.routes, filterFn));
+      }
+    } else {
+      if (Array.isArray(newRoute.children)) {
+        newRoute.children = filterRoutes(newRoute.children, filterFn);
+        newRoute.routes = newRoute.children;
+      }
+      newRoutes.push(newRoute);
+    }
+  }
+
+  return newRoutes;
+};
+
+const mapRoutes = (routes: IRoute[], role: string) => {
+  if (routes.length === 0) {
+    return [];
+  }
+  return routes.map((route) => {
+    const newRoute: NewRoute = { ...route, role };
+    if (route.originPath) {
+      newRoute.path = route.originPath;
+    }
+
+    if (Array.isArray(route.routes)) {
+      newRoute.routes = mapRoutes(route.routes, role);
+    }
+
+    if (Array.isArray(route.children)) {
+      newRoute.children = mapRoutes(route.children, role);
+    }
+
+    return newRoute;
+  });
+};
+
+export default (props: any) => {
+  const [, contextHolder] = Modal.useModal();
+  const { themeData, setUserSettings, userSettings } = useUserSettings();
+  const [userInfo] = useAtom(userAtom);
+  const [routeCache] = useAtom(routeCacheAtom);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const intl = useIntl();
+  const { clientRoutes } = useAppData();
+  const requestResourceRef = useRef<boolean>(false);
+
+  const { fetchResourceData, NoResourceModal, canAddResource } = useAddResource(
+    {
+      onCreated() {
+        requestResourceRef.current = false;
+      }
+    }
+  );
+
+  const initialInfo = (useModel && useModel('@@initialState')) || {
+    initialState: undefined,
+    loading: false,
+    setInitialState: null
+  };
+
+  const { initialState, loading, setInitialState } = initialInfo;
+  const access = useAccess();
+  const probedForUserRef = useRef<string | null>(null);
+
+  // Backfill the access probes (cluster / resource-events) once we're in
+  // the authenticated shell. `getInitialState` runs only once at app
+  // boot and can't probe on the login page (no session => 401), so after
+  // a first login the flags arrive here as `undefined` — which the
+  // access predicate treats as "don't restrict", flashing GPU Service /
+  // the full Usage page on until a manual refresh. This layout mounts
+  // only post-auth (login is `layout:false`) and on every entry, so it's
+  // the reliable place to resolve them.
+  //
+  // The effect is keyed on the user IDENTITY, not on the flag values —
+  // gating on the flags is what made this fragile (on a refresh
+  // `getInitialState` commits `currentUser` and the flags in the same
+  // update, so a flag-gated effect sees them already-known and never
+  // fires). Whether to actually hit the network is decided by the
+  // module-scoped `didInitialStateProbe()` marker, which is true only
+  // when `getInitialState` already probed for an authenticated user this
+  // page load (the refresh path) — so we skip the duplicate request there
+  // but still probe on the SPA-login path. Keying on identity also
+  // re-probes correctly if the signed-in user changes.
+  const currentUser = initialState?.currentUser;
+  const username = currentUser?.username;
+
+  useEffect(() => {
+    if (!username || !setInitialState) {
+      return;
+    }
+    if (probedForUserRef.current === username) {
+      return;
+    }
+    probedForUserRef.current = username;
+    // The refresh path already resolved the flags inside `getInitialState`
+    // for this user — don't issue a duplicate probe.
+    if (didInitialStateProbe()) {
+      return;
+    }
+    probeAccessFlags().then((accessFlags) => {
+      setInitialState((prev: any) => ({
+        ...prev,
+        ...accessFlags
+      }));
+    });
+  }, [username, setInitialState]);
+
+  const userConfig = {
+    title: '',
+    locale: true
+  };
+
+  const formatMessage = (args: { id: string }) => {
+    return intl.formatMessage({ id: args.id });
+  };
+
+  const initRouteCacheValue = (pathname: string) => {
+    if (routeCache.get(pathname) === undefined && routeCachekey[pathname]) {
+      setRouteCache(pathname, false);
+    }
+  };
+
+  const dropRouteCache = (pathname: string) => {
+    for (const key of routeCache.keys()) {
+      if (key !== pathname && !routeCache.get(key) && routeCachekey[key]) {
+        dropByCacheKey(key);
+        routeCache.delete(key);
+      }
+    }
+  };
+
+  const runtimeConfig = {
+    ...initialInfo,
+    logout: async () => {
+      await logout();
+      navigate(loginPath);
+    },
+    showVersion: () => {},
+    showShortcuts: () => {},
+    notFound: <span>404 not found</span>
+  };
+
+  const coreUISlots = useMemo(() => ({ ExtraContent }), []);
+
+  const handleToggleCollapse = (e: any) => {
+    e.stopPropagation();
+    setUserSettings({
+      ...userSettings,
+      collapsed: !userSettings.collapsed
+    });
+  };
+  const newRoutes = filterRoutes(
+    // @ts-ignore
+    clientRoutes.filter((route) => route.id === 'max-tabs'),
+    (route) => {
+      return (
+        (!!route.isLayout && route.id !== '@@/global-layout') ||
+        !!route.isWrapper
+      );
+    }
+  );
+
+  const role = initialState?.currentUser?.is_admin ? 'admin' : 'user';
+  const [route] = useAccessMarkedRoutes(mapRoutes(newRoutes, role));
+
+  // `route` MUST stay in the deps. `useAccessMarkedRoutes` re-marks
+  // `unaccessible` whenever the access instance changes, and access is
+  // recomputed on every `initialState` commit — which happens twice on
+  // the SPA-login path (currentUser, then the probe backfill below).
+  // Keying only on `location.pathname` froze `matchedRoute` on the
+  // FIRST marking, so a route that later resolves to unaccessible kept
+  // its stale `unaccessible: false` and `Exception`'s 403 auto-redirect
+  // never fired — leaving the user parked on a page they can't see
+  // (e.g. `/dashboard` in a Personal Org) with no way out but a manual
+  // refresh. The memoized array is referentially stable between access
+  // changes, so this does not recompute per render.
+  const matchedRoute = useMemo(
+    () => matchRoutes(route?.children || [], location.pathname)?.pop?.()?.route,
+    [route, location.pathname]
+  );
+
+  const collapsed = useMemo(() => {
+    return userSettings.collapsed || false;
+  }, [userSettings.collapsed]);
+
+  const renderMenuHeader = (logo: React.ReactNode, title: React.ReactNode) => {
+    return <>{logo}</>;
+  };
+
+  const menuContentRender = (menuProps: any, defaultDom: React.ReactNode) => {
+    return <SiderMenu {...menuProps}></SiderMenu>;
+  };
+
+  const onPageChange = async (route: any) => {
+    const { location } = history;
+    const { pathname } = location;
+
+    // `canAddResource` is the hook's own access predicate, not
+    // `currentUser.is_admin` — the raw field disagrees with the
+    // routes the prompt sends you to (see use-add-resource).
+    if (
+      !CHECK_RESOURCE_PATH.includes(pathname) &&
+      canAddResource &&
+      !requestResourceRef.current &&
+      !userSettings.hideAddResourceModal
+    ) {
+      requestResourceRef.current = true;
+      await fetchResourceData();
+    }
+
+    initRouteCacheValue(pathname);
+    dropRouteCache(pathname);
+
+    // if user is not change password, redirect to change password page
+    if (location.pathname !== loginPath && userInfo?.require_password_change) {
+      history.push(loginPath);
+      return;
+    }
+
+    // if user is not logged in, redirect to login page
+    if (!initialState?.currentUser && location.pathname !== loginPath) {
+      history.push(loginPath);
+    } else if (location.pathname === '/') {
+      // Pick a landing route the caller can actually see. Access
+      // extensions can narrow ``canSeeAdmin`` to ``false`` even when
+      // ``currentUser.is_admin`` is ``true``; pushing an admin to
+      // ``/dashboard`` (gated by ``canSeeAdmin``) in that case
+      // dead-ends in ``Exception`` 403 → redirect-to-``/`` →
+      // re-push, looping into a blank screen. Honoring the resolved
+      // predicate keeps the user on a route they can render.
+      const pathname = access?.canSeeAdmin
+        ? DEFAULT_ENTER_PAGE.adminForNormal
+        : DEFAULT_ENTER_PAGE.user;
+      history.push(pathname);
+    }
+  };
+
+  const onMenuHeaderClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const pagepath = access?.canSeeAdmin
+      ? DEFAULT_ENTER_PAGE.adminForNormal
+      : DEFAULT_ENTER_PAGE.user;
+
+    navigate(pagepath);
+  };
+
+  const onCollapse = (value: boolean) => {
+    // only trigger by window resize
+    if (!value) {
+      return;
+    }
+    setUserSettings({
+      ...userSettings,
+      collapsed: value
+    });
+  };
+
+  return (
+    <ConfigProvider
+      componentSize="large"
+      theme={themeData}
+      modal={{
+        mask: {
+          blur: false
+        }
+      }}
+      drawer={{
+        mask: {
+          blur: false
+        }
+      }}
+    >
+      {/* Supplies ConfigProvider-aware ``modal`` / ``message`` /
+          ``notification`` to any component that asks for them with
+          ``App.useApp()``. Without one, those render with the default algorithm
+          and locale -- a light dialog with an untranslated "Cancel" while the
+          app is in dark mode. ``component={false}`` keeps it from adding a DOM
+          node that would change the layout.
+
+          Module-level statics still render in antd's detached root.
+          ``global.tsx`` supplies that root with ``AppThemeProvider``, which
+          reads the same settings and theme configuration as this layout.
+          This shares theme tokens, but not the page's locale or other React
+          contexts. New component code should use ``App.useApp()``.
+
+          antd 6 turns cssVar on by default, and App warns whenever cssVar meets
+          ``component={false}``: with no DOM node, its cssVar class has nothing to
+          attach to. Known and harmless here -- the class would only have carried
+          App's own base style (color / fontSize / lineHeight / fontFamily, all of
+          which body already provides), while message / modal / notification each
+          attach their own. The warning is dev-only; devUseWarning is a noop in
+          production builds. Left as is deliberately: switching to the default
+          "div" would reintroduce the layout-changing node this prop exists to
+          avoid, and would need the height chain rebuilt for ProLayout. */}
+      <App component={false}>
+        <CoreUIProvider
+          config={{
+            apiBaseUrl: GPUSTACK_API_BASE_URL,
+            theme: userSettings.theme,
+            iconUrl: '',
+            isDarkTheme: userSettings.isDarkTheme,
+            defaultColorPrimary: COLOR_PRIMARY
+          }}
+          hooks={{
+            useUserSettings,
+            useUserSettingsStorage,
+            useIntl,
+            useCurrentUser,
+            useTableFetch
+          }}
+          i18n={intl}
+          locale={{
+            getAllLocales: getAllLocales,
+            setLocale: setLocale
+          }}
+          services={{
+            request: request,
+            router: {
+              push: (path: string) => navigate(path),
+              replace: (path: string) => navigate(path, { replace: true }),
+              goBack: () => navigate(-1)
+            }
+          }}
+          localStore={{
+            readColumnSettings,
+            writeColumnSettings,
+            readState,
+            writeState
+          }}
+          slots={coreUISlots}
+          access={{ Access, useAccess }}
+        >
+          <DarkMask></DarkMask>
+          <ProLayout
+            fixSiderbar
+            fixedHeader={false}
+            headerRender={false}
+            breadcrumbRender={false}
+            route={route}
+            location={location}
+            title={userConfig.title}
+            navTheme={userSettings.theme}
+            layout="side"
+            contentStyle={{
+              paddingBlock: 0,
+              paddingInline: 0
+            }}
+            openKeys={false}
+            disableMobile={true}
+            siderWidth={220}
+            menuFooterRender={() => (
+              <Button
+                style={{
+                  color: 'var(--color-sider-item-text)'
+                }}
+                size="small"
+                type={'text'}
+                onClick={handleToggleCollapse}
+              >
+                <IconFont
+                  type={collapsed ? 'icon-expand-left' : 'icon-expand-right'}
+                  className="font-size-16"
+                />
+              </Button>
+            )}
+            onCollapse={onCollapse}
+            onMenuHeaderClick={onMenuHeaderClick}
+            collapsed={userSettings.collapsed}
+            onPageChange={onPageChange}
+            formatMessage={formatMessage}
+            menu={{
+              locale: true,
+              type: 'group'
+            }}
+            splitMenus={true}
+            logo={userSettings.collapsed ? <SLogoIcon /> : <LogoIcon />}
+            menuContentRender={menuContentRender}
+            {...runtimeConfig}
+            ErrorBoundary={ErrorBoundary}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',
+                overflow: 'hidden'
+              }}
+            >
+              <PluginExtraFields name="GlobalBanner" />
+              <Exception
+                route={matchedRoute}
+                notFound={runtimeConfig?.notFound}
+                noFound={runtimeConfig?.noFound}
+                unAccessible={runtimeConfig?.unAccessible}
+                noAccessible={runtimeConfig?.noAccessible}
+              >
+                <PageContainerInner>
+                  <div>
+                    <Outlet />
+                  </div>
+                </PageContainerInner>
+              </Exception>
+            </div>
+            {NoResourceModal}
+            {contextHolder}
+          </ProLayout>
+        </CoreUIProvider>
+      </App>
+    </ConfigProvider>
+  );
+};

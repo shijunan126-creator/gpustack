@@ -1,0 +1,146 @@
+{
+  "type": "object",
+  "properties": {
+    "backend_name": {
+      "type": "string",
+      "pattern": "^.+-custom$",
+      "description": "backend name",
+      "severity": "error"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "backend description"
+    },
+    "default_version": {
+      "type": "string",
+      "description": "default backend version"
+    },
+    "is_built_in": {
+      "type": "boolean",
+      "description": "is built-in backend"
+    },
+    "default_backend_param": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "default backend parameter"
+    },
+    "parameter_format": {
+      "type": ["string", "null"],
+      "enum": ["space", "equal", null],
+      "description": "parameter output format: 'space' -> --key value, 'equal' -> --key=value"
+    },
+    "common_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "commonly used parameters shown as hints in deployment UI"
+    },
+    "default_run_command": {
+      "type": ["string", "null"],
+      "description": "default start command"
+    },
+    "default_env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "default environment variables"
+    },
+    "health_check_path": {
+      "type": ["string", "null"],
+      "description": "health check path"
+    },
+    "version_configs": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9._-]+$": {
+          "type": "object",
+          "properties": {
+            "image_name": {
+              "type": "string",
+              "description": "image name"
+            },
+            "run_command": {
+              "type": ["string", "null"],
+              "description": "start command"
+            },
+            "entrypoint": {
+              "type": "string",
+              "description": "Override the default ENTRYPOINT of the image"
+            },
+            "custom_framework": {
+              "type": ["string", "null"],
+              "description": "custom framework"
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "environment variables"
+            }
+          },
+          "required": ["image_name", "run_command"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "multiple backend versions"
+    },
+    "built_in_version_configs": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9._-]+$": {
+          "type": "object",
+          "properties": {
+            "image_name": {
+              "type": "string",
+              "description": "image name"
+            },
+            "run_command": {
+              "type": ["string", "null"],
+              "description": "start command"
+            },
+            "entrypoint": {
+              "type": "string",
+              "description": "Override the default ENTRYPOINT of the image"
+            },
+            "custom_framework": {
+              "type": ["string", "null"],
+              "description": "custom framework"
+            },
+            "built_in_frameworks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "built-in frameworks"
+            }
+          },
+          "required": ["image_name", "run_command"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "multiple backend versions"
+    },
+    "framework_index_map": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9._-]+$": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "framework to version mapping"
+    }
+  },
+  "required": ["backend_name", "default_version", "version_configs"],
+  "additionalProperties": false
+}

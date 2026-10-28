@@ -1,0 +1,99 @@
+import {
+  InstanceTypeDetail,
+  InstanceTypePartitionedResource,
+  InstanceTypeResource
+} from '../../instances/config/types';
+
+export interface UnitResources {
+  cpu?: string | null;
+  ram?: string | null;
+}
+
+// spec carries user-defined fields only; observed hardware (manufacturer,
+// memory, sliced capability, …) lives on status.detail.
+export interface InstanceTypeSpec {
+  displayName?: string | null;
+  os?: string | null;
+  arch?: string | null;
+  acceleratable?: boolean;
+  acceleratorGroup?: string | null;
+  generalGroup?: string | null;
+  unitResources?: UnitResources | null;
+  localStorage?: string | null;
+}
+
+export interface InstanceTypeStatus {
+  // Observed hardware descriptor; absent until the operator backfills status.
+  detail?: InstanceTypeDetail | null;
+  phase?: string | null;
+  phaseMessage?: string | null;
+  // Per-mode resource accounting ({onceMaxRequest, remaining, capacity}).
+  accelerator?: InstanceTypeResource | null;
+  acceleratorShared?: InstanceTypeResource | null;
+  acceleratorSliced?: InstanceTypeResource | null;
+  // Carries this cluster's per-profile partition ledger beside the scalars. The
+  // vGPU form reads remainingProfiles from here — this per-cluster shape, not the
+  // aggregated list-typed acceleratorPartitioned dimension.
+  acceleratorPartitioned?: InstanceTypePartitionedResource | null;
+  cpu?: InstanceTypeResource | null;
+}
+
+// Row shape for the management list (GET /gpu-instance-types).
+export interface ListItem {
+  // Identity of the record-table row. Absent on the write routes' responses,
+  // which return the cluster's live CR rather than a row, and on a
+  // `source=live` read for the same reason.
+  id?: number;
+  // The cluster this type belongs to. The fleet-wide list's only cluster
+  // reference — the payload carries no cluster name, so the list resolves it
+  // against the cluster list. camelCase on the wire, unlike the Worker page's
+  // `cluster_id`: this schema runs an alias generator, `WorkerPublic` does not.
+  clusterId?: number;
+  name: string;
+  // Hoisted by the backend out of the CR's `schedule.gpustack.ai/derived-from-node`
+  // label: the operator derived this type from a node instead of an admin
+  // creating it, so while the cluster derives types from nodes the operator
+  // owns its existence and re-creates it the moment it is deleted.
+  derivedFromNode?: boolean;
+  spec: InstanceTypeSpec;
+  status?: InstanceTypeStatus;
+}
+
+// Selectable flavor shown in the create drawer's first column
+// (GET /gpu-instance-type-flavors). Its acceleratorGroup / generalGroup /
+// acceleratable are copied into the created instance type.
+export interface FlavorItem {
+  name: string;
+  spec: {
+    manufacturer?: string | null;
+    product?: string | null;
+    family?: string | null;
+    memory?: string | null;
+    cores?: string | null;
+    acceleratable?: boolean;
+    acceleratorGroup?: string | null;
+    generalGroup?: string | null;
+  };
+}
+
+// Body for POST /gpu-instance-types (GPUInstanceTypeCreate).
+export interface FormData {
+  name: string;
+  spec: {
+    displayName?: string | null;
+    acceleratorGroup?: string | null;
+    generalGroup?: string | null;
+    acceleratable?: boolean;
+    os: string;
+    arch?: string | null;
+    unitResources?: UnitResources;
+    localStorage?: string | null;
+  };
+}
+
+// The create drawer's form values: the POST body plus the cluster it targets.
+// The cluster travels as a query param rather than in the body, and the page
+// no longer has an ambient one to supply, so the form asks for it.
+export interface CreateFormData extends FormData {
+  cluster_id: number;
+}

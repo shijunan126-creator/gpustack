@@ -1,0 +1,8 @@
+node_modules
+.umi
+.umi-production
+public/static/*.js
+public/static/*.css
+src/components/iconfont/
+
+

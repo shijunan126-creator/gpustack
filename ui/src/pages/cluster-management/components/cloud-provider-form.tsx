@@ -1,0 +1,209 @@
+import { fromClusterCreationAtom } from '@/atoms/clusters';
+import { PageAction } from '@/config';
+import { PageActionType } from '@/config/types';
+import { Select as SealSelect, useAppUtils } from '@gpustack/core-ui';
+import { Link, useIntl } from '@umijs/max';
+import { Form } from 'antd';
+import { useAtom } from 'jotai';
+import _ from 'lodash';
+import React, { useEffect } from 'react';
+import styled from 'styled-components';
+import { ProviderType } from '../config';
+import { providerHasRegions } from '../config/cloud-providers';
+import { useStepsContext } from '../config/steps-context';
+import { ClusterFormData as FormData } from '../config/types';
+import { useProviderRegions } from '../hooks/use-provider-regions';
+import ServerUrlField from './server-url-field';
+
+const OptionItem = styled.div`
+  display: flex;
+  align-items: center;
+  .label {
+    font-weight: 500;
+  }
+  .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--ant-color-text);
+    margin: 0 8px;
+  }
+  .datacenter,
+  .value {
+    color: var(--ant-color-text-secondary);
+  }
+  .icon {
+    margin-right: 8px;
+  }
+`;
+
+interface CloudProviderProps {
+  // A cloud provider from `CloudProviderList` (DigitalOcean / Shuihua) — it
+  // selects the adapter that resolves regions and instance types.
+  provider: ProviderType;
+  credentialList: Global.BaseOption<number>[];
+  action: PageActionType;
+  credentialID?: number;
+}
+
+const NotFoundCredentialContent: React.FC = () => {
+  const [, setFromClusterCreation] = useAtom(fromClusterCreationAtom);
+  const intl = useIntl();
+  const handleOnClick = () => {
+    setFromClusterCreation(true);
+  };
+
+  return (
+    <Link to={'/resources/credentials'} onClick={handleOnClick}>
+      {intl.formatMessage({ id: 'clusters.button.addCredential' })}
+    </Link>
+  );
+};
+
+const optionRender = (option: any): React.ReactNode => {
+  const { value } = option;
+  const data = option.data!;
+
+  return (
+    <OptionItem className="flex-center">
+      <span className="icon">{data.icon}</span>
+      <span className="label">{data.label}</span> <span className="dot"></span>
+      <span className="datacenter">{data.datacenter}</span>{' '}
+      <span className="dot"></span>{' '}
+      <span className="value">{_.toUpper(value)}</span>
+    </OptionItem>
+  );
+};
+
+const CloudProvider: React.FC<CloudProviderProps> = (props) => {
+  const { credentialList, action, credentialID, provider } = props;
+  const hasRegions = providerHasRegions(provider);
+  const intl = useIntl();
+  const { systemConfig } = useStepsContext();
+  const form = Form.useFormInstance<FormData>();
+
+  const {
+    getRegions,
+    getOSImages,
+    updateOSImages,
+    updateInstanceTypes,
+    getInstanceTypes,
+    setLoading,
+    loading,
+    regions
+  } = useProviderRegions(provider);
+
+  const { getRuleMessage } = useAppUtils();
+
+  const handleCredentialChange = async (value: number) => {
+    setLoading(true);
+    const [images, instanceTypes] = await Promise.all([
+      getOSImages(value),
+      getInstanceTypes(value)
+    ]);
+    if (!hasRegions) {
+      // No region step to narrow them down: what the credential returns is
+      // what the node-pool form offers.
+      updateInstanceTypes('', instanceTypes);
+      updateOSImages('', images);
+      setLoading(false);
+      return;
+    }
+    await getRegions(value);
+  };
+
+  const handleRegionChange = (value: string) => {
+    updateInstanceTypes(value);
+    updateOSImages(value);
+  };
+
+  useEffect(() => {
+    if (credentialID && action !== PageAction.CREATE && hasRegions) {
+      getRegions(credentialID);
+    }
+  }, [credentialID]);
+
+  useEffect(() => {
+    form.setFieldValue('server_url', systemConfig?.server_external_url || '');
+  }, [systemConfig]);
+
+  const labelRender = (props: {
+    label: React.ReactNode;
+    value: string | number;
+  }): React.ReactNode => {
+    const data = regions.find((item) => item.value === props.value);
+    if (!data) return props.label;
+    return (
+      <OptionItem className="flex-center">
+        <span className="icon">{data?.icon}</span>
+        <span className="label">{data?.label}</span>{' '}
+        <span className="dot"></span>
+        <span className="datacenter">{data?.datacenter}</span>{' '}
+        <span className="dot"></span>
+        <span className="value">{_.toUpper(data?.value)}</span>
+      </OptionItem>
+    );
+  };
+
+  const filterRegionOption = (inputValue: string, option: any) => {
+    return (
+      option.label.toLowerCase().includes(inputValue.toLowerCase()) ||
+      option.datacenter.toLowerCase().includes(inputValue.toLowerCase()) ||
+      option.value.toLowerCase().includes(inputValue.toLowerCase())
+    );
+  };
+
+  return (
+    <>
+      <Form.Item<FormData>
+        name="credential_id"
+        rules={[
+          {
+            required: true,
+            message: getRuleMessage('input', 'clusters.credential.title')
+          }
+        ]}
+      >
+        <SealSelect
+          notFoundContent={<NotFoundCredentialContent />}
+          disabled={action === PageAction.EDIT}
+          label={intl.formatMessage({ id: 'clusters.credential.title' })}
+          required
+          options={credentialList}
+          onChange={handleCredentialChange}
+        ></SealSelect>
+      </Form.Item>
+      {hasRegions && (
+        <Form.Item<FormData>
+          name="region"
+          rules={[
+            {
+              required: true,
+              message: getRuleMessage('input', 'clusters.workerpool.region')
+            }
+          ]}
+        >
+          <SealSelect
+            showSearch={{
+              filterOption: filterRegionOption
+            }}
+            disabled={action === PageAction.EDIT}
+            label={intl.formatMessage({ id: 'clusters.workerpool.region' })}
+            required
+            options={regions}
+            loading={loading}
+            labelRender={labelRender}
+            optionRender={optionRender}
+            onChange={handleRegionChange}
+            notFoundContent={intl.formatMessage({
+              id: 'clusters.create.noRegions'
+            })}
+          ></SealSelect>
+        </Form.Item>
+      )}
+      <ServerUrlField provider={provider} required />
+    </>
+  );
+};
+
+export default CloudProvider;

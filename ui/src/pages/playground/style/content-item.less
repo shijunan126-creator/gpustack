@@ -1,0 +1,103 @@
+.content-item {
+  margin-bottom: 24px;
+  position: relative;
+
+  &-role {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: 8px;
+    height: 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .content-item-title {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 101;
+  }
+
+  .role {
+    position: relative;
+    padding: 0 4px;
+    border-radius: var(--border-radius-mini);
+    color: var(--ant-color-text-tertiary);
+  }
+
+  .actions {
+    display: none;
+    border: 1px solid var(--ant-color-border);
+    border-radius: var(--border-radius-base);
+    background-color: var(--color-white-1);
+
+    &.has-url-input {
+      display: flex;
+      margin-left: 8px;
+    }
+  }
+
+  .actions-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .actions .mrkd-switch {
+    border-radius: 12px;
+
+    .ant-segmented-thumb,
+    .ant-segmented-item-selected,
+    .ant-segmented-item,
+    .ant-segmented-item::after {
+      border-radius: 10px;
+      overflow: hidden;
+    }
+  }
+
+  &:hover {
+    .actions {
+      display: flex;
+    }
+  }
+
+  &-content {
+    word-break: break-word;
+    min-height: 38px;
+    border-radius: var(--border-radius-mini);
+    background-color: var(--ant-color-fill-tertiary);
+
+    .text {
+      padding: 8px 14px;
+      line-height: 20px;
+    }
+
+    &.has-img {
+      border: 1px solid var(--ant-color-fill-secondary);
+      background: none;
+    }
+  }
+
+  .message-content-input {
+    flex: 1;
+
+    &.has-img {
+      border: 1px solid var(--ant-color-fill-secondary);
+      border-radius: var(--border-radius-base);
+      overflow: hidden;
+
+      .ant-input {
+        border-radius: 0 0 var(--border-radius-base) var(--border-radius-base);
+        border-color: transparent;
+        background-color: transparent;
+      }
+
+      &:focus-within {
+        border-color: var(--ant-color-primary);
+      }
+    }
+  }
+}

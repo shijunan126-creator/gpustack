@@ -1,0 +1,61 @@
+.thumb-img {
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+  justify-content: center;
+  align-items: center;
+  border-radius: var(--border-radius-base);
+  overflow: hidden;
+
+  .img {
+    display: flex;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    border-radius: var(--border-radius-base);
+    cursor: pointer;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .del {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    background-color: var(--color-white-1);
+    display: none;
+    border-radius: 50%;
+    height: 16px;
+    width: 16px;
+    overflow: hidden;
+    pointer-events: all;
+
+    &:hover {
+      transform: scale(1.1);
+    }
+  }
+
+  &:hover {
+    .ant-image .ant-image-mask {
+      opacity: 1;
+      transition: opacity var(--ant-motion-duration-slow);
+    }
+
+    .del {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  }
+}
+
+.thumb-list-wrap {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}

@@ -1,0 +1,389 @@
+/**
+ * Canonical "Instance Type" cell renderer.
+ *
+ * This is the single source of truth for the Instance Type column: the GPU
+ * Instances list ([use-instances-columns]) and the Usage GPU Instances table
+ * both render through it, so the primary label + the categorized spec popover
+ * (GPU / CPU / Memory / Disk) stay byte-for-byte identical.
+ *
+ * It operates on the GPU-service ``ListItem`` shape. Callers whose data has a
+ * different shape (e.g. the Usage breakdown rows) build a minimal ``ListItem``
+ * with ``buildInstanceTypeRecordFromMiB`` and feed it here.
+ */
+import _ from 'lodash';
+import { ceilMilliToCore, parseQuantityToGi } from '../../utils';
+import InstanceTypeCell from '../components/instance-type-cell';
+import {
+  formatMemoryDisplay,
+  parseProfileMemoryGB,
+  profileMemoryMib
+} from '../config';
+import {
+  AcceleratorSlicedPhysicalDetailProfile,
+  InstanceTypeSnapshotSpec,
+  ListItem
+} from '../config/types';
+import { buildInstanceTypeSnapshot } from './type-snapshot';
+
+// Minimal shape of the ``useIntl()`` result we depend on — keeps this module
+// free of an intl package import.
+type IntlLike = { formatMessage: (descriptor: { id: string }) => string };
+
+const toGB = (v?: string | number) =>
+  v ? `${v}`.replace('Gi', ' GB').replace('Mi', ' MB') : '-';
+
+const buildResourcesData = (
+  instanceType: {
+    spec: InstanceTypeSnapshotSpec;
+  },
+  options: {
+    count: number;
+  }
+) => {
+  const unitResourcesParsed = instanceType?.spec?.unitResourcesParsed;
+  const acceleratable = instanceType?.spec?.acceleratable;
+  const { count = 0 } = options;
+
+  if (acceleratable) {
+    return {
+      accelerator: _.toString(count),
+      cpu: unitResourcesParsed?.cpu?.cores
+        ? count * unitResourcesParsed?.cpu?.cores
+        : undefined,
+      ram: unitResourcesParsed?.ram?.value
+        ? count * unitResourcesParsed?.ram?.value
+        : undefined
+    };
+  }
+  return {};
+};
+
+// Memory (VRAM) percentage for a sliced instance; 0 when not sliced.
+const getSliceMemoryPercentage = (record: ListItem) =>
+  _.toNumber(record.spec?.resources?.acceleratorSlicedMemoryPercentage) || 0;
+
+// Hardware partition profile (e.g. "1g.10gb"); empty when not partitioned.
+const getPartitionProfile = (record: ListItem) =>
+  record.spec?.resources?.acceleratorPartitionedProfile || '';
+
+const formatResources = (
+  instanceTypeSpec: { spec: InstanceTypeSnapshotSpec },
+  record: ListItem,
+  partitionProfiles?: AcceleratorSlicedPhysicalDetailProfile[] | null
+) => {
+  const resources = buildResourcesData(instanceTypeSpec, {
+    count: _.toNumber(record.spec?.resources?.accelerator) || 0
+  });
+
+  if (!record.spec?.resources?.accelerator) {
+    return {
+      cpu: record.spec?.resources?.cpu
+        ? `${record.spec?.resources?.cpu} vCPU`
+        : '-',
+      ram: record.spec?.resources?.ram
+        ? toGB(record.spec?.resources?.ram)
+        : '-',
+      localStorage: record.spec?.resources?.localStorage
+        ? toGB(record.spec?.resources?.localStorage)
+        : '-'
+    };
+  }
+
+  const sliceMemoryPercentage = getSliceMemoryPercentage(record);
+  const partitionProfile = getPartitionProfile(record);
+
+  // Divided card (soft slice or hardware partition): CPU / RAM carry the
+  // already-scaled values on spec.resources — whole cores / whole Gi for
+  // instances created by the current form; parse (instead of echoing the raw
+  // quantity) so legacy instances persisted as millicores / Mi (e.g. "400m" /
+  // "1638Mi") render as whole units too. VRAM is the slice's own size — the
+  // profile's VRAM for a partition, the per-card memory scaled by the memory
+  // percentage (floored, min 1) for a soft slice — not the whole card's size.
+  if (sliceMemoryPercentage > 0 || partitionProfile) {
+    const vramGi = parseQuantityToGi(instanceTypeSpec.spec?.memory)?.value;
+    // A partition's VRAM comes from its profile's reported memoryMib when the
+    // resolved summary carries the pool's profile ledger; parsed from its NAME
+    // otherwise (a fallback that reads ~5% above the real figure — an A100
+    // "1g.10gb" actually holds 9.5 GB, not 10). Usage / billing always read
+    // `memoryMib` server-side, so the bill is exact either way.
+    const profileMiB = profileMemoryMib(partitionProfiles, partitionProfile);
+    const profileGB = profileMiB
+      ? _.round(profileMiB / 1024, 1)
+      : parseProfileMemoryGB(partitionProfile);
+    const vram = profileGB
+      ? `${profileGB} GB`
+      : vramGi != null && sliceMemoryPercentage > 0
+        ? `${Math.max(1, _.floor((vramGi * sliceMemoryPercentage) / 100))} GB`
+        : undefined;
+    const cpuCores = ceilMilliToCore(
+      _.toString(record.spec?.resources?.cpu) || null
+    )?.cores;
+    const ramGi = parseQuantityToGi(
+      _.toString(record.spec?.resources?.ram) || null
+    )?.value;
+
+    return {
+      cpu: cpuCores != null ? `${Math.max(1, cpuCores)} vCPU` : '-',
+      ram: ramGi != null ? `${Math.max(1, ramGi)} GB` : '-',
+      vram,
+      localStorage: record.spec?.resources?.localStorage
+        ? toGB(record.spec?.resources?.localStorage)
+        : undefined
+    };
+  }
+
+  // VRAM = per-card GPU memory (a single card's size; not aggregated across
+  // cards — the model's marquee spec).
+  const vram = formatMemoryDisplay(instanceTypeSpec.spec?.memory ?? undefined);
+
+  return {
+    cpu: resources.cpu ? `${resources.cpu} vCPU` : '-',
+    ram: resources.ram ? `${resources.ram} GB` : '-',
+    vram,
+    localStorage: record.spec?.resources?.localStorage
+      ? toGB(record.spec?.resources?.localStorage)
+      : undefined
+  };
+};
+
+// Spec popover categories, in render order.
+type SpecCategory = 'gpu' | 'cpu' | 'ram' | 'disk';
+
+export const renderInstanceType = (
+  record: ListItem,
+  options: {
+    intl: IntlLike;
+    // name → capacity (e.g. "20Gi") for referenced persistent volumes, so the
+    // Disk → Persistent row can show the size instead of just the PV name.
+    pvCapacityByName?: Record<string, string>;
+    // Limit the spec popover to these categories (default: all). The Instance
+    // Types breakdown only wants CPU + RAM, for example.
+    categories?: SpecCategory[];
+    // Override the primary label (default: derived "<product> x <count>" /
+    // "CPU-only"). The Instance Types breakdown keeps its plain product name.
+    title?: string;
+  }
+) => {
+  const { intl, pvCapacityByName, categories } = options;
+  // The type's flat display snapshot, resolved by the server from the type
+  // the instance was created against. Empty when the instance carries no
+  // summary (legacy rows, or the type row is gone) — the CPU-only literals
+  // below stay the no-type fallback.
+  const typeSnapshot =
+    buildInstanceTypeSnapshot(record?.typeSnapshotDetail) ?? {};
+  // The pool's partition-profile ledger rides the resolved summary (it never
+  // fit the 1024-char description cap), so a partition's VRAM can come from
+  // the profile's reported size instead of its name.
+  const partitionProfiles =
+    record?.typeSnapshotDetail?.status?.detail?.slicedDetail?.physical
+      ?.profiles;
+  const resources = formatResources(
+    { spec: typeSnapshot },
+    record,
+    partitionProfiles
+  );
+  const accelerator = record.spec?.resources?.accelerator;
+  const sliceMemoryPercentage = getSliceMemoryPercentage(record);
+  const partitionProfile = getPartitionProfile(record);
+  const isSliced = typeSnapshot.acceleratable && sliceMemoryPercentage > 0;
+  const isPartitioned = !!typeSnapshot.acceleratable && !!partitionProfile;
+  // Type label (primary cell label and the popover's "Type" row) prefers the
+  // type's user-defined displayName, falling back to the hardware product.
+  const typeLabel =
+    typeSnapshot.displayName || typeSnapshot.product || undefined;
+  const title =
+    options.title ??
+    (typeSnapshot.acceleratable
+      ? isPartitioned
+        ? `${typeLabel} (${partitionProfile})`
+        : isSliced
+          ? `${typeLabel} (${sliceMemoryPercentage}%)`
+          : `${typeLabel} x ${accelerator}`
+      : typeSnapshot.displayName || 'CPU-only');
+
+  const volume = (record.spec as any)?.volume;
+  // Spec popover grouped by category (GPU / CPU / Memory / Disk), mirroring
+  // the Deployments instance info icon: dark tooltip, per-category icon,
+  // instance name as the title. Rows with no value are dropped.
+  type Section = {
+    key: SpecCategory;
+    icon: string;
+    name: string;
+    rows: [string | null, string | undefined][];
+  };
+  const sections: Section[] = [];
+  if (typeSnapshot.acceleratable) {
+    sections.push({
+      key: 'gpu',
+      icon: 'icon-gpu',
+      name: 'GPU',
+      rows: [
+        // A divided card shows its slice (ratio / profile) instead of a card
+        // count (always 1).
+        isPartitioned
+          ? [
+              intl.formatMessage({ id: 'gpuservice.instance.partitioned' }),
+              partitionProfile
+            ]
+          : isSliced
+            ? [
+                intl.formatMessage({ id: 'gpuservice.instance.sliced' }),
+                `${sliceMemoryPercentage}%`
+              ]
+            : [
+                intl.formatMessage({ id: 'gpuservice.table.count' }),
+                accelerator ? `${accelerator}` : undefined
+              ],
+        [
+          intl.formatMessage({ id: 'gpuservice.instance.section.type' }),
+          typeLabel
+        ],
+        [
+          intl.formatMessage({ id: 'gpuservice.instance.memory' }),
+          resources.vram
+        ]
+      ]
+    });
+  }
+  sections.push({
+    key: 'cpu',
+    icon: 'icon-cpu',
+    name: 'CPU',
+    rows: [[null, resources.cpu]]
+  });
+  sections.push({
+    key: 'ram',
+    icon: 'icon-ram-02',
+    name: intl.formatMessage({ id: 'gpuservice.instance.ram' }),
+    rows: [[null, resources.ram]]
+  });
+  sections.push({
+    key: 'disk',
+    icon: 'icon-hard-disk',
+    name: intl.formatMessage({ id: 'gpuservice.instance.disk' }),
+    rows: [
+      [
+        intl.formatMessage({ id: 'gpuservice.instance.disk.system' }),
+        resources.localStorage
+      ],
+      [
+        intl.formatMessage({ id: 'gpuservice.instance.disk.ephemeral' }),
+        toGB(volume?.ephemeral?.capacity)
+      ],
+      [
+        intl.formatMessage({ id: 'gpuservice.instance.disk.persistent' }),
+        // toGB returns '-' (a truthy string) for falsy input, so only call it
+        // when a value actually exists — otherwise the first branch would
+        // short-circuit the chain and the PV fallbacks would never run.
+        (volume?.persistentTemplate?.spec?.capacity &&
+          toGB(volume.persistentTemplate.spec.capacity)) ||
+          (volume?.persistent?.name &&
+            pvCapacityByName?.[volume.persistent.name] &&
+            toGB(pvCapacityByName[volume.persistent.name])) ||
+          volume?.persistent?.name
+      ]
+    ]
+  });
+
+  const visibleSections = categories
+    ? sections.filter((s) => categories.includes(s.key))
+    : sections;
+
+  return (
+    <InstanceTypeCell
+      title={title}
+      name={record.name}
+      sections={visibleSections}
+    />
+  );
+};
+
+// MiB → k8s "Gi" quantity string, so values that arrive as raw mebibytes (the
+// Usage breakdown carries them this way) render through the same toGB path as
+// the GPU Instances list — i.e. as "X GB", not "X MB".
+const mibToGiQuantity = (mib?: number): string | undefined =>
+  mib ? `${Math.round(mib / 1024)}Gi` : undefined;
+
+// Per-card / whole-instance metrics carried by the Usage breakdown rows.
+export interface InstanceTypeMiB {
+  name?: string;
+  product?: string;
+  // accelerator (GPU card) count; 0/undefined → CPU-only.
+  gpuCount?: number;
+  // Per-card values.
+  unitCpuMilli?: number;
+  unitMemoryMib?: number;
+  vramMib?: number;
+  // Disk (whole instance).
+  localStorageMib?: number;
+  ephemeralMib?: number;
+  persistentMib?: number;
+}
+
+// Adapt the Usage breakdown's flat MiB fields into the ``ListItem`` shape the
+// canonical renderer consumes, so both tables render identically. CPU/RAM ride
+// on the parsed unit-resources (per card) for accelerated rows and on
+// ``spec.resources`` for CPU-only rows, matching how the list derives them.
+// The Usage rows carry the figures directly (no type row to resolve), so the
+// synthesized summary holds them verbatim — including the precomputed parsed
+// unit resources, which buildInstanceTypeSnapshot then keeps unchanged instead
+// of re-deriving from quantity strings.
+export const buildInstanceTypeRecordFromMiB = (
+  data: InstanceTypeMiB
+): ListItem => {
+  const acceleratable = (data.gpuCount ?? 0) > 0;
+  return {
+    name: data.name,
+    typeSnapshotDetail: {
+      name: data.name,
+      spec: {
+        acceleratable,
+        unitResourcesParsed: {
+          cpu: data.unitCpuMilli
+            ? {
+                cores: data.unitCpuMilli / 1000,
+                unit: 'Core',
+                num: data.unitCpuMilli / 1000
+              }
+            : null,
+          ram: data.unitMemoryMib
+            ? {
+                value: data.unitMemoryMib / 1024,
+                unit: 'Gi',
+                num: data.unitMemoryMib / 1024
+              }
+            : null
+        }
+      },
+      status: {
+        detail: {
+          product: data.product,
+          // Kept as a raw MiB number: formatMemoryDisplay treats a number as
+          // mebibytes, matching the previous description-blob channel.
+          memory: data.vramMib
+        }
+      }
+    },
+    spec: {
+      resources: {
+        accelerator: data.gpuCount ? `${data.gpuCount}` : null,
+        // Only the CPU-only branch reads cpu/ram off spec.resources.
+        cpu: acceleratable
+          ? null
+          : data.unitCpuMilli
+            ? data.unitCpuMilli / 1000
+            : null,
+        ram: acceleratable ? null : mibToGiQuantity(data.unitMemoryMib),
+        localStorage: mibToGiQuantity(data.localStorageMib) ?? null
+      },
+      volume: {
+        ephemeral: { capacity: mibToGiQuantity(data.ephemeralMib) },
+        persistentTemplate: data.persistentMib
+          ? {
+              spec: { type: '', capacity: mibToGiQuantity(data.persistentMib)! }
+            }
+          : undefined
+      }
+    }
+  } as ListItem;
+};

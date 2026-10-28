@@ -1,0 +1,3 @@
+
+node scripts/check-enterprise-pollution.cjs
+npx lint-staged

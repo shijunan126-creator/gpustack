@@ -1,0 +1,22 @@
+.reference-params {
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  align-items: center;
+  color: var(--ant-orange);
+  gap: 20px;
+
+  &.scaleable {
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  .usage {
+    cursor: pointer;
+    line-height: 16px;
+
+    &.scaleable {
+      transform: scale(0.9);
+    }
+  }
+}

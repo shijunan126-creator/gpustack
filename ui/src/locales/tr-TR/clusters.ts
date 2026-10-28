@@ -1,0 +1,410 @@
+export default {
+  'clusters.title': 'Küme',
+  'clusters.table.provider': 'Sağlayıcı',
+  'clusters.table.deployments': 'Dağıtımlar',
+  'clusters.button.add': 'Küme Ekle',
+  'clusters.button.addCredential': 'Bulut Kimlik Bilgisi Ekle',
+  'clusters.button.editCredential': 'Bulut Kimlik Bilgisini Düzenle',
+  'clusters.filterBy.cluster': 'Kümeye göre filtrele',
+  'clusters.add.cluster': '{cluster} Kümesi Ekle',
+  'clusters.edit.cluster': '{cluster} Düzenle',
+  'clusters.provider.custom': 'Özel',
+  'clusters.button.register': 'Küme Kaydet',
+  'clusters.button.addNodePool': 'İşçi Havuzu Ekle',
+  'clusters.button.add.credential': '{provider} Kimlik Bilgisi Ekle',
+  'clusters.credential.title': 'Bulut Kimlik Bilgisi',
+  'clusters.credential.signinToCreate':
+    'Henüz {name} yok mu? Oluşturmak için <a href="{link}" target="_blank">giriş yapın veya kaydolun</a>.',
+  'clusters.credential.token': 'Erişim Anahtarı',
+  'clusters.workerpool.region': 'Bölge',
+  'clusters.workerpool.zone': 'Alan',
+  'clusters.workerpool.instanceType': 'Örnek Türü',
+  'clusters.workerpool.replicas': 'Kopyalar',
+  'clusters.workerpool.batchSize': 'Toplu İş Boyutu',
+  'clusters.workerpool.osImage': 'İşletim Sistemi İmajı',
+  'clusters.workerpool.volumes': 'Birimler',
+  'clusters.workerpool.format': 'Format',
+  'clusters.workerpool.size': 'Boyut (GiB)',
+  'clusters.workerpool.title': 'İşçi Havuzları',
+  'clusters.workerpool.cloudOptions': 'Bulut Seçenekleri Ekle',
+  'clusters.workerpool.volumes.add': 'Birim Ekle',
+  'clusters.create.provider.self': 'Barındırılan',
+  'clusters.create.provider.cloud': 'Bulut Sağlayıcı',
+  'clusters.create.steps.selectProvider': 'Sağlayıcı Seç',
+  'clusters.create.configBasic': 'Temel Yapılandırma',
+  'clusters.create.execCommand': 'Komutu Çalıştır',
+  'clusters.create.supportedGpu': "Desteklenen GPU'lar",
+  'clusters.create.skipfornow': 'Şimdilik Atla',
+  'clusters.create.noImages': 'Kullanılabilir imaj yok',
+  'clusters.create.noInstanceTypes': 'Kullanılabilir örnek türü yok',
+  'clusters.create.noRegions': 'Kullanılabilir bölge yok',
+  'clusters.workerpool.batchSize.desc':
+    'İşçi havuzunda eşzamanlı olarak oluşturulan işçi düğüm sayısı',
+  'clusters.create.addworker.tips':
+    'Aşağıdaki komutu çalıştırmadan önce lütfen <a href={link} target="_blank">ön koşulların</a> karşılandığından emin olun.',
+  'clusters.create.addCommand.tips':
+    'Eklenmesi gereken İşçi Düğümde, kümeye katılması için aşağıdaki komutu çalıştırın.',
+  'clusters.create.addCommand.k8s.tips':
+    'Kaydedilmesi gereken Kubernetes kümesinde, Kubernetes kaynaklarını oluşturmak ve kümeyi kaydetmek için aşağıdaki komutu çalıştırın.',
+  'clusters.create.addCommand.k8s.version.warning':
+    'Desteklenen minimum Kubernetes sürümü 1.23’tür. GPU hizmeti özelliğini kullanmak için desteklenen minimum Kubernetes sürümü 1.27’dir.',
+  'clusters.create.register.tips':
+    'Eklenmesi gereken Kubernetes kümesinde, düğümlerini kümeye katılması için aşağıdaki komutu çalıştırın.',
+  'cluster.create.checkEnv.tips':
+    'Ortamın hazır olup olmadığını kontrol etmek için aşağıdaki komutu kullanın.',
+  'cluster.provider.comingsoon': 'Yakında',
+  'clusters.addworker.nvidiaNotes-01':
+    'Birden fazla çıkış IP\'si varsa, işçi düğümün kullanmasını istediğinizi belirtin. Lütfen <span class="bold-text">hostname -I | xargs -n1</span> ile kontrol edin.',
+  'clusters.addworker.nvidiaNotes-02':
+    'İşçi düğümde zaten bir model dizini varsa, bağlamak için yolu belirtebilirsiniz.',
+  'clusters.addworker.hygonNotes': `<span class="bold-text">/opt/hyhal</span> veya <span class="bold-text">/opt/dtk</span> mevcut değilse, ilgili Hygon kurulum yollarına işaret eden sembolik bağlantılar oluşturun, örneğin: 
+  <span class="desc-fill">ln -s /path/to/hyhal /opt/hyhal</span>
+  <span class="desc-fill">ln -s /path/to/dtk /opt/dtk</span>.`,
+  'clusters.addworker.corexNotes': `<span class="bold-text">/usr/local/corex</span> dizini mevcut değilse, Iluvatar SDK kurulum yoluna sembolik bağlantı oluşturun:  
+<span class="bold-text">ln -s /path/to/corex /usr/local/corex</span>.`,
+  'clusters.addworker.metaxNotes': `<span class="bold-text">/opt/mxdriver</span> veya <span class="bold-text">/opt/maca</span> dizini mevcut değilse, MetaX sürücü ve SDK kurulum yoluna sembolik bağlantı oluşturun:  
+<span class="desc-fill">ln -s /path/to/mxdriver /opt/mxdriver</span>
+<span class="desc-fill">ln -s /path/to/maca /opt/maca</span>.`,
+  'clusters.addworker.cambriconNotes': `<span class="bold-text">/usr/local/neuware</span> dizini mevcut değilse, Cambricon kurulum yoluna sembolik bağlantı oluşturun:  
+<span class="bold-text">ln -s /path/to/neuware /usr/local/neuware</span>.`,
+  'clusters.addworker.hygonNotes-02':
+    'Cihaz algılama başarısız olursa, <span class="bold-text">--env ROCM_SMI_LIB_PATH=/opt/hyhal/lib</span> parametresini kaldırmayı deneyin.',
+  'clusters.addworker.selectCluster': 'Küme Seç',
+  'clusters.addworker.selectCluster.tips':
+    '<span class="bold-text">Docker dışı</span> kümeler için lütfen Kümeler sayfasından küme kaydı oluşturun veya işçi havuzlarını yönetin.',
+  'clusters.addworker.selectGPU': 'GPU Üreticisi Seç',
+  'clusters.addworker.selectGPU.multiTag': 'Çoklu seçim',
+  'clusters.addworker.selectHardware': 'Donanım Türü Seç',
+  'clusters.addworker.selectHardware.subtitle':
+    'Bu kümenin worker çalıştırması gereken tüm donanım türlerini seçin',
+  'clusters.addworker.cpuNode.tips':
+    'GPU’su olmayan tüm düğümlere worker dağıtır. Kontrol düzleminiz GPU düğümleriyle aynı kümedeyse ve CPU düğümlerinde worker çalıştırmak istemiyorsanız seçili bırakmayın.',
+  'clusters.addworker.noWorkerSelected.error':
+    'En az bir donanım türü seçin — ne CPU Node ne de bir GPU üreticisi seçilmediğinde hiçbir worker dağıtılmaz.',
+  'clusters.addworker.checkEnv': 'Ortamı Kontrol Et',
+  'clusters.addworker.checkEnv.cpuOnlyTips':
+    'Kubernetes kümesinde en az bir hazır düğüm olduğunu doğrulamak için aşağıdaki komutu kullanın. Yalnızca CPU kümelerini kaydediyorsunuz.',
+  'clusters.addworker.specifyArgs': 'Argümanları Belirle',
+  'clusters.addworker.dtkVersion': 'DTK Sürümü',
+  'clusters.addworker.runCommand': 'Komutu Çalıştır',
+  'clusters.addworker.specifyWorkerIP': "İşçi Düğüm IP'si",
+  'clusters.addworker.detectWorkerIP': "İşçi Düğüm IP'sini Otomatik Algıla",
+  'clusters.addworker.specifyWorkerAddress': 'İşçi Düğüm Harici Adresi',
+  'clusters.addworker.detectWorkerAddress': 'İşçi Düğüm Harici Adresi',
+  'clusters.addworker.detectWorkerAddress.tips':
+    "Belirtilmezse İşçi Düğüm IP'si varsayılır.",
+  'clusters.addworker.externalIP.tips':
+    'VPC veya özel ağda çalıştırılıyorsa, lütfen GPUStack Sunucusuna erişilebilir İşçi Düğüm harici adresini belirtin.',
+  'clusters.addworker.enterWorkerIP': "İşçi düğüm IP'sini girin",
+  'clusters.addworker.enterWorkerIP.error': "Lütfen işçi düğüm IP'sini girin.",
+  'clusters.addworker.enterWorkerAddress': 'İşçi düğüm harici adresini girin',
+  'clusters.addworker.enterWorkerAddress.error':
+    'Lütfen işçi düğüm harici adresini girin.',
+  'clusters.addworker.rdma': 'RDMA / InfiniBand',
+  'clusters.addworker.rdma.tips':
+    'Çalışan düğümde InfiniBand/RoCE ağ kartları varsa etkinleştirin. Düğümler arası KV önbellek aktarımı için gereklidir.',
+  'clusters.addworker.extraVolume': 'Ek Birim Bağlama',
+  'clusters.addworker.cacheVolume': 'Model Önbellek Birimi Bağlama',
+  'clusters.addworker.cacheVolume.tips':
+    'Model önbellek dizinini özelleştirmek istiryorsanız, bağlamak için yolu belirtebilirsiniz.',
+  'clusters.addworker.configSummary': 'Yapılandırma Özeti',
+  'clusters.addworker.gpuVendor': 'GPU Üreticisi',
+  'clusters.addworker.workerIP': "İşçi Düğüm IP'si",
+  'clusters.addworker.workerExternalIP': 'İşçi Düğüm Harici Adresi',
+  'clusters.addworker.notSpecified': 'Belirtilmedi',
+  'clusters.addworker.autoDetect': 'Otomatik',
+  'clusters.addworker.extraVolume.holder':
+    'örn. /data/models (yol / ile başlamalıdır). Birden fazla yolu virgülle ayırın.',
+  'clusters.addworker.cacheVolume.holder':
+    'örn. /data/cache (yol / ile başlamalıdır)',
+  'clusters.addworker.vendorNotes.title': '{vendor} Cihaz Notları',
+  'clusters.addworker.amdNotes-01': `<span class="bold-text">/opt/rocm</span> dizini mevcut değilse, lütfen ROCm kurulum yoluna işaret eden sembolik bağlantı oluşturun: <span class="bold-text">ln -s /path/to/rocm /opt/rocm</span>.`,
+  'clusters.addworker.amdNotes-02': `Ana makinede birden fazla ROCm sürümü yönetiliyorsa, algılama hatalarını önlemek için <span class="bold-text">/opt/rocm/lib</span> dizinini bağlamanız gerekir.`,
+  'clusters.addworker.message.success_single':
+    '{count} yeni işçi düğüm kümeye eklendi.',
+  'clusters.addworker.message.success_multiple':
+    '{count} yeni işçi düğüm kümeye eklendi.',
+  'clusters.create.serverUrl': "GPUStack Sunucu URL'si",
+  'clusters.create.workerConfig': 'İşçi Düğüm Yapılandırması',
+  'clusters.chartValues.title': 'Chart Değerleri (YAML)',
+  'clusters.chartValues.tip':
+    'GPUStack Helm chart’ının değerleri; anahtarlar chart’ın kendi anahtarlarıyla aynıdır ve sunucunun türettiği değerlerin üzerine birleştirilir. Yukarıda karşılık gelen bir alan olmayan, chart ve alt chart’larının sunduğu her şey buradan ayarlanabilir — örneğin kümede hâlihazırda bulunan bir bileşeni kapatmak. Helm’de olduğu gibi listeler eklenmez, tümüyle değiştirilir.',
+  'clusters.chartValues.reapply.tip':
+    'Kümeyi kaydetmek Kubernetes tarafında hiçbir şeyi değiştirmez. Değişiklikten sonra «Kümeyi Kaydet» akışını yeniden çalıştırıp manifest’i alın ve tekrar uygulayın — küme içindeki Job, manifest’in istediği yapılandırmayı release’in kurulu yapılandırmasıyla karşılaştırır ve yalnızca fark varsa yükseltme yapar.',
+  'clusters.chartValues.doc.chart': 'Chart değerleri',
+  'clusters.chartValues.doc.operator': 'Operator chart',
+  'clusters.chartValues.error.invalidYaml': 'Geçersiz YAML: {reason}',
+  'clusters.chartValues.error.notJson':
+    '{path} konumundaki değer bir dize, sayı, mantıksal değer, liste veya eşleme değil — YAML onu tarih ya da ikili değer olarak okudu ve bu hâliyle olduğu gibi iletilemez. Metin olarak kalması için tırnak içine alın.',
+  'clusters.chartValues.error.unsafeInteger':
+    '{path} konumundaki tam sayı tam olarak taşınabilecek aralığın dışında — YAML okunurken zaten yuvarlandı, dolayısıyla farklı bir değer gönderilirdi. Rakamları korumak için tırnak içine alın.',
+  'clusters.chartValues.error.notMapping':
+    'Chart değerleri bir YAML anahtar eşlemesi olmalıdır; tek bir değer veya liste olamaz.',
+  'clusters.edit.registration.changed.tip':
+    'Bir işçi düğüm kaydolurken uygulanan ayarları değiştirdiniz. Değişikliklerin etkili olması için kayıt komutunu hedef kümede yeniden çalıştırın.',
+  'clusters.addworker.containerName': 'İşçi Düğüm Konteyner Adı',
+  'clusters.addworker.containerName.tips':
+    'İşçi düğüm konteyneri için bir ad belirtin.',
+  'clusters.addworker.dataVolume': 'GPUStack Veri Birimi',
+  'clusters.addworker.dataVolume.tips':
+    'GPUStack için veri depolama yolu belirtin.',
+  'clusters.table.ip.internal': 'Dahili',
+  'clusters.table.ip.external': 'Harici',
+  'clusters.form.serverUrl.tips':
+    "İşçi düğüm GPUStack Sunucusuna doğrudan erişemiyorsa, harici olarak erişilebilir bir GPUStack hizmet URL'si belirtin. Örneğin: {example}",
+  'clusters.form.setDefault': 'Varsayılan Olarak Ayarla',
+  'clusters.form.setDefault.tips': 'Dağıtım için varsayılan.',
+  'clusters.addworker.noClusters': 'Kullanılabilir Docker kümesi bulunamadı',
+  'clusters.create.steps.complete.tips': 'Küme başarıyla oluşturuldu!',
+  'clusters.create.steps.complete': 'Tamamla',
+  'clusters.create.steps.configure': 'Yapılandır',
+  'clusters.create.dockerTips1': 'Sonraki adım, bu kümeye işçi düğüm ekleyin.',
+  'clusters.create.dockerTips2':
+    'Bu adımı atlayabilir ve daha sonra küme listesinden ekleyebilirsiniz.',
+  'clusters.create.k8sTips1':
+    'Sonraki adım, mevcut Kubernetes kümesini kaydedin.',
+  'clusters.create.k8sTips2':
+    'Bu adımı atlayabilir ve daha sonra küme listesinden kaydedebilirsiniz.',
+  'clusters.addworker.theadNotes':
+    '<span class="bold-text">/usr/local/PPU_SDK</span> dizini mevcut değilse, lütfen T-Head PPU SDK kurulum yoluna işaret eden sembolik bağlantı oluşturun: <span class="bold-text">ln -s /path/to/PPU_SDK /usr/local/PPU_SDK</span>.',
+  'clusters.addworker.theadNotes-02':
+    'T-Head PPU, cihaz enjeksiyonu için Container Device Interface (CDI) kullanır ve CDI oluşturma için <span class="bold-text">/var/run/cdi</span> dizininin kullanılabilir olmasını gerektirir.',
+  'clusters.addworker.nvidiaNotes':
+    'GPUStack\'teki yerleşik çıkarım altyapıları <span class="bold-text">CUDA 12.8+</span> gerektirir. Lütfen NVIDIA sürücü sürümünüzün <span class="bold-text">570</span> veya daha yeni olduğundan emin olun.',
+  'clusters.volume.title': 'Birim Bağlamaları',
+  'clusters.volume.name': 'Birim Adı',
+  'clusters.volume.mountPath': 'Konteyner Yolu',
+  'clusters.volume.mountPath.format': 'Yol / ile başlamalıdır',
+  'clusters.volume.readOnly': 'Salt Okunur',
+  'clusters.volume.sourceType': 'Kaynak Türü',
+  'clusters.volume.sourceType.hostPath': 'Ana Bilgisayar Yolu',
+  'clusters.volume.sourceType.pvc': 'Kalıcı Birim Talebi (PVC)',
+  'clusters.volume.sourceType.configMap': 'ConfigMap',
+  'clusters.volume.hostPath.path': 'Ana Bilgisayar Yolu',
+  'clusters.volume.hostPath.type': 'Yol Türü',
+  'clusters.volume.hostPath.type.directory': 'Dizin',
+  'clusters.volume.hostPath.type.directoryOrCreate': 'Dizin (yoksa oluştur)',
+  'clusters.volume.hostPath.type.file': 'Dosya',
+  'clusters.volume.hostPath.type.fileOrCreate': 'Dosya (yoksa oluştur)',
+  'clusters.volume.hostPath.type.socket': 'Soket',
+  'clusters.volume.hostPath.type.charDevice': 'Karakter Aygıtı',
+  'clusters.volume.hostPath.type.blockDevice': 'Blok Aygıtı',
+  'clusters.volume.pvc.claimName': 'PVC Adı',
+  'clusters.volume.pvc.readOnly': 'Salt Okunur',
+  'clusters.volume.configMap.name': 'ConfigMap Adı',
+  'clusters.volume.configMap.optional': 'İsteğe bağlı',
+  'clusters.volume.add': 'Birim Bağlaması Ekle',
+  'clusters.systemDefaultContainerRegistry.title':
+    'Varsayılan Konteyner Kayıt Defteri',
+  'clusters.systemDefaultContainerRegistry.tip':
+    'Bu küme için GPUStack imajlarının çözümlenmesinde kullanılan varsayılan kayıt defteri. Ayarlanmadığında sunucu varsayılanına döner.',
+  'clusters.systemDefaultContainerRegistry.dockerHubUnreachable':
+    '{provider} örnekleri Docker Hub’a erişemez. Bir ayna veya özel kayıt defteri kullanın.',
+  'clusters.k8sOptions.title': 'Kubernetes Dağıtım Seçenekleri',
+  'clusters.imageCredentials.title': 'İmaj Kimlik Bilgileri',
+  'clusters.imageCredentials.add': 'Kimlik Bilgisi Ekle',
+  'clusters.imageCredentials.registry': 'Kayıt Defteri',
+  'clusters.imageCredentials.username': 'Kullanıcı adı',
+  'clusters.imageCredentials.password': 'Şifre',
+  'clusters.nodeSelector.title': 'Düğüm Seçici',
+  'clusters.nodeSelector.tip':
+    "Her işçi düğüm DaemonSet'ine uygulanan pod nodeSelector değeri — yalnızca etiketleri eşleşen düğümler işçi düğümü çalıştırmaya uygundur.",
+  'clusters.operatorImage.title': 'Operatör İmajı',
+  'clusters.operatorImage.tip':
+    'GPUStack Operatör konteyner imajı için geçersiz kılma. Sunucu varsayılanını kullanmak için boş bırakın.',
+  'clusters.namespace.title': 'Namespace',
+  'clusters.namespace.tip':
+    'Kümenin bildirimlerinin oluşturulacağı Kubernetes ad alanı. gpustack-system kullanmak için boş bırakın.',
+  'clusters.clusterType.title': 'Küme Türü',
+  'clusters.modelService.title': 'Model Hizmeti',
+  'clusters.modelService.tip':
+    "LLM çıkarımı ve API sunumu için — örneğin model API'lerini ve token tabanlı hizmetleri yayınlamak.",
+  'clusters.gpuInstances.title': 'GPU Hizmeti',
+  'clusters.gpuInstances.tip':
+    'İstek üzerine GPU işlem gücü için — örneğin etkileşimli geliştirme, eğitim işleri veya özel ortamlar.',
+  'clusters.gpuInstances.staticAddress': 'GPU Hizmeti Statik Erişim Adresi',
+  'clusters.gpuInstances.staticAddress.tip':
+    "Operatörün bu kümedeki GPU örneklerine erişmek için kullandığı statik adres (örneğin bir LoadBalancer VIP'si). Operatör varsayılanı: boş — erişim adresi ana bilgisayar IP'lerinden üretilir. Bunu değiştirmek, halihazırda dağıtılmış GPU örneklerinin adresini yeniden atamaz; yalnızca yeni oluşturulanlara uygulanır.",
+  'clusters.gpuInstances.derivedFromNode': 'Örnek Türlerini Düğümlerden Türet',
+  'clusters.gpuInstances.derivedFromNode.tip':
+    'Operatörün örnek türlerini (ve bunları besleyen kuyrukları) düğüm donanımından otomatik türetip türetmeyeceği. Etkin: operatör her düğüm çeşidi için türetilmiş bir örnek türü oluşturur. Devre dışı: yalnızca kaynak çeşidini hizalar ve her örnek türünü siz tanımlarsınız. Operatör varsayılanı: Etkin.',
+  'clusters.gpuInstances.mixedOnNode':
+    'Bir Düğümde Karışık Örnek Türlerine İzin Ver',
+  'clusters.gpuInstances.mixedOnNode.tip':
+    "Bir düğümün hem hızlandırıcılı hem de yalnızca CPU'lu bir örnek türüne hizmet verip veremeyeceği. Etkin: düğüm, hizmet verebildiği her tür altında özetlenir. Devre dışı: hızlandırıcısı olan bir düğüm yalnızca hızlandırıcılı bir tür, yalnızca CPU'lu bir düğüm ise yalnızca genel bir tür üretir. Operatör varsayılanı: Etkin.",
+  'clusters.gpuInstances.setting.enabled': 'Etkin',
+  'clusters.gpuInstances.setting.disabled': 'Devre dışı',
+  'clusters.gpuInstances.setting.unmanaged':
+    'Yönetilmiyor (küme kendi değerini korur)',
+
+  // Topology: where this cluster's workers sit.
+  'clusters.topology.title': 'Topoloji Yapılandırması',
+  'clusters.topology.noRebalance':
+    'Konum yalnızca sonraki zamanlamayı etkiler. Çalışan dağıtımlar taşınmaz.',
+  'clusters.topology.load.failed': 'Topoloji yüklenemedi.',
+  'clusters.topology.save.failed': 'Kaydedilemedi.',
+  'clusters.topology.preview.failed': 'Bu eşleme önizlenemedi.',
+  'clusters.topology.preview.noWorkers': 'Bu kümede henüz worker yok.',
+  'clusters.topology.preview.capacity':
+    '{workers} worker · {gpus} GPU · {free} boş',
+  'clusters.topology.cluster': 'Küme',
+  'clusters.topology.discard.ok': 'Vazgeç',
+  'clusters.topology.field.region': 'Bölge',
+  'clusters.topology.field.zone': 'Kullanılabilirlik alanı',
+  'clusters.topology.field.room': 'Oda',
+  'clusters.topology.field.row': 'Sıra',
+  'clusters.topology.field.rack': 'Kabin',
+  'clusters.topology.field.switch': 'Erişim anahtarı',
+  'clusters.topology.field.acceleratorDomain': 'Hızlandırıcı etki alanı',
+  'clusters.topology.field.host': 'Sunucu',
+  'clusters.topology.field.region.tips': 'Bulut bölgesi veya veri merkezi',
+  'clusters.topology.field.zone.tips': 'Kullanılabilirlik alanı veya salon',
+  'clusters.topology.field.room.tips': 'Makine odası',
+  'clusters.topology.field.row.tips': 'Kabin sırası',
+  'clusters.topology.field.rack.tips': 'Kabin',
+  'clusters.topology.field.switch.tips':
+    'Elle doldurulur veya Topograph gibi bir araç tarafından yazılır',
+  'clusters.topology.field.acceleratorDomain.tips':
+    'Cihaz bildirmiyorsa elle doldurun',
+  'clusters.topology.overview.workers': '{count} worker',
+  'clusters.topology.overview.domains': '{count} {field}',
+  'clusters.topology.overview.unfilled': '{count} tanesinde {field} yok',
+  'clusters.topology.previewing': '● Önizleme',
+  'clusters.topology.previewing.long':
+    '● Önizleme: ana çekmece kaydedilmemiş eşlemeyi gösteriyor',
+  'clusters.topology.view.table': 'Tablo',
+  'clusters.topology.view.tree': 'Ağaç',
+  'clusters.topology.search.placeholder': 'Sunucu ara…',
+  'clusters.topology.columns': 'Sütunlar',
+  'clusters.topology.columns.fields': 'Konum alanları',
+  'clusters.topology.columns.manage': 'Katmanları yönet',
+  'clusters.topology.columns.mapping': 'Etiket anahtarı eşlemesi…',
+  'clusters.topology.columns.deleteCustom': '“{name}” alanını sil',
+  'clusters.topology.columns.deleteCustom.confirm':
+    '“{name}” alanı silinsin mi? Doldurulmuş değerler worker etiketlerinde kalır.',
+  'clusters.topology.columns.deleted': '“{name}” alanı silindi',
+  'clusters.topology.selected': '{count} seçili',
+  'clusters.topology.clearSelection': 'Seçimi temizle',
+  'clusters.topology.batch.button': 'Konum ayarla',
+  'clusters.topology.batch.title': 'Konum ayarla · {count} seçili',
+  'clusters.topology.batch.field': 'Alan',
+  'clusters.topology.batch.value': 'Değer',
+  'clusters.topology.batch.overwrite':
+    '{count} mevcut değerin üzerine yazılacak: {names}',
+  'clusters.topology.batch.overwriteAuto':
+    'Bunların {count} tanesinin {field} değeri cihaz tarafından bildirildi; geçersiz kılınacak',
+  'clusters.topology.batch.more': '{names} ve {count} tane daha',
+  'clusters.topology.batch.apply': '{count} tanesine uygula',
+  'clusters.topology.batch.partial': 'Yazma {failed} kümede başarısız oldu.',
+  'clusters.topology.toast.setOne': '{host} için {field}: {value}',
+  'clusters.topology.toast.clearedOne': '{host} için {field} temizlendi',
+  'clusters.topology.toast.set': '{count} worker için {field}: {value}',
+  'clusters.topology.toast.cleared': '{count} worker için {field} temizlendi',
+  'clusters.topology.toast.firstWrite':
+    ' (yalnızca sonraki zamanlamayı etkiler)',
+  'clusters.topology.undo': 'Geri al',
+  'clusters.topology.undo.done': 'Geri alındı',
+  'clusters.topology.undo.failed': 'Geri alınamadı: {reason}',
+  'clusters.topology.cell.fill': '{field} doldur',
+  'clusters.topology.cell.aria': '{field}, {state}, {host}',
+  'clusters.topology.state.unfilled': 'doldurulmamış',
+  'clusters.topology.state.discovered.aria':
+    '{value}, cihaz tarafından bildirildi',
+  'clusters.topology.state.override.aria':
+    '{value}, bildirilen değerin üzerine elle girildi',
+  'clusters.topology.state.discovered.tips':
+    'Cihaz tarafından bildirildi ({key}). Elle doldurmak bunu geçersiz kılar.',
+  'clusters.topology.state.override.tips':
+    'Elle girildi. Temizlemek bildirilen {value} değerini geri getirir',
+  'clusters.topology.state.user.tips': 'Elle girildi ({key})',
+  'clusters.topology.override.confirm':
+    'Bu değer cihaz tarafından bildirildi; elle doldurmak onu geçersiz kılar.',
+  'clusters.topology.override.ok': 'Geçersiz kıl',
+  'clusters.topology.value.count': '{count} worker',
+  'clusters.topology.value.create': '“{value}” oluştur',
+  'clusters.topology.value.clear': 'Temizle',
+  'clusters.topology.column.menu': '{field} sütun menüsü',
+  'clusters.topology.column.fillUnfilled':
+    'Doldurulmamış {count} taneyi doldur…',
+  'clusters.topology.column.fillBySwitch':
+    'Erişim anahtarına göre doldur ({count} grup)…',
+  'clusters.topology.source.user': 'elle',
+  'clusters.topology.source.discovered': 'otomatik',
+  'clusters.topology.source.node': 'K8s düğümü',
+  'clusters.topology.host.online': 'Çevrimiçi',
+  'clusters.topology.host.offline': 'Çevrimdışı',
+  'clusters.topology.tree.byLayer': 'Katmana göre',
+  'clusters.topology.tree.byField': '{field} alanına göre',
+  'clusters.topology.tree.expandAll': 'Tümünü genişlet',
+  'clusters.topology.tree.collapseAll': 'Tümünü daralt',
+  'clusters.topology.tree.unfilled': 'Henüz {field} yok',
+  'clusters.topology.tree.unfilled.why':
+    '{key} etiketi (veya alternatiflerinden herhangi biri) eksik',
+  'clusters.topology.tree.more': '{count} tane daha',
+  'clusters.topology.tree.hostCapacity': '{gpus} GPU · {free} boş',
+  'clusters.topology.onboarding.hosts': '{hosts} sunucu bulundu.',
+  'clusters.topology.onboarding.goal':
+    'Ayrıştırılmış bir grubun üyelerini bir arada tutmak için:',
+  'clusters.topology.onboarding.steps':
+    '① Aynı kabindeki makineleri seçin → ② “Konum ayarla” ile kabin adını girin → ③ Dağıtırken “aynı kabin” seçin',
+  'clusters.topology.onboarding.domains':
+    'Cihazın bildirdiği hızlandırıcı etki alanı (çok düğümlü NVLink, Ascend süper pod) da bir katman olabilir: “Katman ekle” ile ilgili etiket anahtarını gösterin, katman değerlerini kendiliğinden alsın.',
+  'clusters.topology.onboarding.dismiss': 'Anladım',
+  'clusters.topology.mapping.title': 'Etiket anahtarı eşlemesi',
+  'clusters.topology.mapping.intro':
+    'Her alanın değerini hangi worker etiketinden okuduğu',
+  'clusters.topology.mapping.showUnused': 'Kullanılmayan {count} alanı göster',
+  'clusters.topology.mapping.hideUnused': 'Kullanılmayan alanları gizle',
+  'clusters.topology.mapping.moreKeys': '+ {count} aday anahtar',
+  'clusters.topology.mapping.classified': 'Çözümlenen {classified} / {total}',
+  'clusters.topology.mapping.noKeys': 'Etiket anahtarı yok',
+  'clusters.topology.layer.labelKeys': 'Etiket anahtarları',
+  'clusters.topology.layer.addKey': 'Anahtar ekle',
+  'clusters.topology.layer.rename': 'Yeniden adlandır',
+  'clusters.topology.layer.rename.tips':
+    'Yalnızca görünen adı değiştirir. Katmanın kimliği, etiket anahtarları ve modellerde kayıtlı topoloji yakınlığı etkilenmez. Varsayılan ada dönmek için boş bırakın. Katman kimliği:',
+  'clusters.topology.layer.rename.taken':
+    'Bu zincirdeki başka bir katman zaten bu adı kullanıyor.',
+  'clusters.topology.layer.disable': 'Devre dışı bırak',
+  'clusters.topology.layer.disabled': ' (devre dışı)',
+  'clusters.topology.layer.enable': 'Etkinleştir',
+  'clusters.topology.layer.inUse': 'Bu katman hâlâ kullanımda',
+  'clusters.topology.layer.inUse.tips':
+    'Şu modeller topoloji yakınlığı olarak bu katmanı gösteriyor ve kısıtı kaybeder: {models}. Önce bu modelleri değiştirin.',
+  'clusters.topology.layer.name': 'Ad',
+  'clusters.topology.advanced.hostKeys': 'Yerleşik, worker adına göre',
+  'clusters.topology.advanced.locked':
+    'GPUStack’in kendi anahtarı: elle girilen değerler buraya yazılır. Silinemez veya taşınamaz.',
+  'clusters.topology.advanced.suggestions': 'Keşfedilen etiket anahtarları',
+  'clusters.topology.advanced.suggestion':
+    '{workers} worker · {values} değer · {field} gibi görünüyor',
+  'clusters.topology.advanced.discard':
+    'Alan eşlemesindeki değişiklikler atılsın mı?',
+  'clusters.topology.advanced.discard.tips':
+    'Tabloda girilen değerler etkilenmez.',
+  'clusters.topology.advanced.saved':
+    'Kaydedildi. Yalnızca sonraki zamanlamayı etkiler; çalışan gruplar taşınmaz.',
+  'clusters.topology.keys.placeholder':
+    'Bir etiket anahtarı yazın veya aşağıdan seçin',
+  'clusters.topology.keys.invalid':
+    'Geçerli bir Kubernetes etiket anahtarı değil (önek ≤ 253, ad ≤ 63, harf/rakam - _ .)',
+  'clusters.topology.keys.usage':
+    '{count} worker bu anahtarı taşıyor ({values} değer)',
+  'clusters.topology.keys.exists': 'Bu anahtar zaten eklendi',
+  'clusters.topology.custom.title': 'Katman ekle',
+  'clusters.topology.custom.name.required': 'Bir ad girin',
+  'clusters.topology.custom.name.taken': 'Bu ad alınmış veya ayrılmış',
+  'clusters.topology.custom.name.tips':
+    'Dağıtım formunda bir seçenek olarak görünür',
+  'clusters.topology.custom.position': 'Zincirde nereye',
+  'clusters.topology.custom.slot.insert': 'Buraya ekle',
+  'clusters.topology.custom.slot.placeholder': 'Yeni katman',
+  'clusters.topology.custom.slot.explain':
+    'Bir {parent} içinde birden çok {name}, bir {name} içinde birden çok {child} bulunur',
+  'clusters.topology.custom.slot.explain.top':
+    'Bir {name} içinde birden çok {child} bulunur',
+  'clusters.topology.custom.keys.tips':
+    'Özel katmanın kendi anahtarı yoktur; tablodan doldurabilmek için ilk anahtarı yazmayı planladığınız anahtar yapın.',
+  'clusters.topology.custom.referenced':
+    '“{name}” silinemez: şu modeller buna göre topluyor'
+};

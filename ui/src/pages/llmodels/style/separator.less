@@ -1,0 +1,19 @@
+.separator {
+  position: relative;
+
+  .shape {
+    position: absolute;
+    border-radius: 0 2px 0 0;
+    top: 10px;
+    left: -13px;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--ant-color-split);
+    transform: rotate(45deg);
+    border-left: none;
+    border-bottom: none;
+    background-color: var(--ant-color-bg-elevated);
+    z-index: 100;
+    clip-path: polygon(0 -1px, 24px 0, 24px 23px);
+  }
+}

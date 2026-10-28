@@ -1,0 +1,243 @@
+import { OPENAI_COMPATIBLE } from '@/config/settings';
+import {
+  AUDIO_SPEECH_TO_TEXT_API,
+  AUDIO_TEXT_TO_SPEECH_API,
+  CHAT_API,
+  CREAT_IMAGE_API,
+  EMBEDDING_API,
+  MODEL_PROXY,
+  RERANKER_API
+} from '@/pages/playground/apis';
+import {
+  AutoTooltip,
+  CopyButton,
+  IconFont,
+  ScrollerModal
+} from '@gpustack/core-ui';
+import { useIntl, useNavigate } from '@umijs/max';
+import { Button, Flex, Tag } from 'antd';
+import _ from 'lodash';
+import { useEffect, useMemo } from 'react';
+import styled from 'styled-components';
+import { modelCategoriesMap } from '../config';
+import { ListItem } from '../config/types';
+import useGenericProxy from '../hooks/use-generic-proxy';
+const API_MAP: Record<string, { api: string }> = {
+  [modelCategoriesMap.embedding]: {
+    api: EMBEDDING_API
+  },
+  [modelCategoriesMap.llm]: {
+    api: CHAT_API
+  },
+  [modelCategoriesMap.image]: {
+    api: CREAT_IMAGE_API
+  },
+  [modelCategoriesMap.text_to_speech]: {
+    api: AUDIO_TEXT_TO_SPEECH_API
+  },
+  [modelCategoriesMap.speech_to_text]: {
+    api: AUDIO_SPEECH_TO_TEXT_API
+  },
+  [modelCategoriesMap.reranker]: {
+    api: RERANKER_API
+  }
+};
+
+const ApiAccessInfoWrapper = styled.div`
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  gap: 8px 0px;
+  justify-items: start;
+  align-items: center;
+  .label {
+    font-weight: 500;
+  }
+  .value {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+    color: var(--ant-color-text-secondary);
+  }
+  .copy-btn {
+    margin-left: 8px;
+  }
+`;
+
+const Tips = styled.div`
+  color: var(--ant-color-text-secondary);
+  font-size: var(--font-size-base);
+  .tips {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  dd {
+    margin-bottom: 0;
+  }
+`;
+
+const APITAG = styled(Tag)`
+  border-radius: 12px;
+  margin: 0;
+  width: fit-content;
+  margin-left: 8px;
+`;
+
+const CreateButton = styled(Button)`
+  padding-inline: 0;
+`;
+
+interface ApiAccessInfoProps {
+  open: boolean;
+  data: ListItem;
+  onClose: () => void;
+}
+
+const ApiAccessInfo = ({ open, data, onClose }: ApiAccessInfoProps) => {
+  const intl = useIntl();
+  const navigate = useNavigate();
+  const { GenericProxyCommandCode, openProxyModal } = useGenericProxy();
+
+  const endPoint = useMemo(() => {
+    if (!data.generic_proxy) {
+      return `${window.location.origin}/${OPENAI_COMPATIBLE}`;
+    }
+    return `${window.location.origin}${MODEL_PROXY}/${data.id}/<YOUR_API_PATH>`;
+  }, [data]);
+
+  const isRanker = useMemo(() => {
+    return _.includes(data.categories, modelCategoriesMap.reranker);
+  }, [data]);
+
+  const isLLM = useMemo(() => {
+    return _.includes(data.categories, modelCategoriesMap.llm);
+  }, [data]);
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  const renderTips = () => {
+    return (
+      <Tips>
+        <dl className="tips">
+          <dd
+            dangerouslySetInnerHTML={{
+              __html: intl.formatMessage({
+                id: 'models.table.button.apiAccessInfo.tips'
+              })
+            }}
+          ></dd>
+        </dl>
+      </Tips>
+    );
+  };
+
+  useEffect(() => {
+    if (open && data.generic_proxy) {
+      openProxyModal(data);
+    }
+  }, [open, data, openProxyModal]);
+
+  return (
+    <ScrollerModal
+      open={open}
+      style={{
+        top: '20%'
+      }}
+      title={
+        <span style={{ marginBottom: 8 }}>
+          {intl.formatMessage({ id: 'models.table.button.apiAccessInfo' })}
+        </span>
+      }
+      width={660}
+      destroyOnHidden
+      closable={true}
+      mask={{
+        closable: false
+      }}
+      onOk={handleClose}
+      onCancel={handleClose}
+      footer={null}
+    >
+      {renderTips()}
+      <ApiAccessInfoWrapper>
+        <span className="label">
+          {intl.formatMessage({ id: 'models.table.apiAccessInfo.endpoint' })}
+        </span>
+        <Flex align="center" wrap>
+          <span
+            className="value"
+            style={{ display: 'flex', flex: 1, minWidth: 0 }}
+          >
+            <AutoTooltip ghost maxWidth={'100%'}>
+              {endPoint}
+            </AutoTooltip>
+          </span>
+          {!data.generic_proxy && (
+            <>
+              <APITAG color="geekblue">
+                {isRanker
+                  ? intl.formatMessage({
+                      id: 'models.table.apiAccessInfo.jinaCompatible'
+                    })
+                  : intl.formatMessage({
+                      id: 'models.table.apiAccessInfo.openaiCompatible'
+                    })}
+              </APITAG>
+              {isLLM && (
+                <APITAG color="geekblue">
+                  {intl.formatMessage({
+                    id: 'models.table.apiAccessInfo.anthropicCompatible'
+                  })}
+                </APITAG>
+              )}
+            </>
+          )}
+        </Flex>
+        <span className="copy-btn">
+          <CopyButton text={endPoint} type="link" size="small"></CopyButton>
+        </span>
+        <span className="label">
+          {intl.formatMessage({
+            id: 'models.table.apiAccessInfo.modelName'
+          })}
+        </span>
+        <Flex align="center">
+          <span className="value">
+            <AutoTooltip ghost maxWidth={300}>
+              {data.name}
+            </AutoTooltip>
+          </span>
+        </Flex>
+        <span className="copy-btn">
+          <CopyButton text={data.name} type="link" size="small"></CopyButton>
+        </span>
+        <span className="label">
+          {intl.formatMessage({ id: 'models.table.apiAccessInfo.apikey' })}
+        </span>
+        <Flex align="center">
+          <span className="value">
+            <CreateButton
+              type="link"
+              size="small"
+              onClick={() => navigate('/access-control/api-keys')}
+            >
+              {intl.formatMessage({
+                id: 'models.table.apiAccessInfo.gotoCreate'
+              })}
+              <IconFont
+                type="icon-external-link"
+                className="font-size-14"
+              ></IconFont>
+            </CreateButton>
+          </span>
+        </Flex>
+      </ApiAccessInfoWrapper>
+      {data.generic_proxy && (
+        <div style={{ marginTop: 12 }}>{GenericProxyCommandCode}</div>
+      )}
+    </ScrollerModal>
+  );
+};
+export default ApiAccessInfo;

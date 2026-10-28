@@ -1,0 +1,344 @@
+import { PageAction } from '@/config';
+import { PageActionType } from '@/config/types';
+import {
+  AlertBlockInfo,
+  ColumnWrapper,
+  GSDrawer,
+  IconFont,
+  ModalFooter,
+  SegmentLine,
+  useSubmitLock
+} from '@gpustack/core-ui';
+import { preloadYamlEditor } from '@gpustack/core-ui/yaml-editor';
+import { useIntl } from '@umijs/max';
+import { Tabs } from 'antd';
+import _ from 'lodash';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import styled from 'styled-components';
+import {
+  BackendSourceValueMap,
+  builtInBackendFields,
+  customBackendFields,
+  json2Yaml
+} from '../config';
+import { FormData, ListItem } from '../config/types';
+import BackendForm from '../forms';
+import ImportYAML from './import-yaml';
+
+const ModalFooterStyle = {
+  padding: '16px 24px 8px',
+  display: 'flex',
+  justifyContent: 'flex-end'
+};
+
+const SegmentedHeader = styled.div`
+  margin: 16px 24px;
+  border-bottom: 1px solid var(--ant-color-split);
+`;
+
+interface AddModalProps {
+  action: PageActionType;
+  currentData?: ListItem; // Used when action is EDIT
+  onClose: () => void;
+  onSubmit: (values: FormData) => void;
+  onSubmitYaml: (values: { content: string }) => void;
+  open: boolean;
+  title?: string;
+}
+
+const versionFields = [
+  'image_name',
+  'run_command',
+  'custom_framework',
+  'entrypoint',
+  'env'
+];
+
+const AddModal: React.FC<AddModalProps> = (props) => {
+  const { action, currentData, onClose, onSubmit, onSubmitYaml, open, title } =
+    props;
+  const uid = useId();
+  const formRef = useRef<any>(null);
+  const editorRef = useRef<any>(null);
+  const intl = useIntl();
+  const [activeKey, setActiveKey] = useState<string>('form');
+  const [yamlContent, setYamlContent] = useState<string>('');
+  const [formContent, setFormContent] = useState<FormData>({} as FormData);
+  const alertRef = useRef<HTMLDivElement>(null);
+  const { loading, guard, run, release } = useSubmitLock();
+
+  const showVersionCustomSuffix =
+    currentData?.backend_source === BackendSourceValueMap.BUILTIN ||
+    currentData?.backend_source === BackendSourceValueMap.COMMUNITY;
+
+  const backendSource = useMemo(
+    () => currentData?.backend_source || BackendSourceValueMap.CUSTOM,
+    [currentData]
+  );
+
+  // remove '-custom' suffix from version_no in currentData, when action is EDIT
+  const genertateCurrentVersionData = (values: ListItem): ListItem => {
+    const data = { ...values };
+
+    if (showVersionCustomSuffix) {
+      data.version_configs = Object.entries(data.version_configs || {}).reduce(
+        (acc, [key, value]) => {
+          const version = key.replace(/-custom$/, '');
+          acc[version] = { ...value, backend_source: data.backend_source };
+          return acc;
+        },
+        {} as any
+      );
+    }
+
+    return data;
+  };
+
+  const onOk = () => {
+    guard(() => {
+      if (activeKey === 'yaml') {
+        const content = editorRef.current?.getContent();
+        if (!content) {
+          // nothing to submit — drop the lock so the button stays usable
+          release();
+          return;
+        }
+        run(() => onSubmitYaml({ content: content }));
+        return;
+      }
+      formRef.current?.submit();
+    });
+  };
+
+  const onFinish = async (values: FormData) => {
+    const versionConfigs = values.version_configs?.reduce(
+      (acc: Record<string, any>, curr) => {
+        if (curr.version_no) {
+          acc[curr.version_no] = {
+            ..._.pick(curr, versionFields)
+          };
+        }
+        return acc;
+      },
+      {}
+    );
+
+    const defaultVersion = values.version_configs?.find((v) => v.is_default);
+
+    await run(() =>
+      onSubmit({
+        ...values,
+        parameter_format: values.parameter_format || null,
+        default_version: defaultVersion?.version_no || '',
+        // @ts-ignore
+        version_configs: versionConfigs
+      })
+    );
+  };
+
+  useEffect(() => {
+    const iniFormContent = (data: ListItem) => {
+      const values: any = genertateCurrentVersionData(data);
+
+      // custom versions
+      const versionConfigs = Object.keys(values.version_configs || {}).map(
+        (key: string) => ({
+          version_no: key,
+          is_default: key === values.default_version,
+          ..._.pick(values.version_configs?.[key], versionFields)
+        })
+      );
+
+      // built-in versions
+      const builtInVersions = Object.keys(
+        values.built_in_version_configs || {}
+      ).map((key) => ({
+        version_no: key,
+        is_default: key === values.default_version,
+        built_in_frameworks:
+          values.built_in_version_configs?.[key]?.built_in_frameworks || [],
+        is_built_in:
+          data.is_built_in &&
+          data.backend_source === BackendSourceValueMap.BUILTIN,
+        ..._.pick(values.built_in_version_configs?.[key], versionFields)
+      }));
+
+      return {
+        ...values,
+        backend_name: values.backend_name.replace(/-custom$/, ''),
+        parameter_format: values.parameter_format,
+        version_configs: versionConfigs,
+        built_in_version_configs: builtInVersions
+      };
+    };
+
+    // built-in backend does not allow to edit default_version
+    const initYamlContent = (values: any) => {
+      const copyValues = structuredClone(values);
+      copyValues.version_configs = _.mapValues(
+        copyValues.version_configs || {},
+        (v: any) => {
+          return _.omit(v, ['built_in_frameworks']);
+        }
+      );
+
+      if (currentData?.is_built_in) {
+        return json2Yaml(_.pick(copyValues, builtInBackendFields));
+      }
+      return json2Yaml(
+        _.pick(copyValues, [...customBackendFields, 'default_version'])
+      );
+    };
+
+    if (action === PageAction.EDIT && open) {
+      const yaml = initYamlContent(currentData || {});
+      const formData = iniFormContent(currentData || ({} as ListItem));
+      setYamlContent(yaml);
+      setFormContent(formData);
+      formRef.current?.setFieldsValue?.(formData);
+      editorRef.current?.setContent?.(yaml);
+    }
+
+    if (!open) {
+      formRef.current?.resetFields?.();
+      editorRef.current?.setContent?.('');
+      setFormContent({} as FormData);
+      setYamlContent('');
+      setActiveKey('form');
+    }
+  }, [action, currentData, open]);
+
+  // The modal opens on the form tab, so monaco is not needed yet — but the
+  // YAML tab is one click away, and that click would otherwise wait out the
+  // whole download. Fetching from here spends the wait on reading the form.
+  useEffect(() => {
+    if (open) {
+      preloadYamlEditor();
+    }
+  }, [open]);
+
+  const yamlHeight = useMemo(() => {
+    if (action !== PageAction.CREATE) {
+      return undefined;
+    }
+    const baseHeight = 260;
+    const alertHeight = alertRef.current?.offsetHeight || 0;
+    return `calc(100vh - ${baseHeight + alertHeight}px)`;
+  }, [action, activeKey]);
+
+  return (
+    <GSDrawer
+      title={title}
+      open={open}
+      key={uid}
+      onClose={onClose}
+      destroyOnHidden={true}
+      closeIcon={false}
+      mask={{
+        closable: false
+      }}
+      keyboard={false}
+      styles={{
+        body: {
+          padding: '0 0 16px',
+          overflowX: 'hidden'
+        },
+        section: {
+          borderRadius: '6px 0 0 6px'
+        },
+        wrapper: {
+          width: 600
+        }
+      }}
+      footer={false}
+    >
+      <SegmentedHeader>
+        <SegmentLine
+          theme="light"
+          onChange={(value) => setActiveKey(value as string)}
+          options={[
+            {
+              label: intl.formatMessage({ id: 'backend.mode.form' }),
+              value: 'form',
+              icon: <IconFont type="icon-edit-content" />
+            },
+            {
+              label: intl.formatMessage({ id: 'backend.mode.yaml' }),
+              value: 'yaml',
+              icon: <IconFont type="icon-code_block" />
+            }
+          ]}
+          size="middle"
+          style={{ width: '100%' }}
+        />
+      </SegmentedHeader>
+      <ColumnWrapper
+        maxHeight={'calc(100vh - 140px)'}
+        styles={{
+          container: {
+            paddingBlock: 0
+          }
+        }}
+        footer={
+          <>
+            {action === PageAction.CREATE && open && (
+              <div style={{ marginInline: 24, paddingTop: 8 }} ref={alertRef}>
+                <AlertBlockInfo
+                  type="warning"
+                  contentStyle={{ paddingInline: 0 }}
+                  message={intl.formatMessage({
+                    id: 'backend.form.add.hint'
+                  })}
+                ></AlertBlockInfo>
+              </div>
+            )}
+            <ModalFooter
+              onCancel={onClose}
+              onOk={onOk}
+              loading={loading}
+              style={ModalFooterStyle}
+            ></ModalFooter>
+          </>
+        }
+      >
+        <Tabs
+          renderTabBar={(agrs, tab) => <></>}
+          activeKey={activeKey}
+          defaultActiveKey={activeKey}
+          items={[
+            {
+              key: 'form',
+              label: intl.formatMessage({ id: 'backend.mode.form' }),
+              children: (
+                <BackendForm
+                  onFinish={onFinish}
+                  onFinishFailed={release}
+                  action={action}
+                  currentData={formContent as ListItem}
+                  ref={formRef}
+                />
+              )
+            },
+            {
+              key: 'yaml',
+              label: intl.formatMessage({ id: 'backend.mode.yaml' }),
+              children: (
+                <ImportYAML
+                  height={yamlHeight}
+                  actionStatus={{
+                    action: action,
+                    backendSource: backendSource
+                  }}
+                  ref={editorRef}
+                  content={yamlContent}
+                />
+              )
+            }
+          ]}
+        ></Tabs>
+      </ColumnWrapper>
+    </GSDrawer>
+  );
+};
+
+export default AddModal;

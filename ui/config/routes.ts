@@ -1,0 +1,447 @@
+import { keepAliveRoutes } from './keep-alive';
+import { applyRouteExtensions } from './routes.extensions';
+
+const baseRoutes = [
+  {
+    name: 'dashboard',
+    path: '/dashboard',
+    key: 'dashboard',
+    icon: 'icon-dashboard',
+    selectedIcon: 'icon-dashboard-filled',
+    defaultIcon: 'icon-dashboard',
+    // `canSeeOrgAdmin` widens to anyone the access seam grants
+    // admin-ish visibility — by default platform admin, plus
+    // whatever the routes extension chooses to allow.
+    access: 'canSeeOrgAdmin',
+    component: './dashboard',
+    routes: []
+  },
+  {
+    name: 'playground',
+    icon: 'icon-experiment',
+    selectedIcon: 'icon-experiment-filled',
+    defaultIcon: 'icon-experiment',
+    path: '/playground',
+    key: 'playground',
+    routes: [
+      {
+        path: '/playground',
+        redirect: '/playground/chat'
+      },
+      {
+        name: 'chat',
+        title: 'Chat',
+        path: '/playground/chat',
+        key: 'chat',
+        icon: 'icon-chat',
+        selectedIcon: 'icon-chat-filled',
+        defaultIcon: 'icon-chat',
+        component: './playground/chat/index'
+      },
+      {
+        name: 'embedding',
+        title: 'embedding',
+        path: '/playground/embedding',
+        key: 'embedding',
+        icon: 'icon-embedding',
+        selectedIcon: 'icon-embedding-filled',
+        defaultIcon: 'icon-embedding',
+        component: './playground/embedding/index'
+      },
+      {
+        name: 'rerank',
+        title: 'Rerank',
+        path: '/playground/rerank',
+        key: 'rerank',
+        icon: 'icon-reranker',
+        selectedIcon: 'icon-reranker-filled',
+        defaultIcon: 'icon-reranker',
+        component: './playground/rerank/index'
+      },
+      {
+        name: 'text2images',
+        title: 'Text2Images',
+        path: keepAliveRoutes.text2images,
+        key: 'text2images',
+        icon: 'icon-image1',
+        selectedIcon: 'icon-image-filled',
+        defaultIcon: 'icon-image1',
+        component: './playground/images/index'
+      },
+      {
+        name: 'speech',
+        title: 'Speech',
+        path: keepAliveRoutes.speech,
+        key: 'speech',
+        icon: 'icon-audio1',
+        selectedIcon: 'icon-audio-filled',
+        defaultIcon: 'icon-audio1',
+        component: './playground/speech/index'
+      }
+      // {
+      //   name: 'video',
+      //   title: 'Video',
+      //   path: '/playground/video',
+      //   key: 'video',
+      //   icon: 'icon-video-outline',
+      //   hideInMenu: false,
+      //   selectedIcon: 'icon-video-filled02',
+      //   defaultIcon: 'icon-video-outline',
+      //   component: './playground/video'
+      // }
+    ]
+  },
+  {
+    name: 'models',
+    path: '/models',
+    key: 'models',
+    routes: [
+      {
+        path: '/models',
+        redirect: '/models/deployments'
+      },
+      {
+        name: 'userModels',
+        path: '/models/user-models',
+        key: 'userModels',
+        icon: 'icon-models',
+        selectedIcon: 'icon-models-filled',
+        defaultIcon: 'icon-models',
+        component: './llmodels/user-models'
+      },
+      {
+        name: 'modelCatalog',
+        path: '/models/catalog',
+        key: 'modelsCatalog',
+        icon: 'icon-layers',
+        selectedIcon: 'icon-layers-filled',
+        defaultIcon: 'icon-layers',
+        access: 'canSeeOrgAdmin',
+        component: './llmodels/catalog'
+      },
+      {
+        name: 'deployment',
+        path: '/models/deployments',
+        key: 'modelDeployments',
+        icon: 'icon-rocket-launch1',
+        selectedIcon: 'icon-rocket-launch-fill',
+        defaultIcon: 'icon-rocket-launch1',
+        access: 'canSeeOrgAdmin',
+        component: './llmodels/index'
+      },
+      {
+        name: 'routes',
+        path: '/models/routes',
+        key: 'routes',
+        icon: 'icon-captive_portal',
+        selectedIcon: 'icon-captive_portal',
+        defaultIcon: 'icon-captive_portal',
+        access: 'canSeeOrgAdmin',
+        component: './model-routes/index'
+      },
+      {
+        name: 'benchmark',
+        path: '/models/benchmark',
+        key: 'benchmark',
+        icon: 'icon-speed',
+        selectedIcon: 'icon-speed-filled',
+        defaultIcon: 'icon-speed',
+        access: 'canSeeOrgAdmin',
+        component: './benchmark/index'
+      },
+      {
+        name: 'benchmarkDetail',
+        path: '/models/benchmark/detail',
+        key: 'benchmarkDetail',
+        icon: 'icon-speed',
+        selectedIcon: 'icon-speed-filled',
+        defaultIcon: 'icon-speed',
+        access: 'canSeeOrgAdmin',
+        hideInMenu: true,
+        component: './benchmark/details'
+      },
+      {
+        name: 'backendsList',
+        path: '/models/backends',
+        key: 'backendsList',
+        icon: 'icon-backend',
+        selectedIcon: 'icon-backend-filled',
+        defaultIcon: 'icon-backend',
+        access: 'canSeeOrgAdmin',
+        component: './backends/index'
+      },
+      {
+        name: 'kvCache',
+        path: '/models/kv-cache',
+        key: 'kvCache',
+        icon: 'icon-kvcache-outlined',
+        selectedIcon: 'icon-kvcache-filled',
+        defaultIcon: 'icon-kvcache-outlined',
+        access: 'canSeeOrgAdmin',
+        component: './kv-cache/index'
+      },
+      {
+        name: 'kvCacheDetail',
+        path: '/models/kv-cache/detail',
+        key: 'kvCacheDetail',
+        icon: 'icon-storage-outlined',
+        selectedIcon: 'icon-storage-filled',
+        defaultIcon: 'icon-storage-outlined',
+        access: 'canSeeOrgAdmin',
+        hideInMenu: true,
+        component: './kv-cache/detail'
+      },
+      {
+        name: 'modelfiles',
+        path: '/models/modelfiles',
+        key: 'modelfiles',
+        icon: 'icon-files',
+        selectedIcon: 'icon-files-filled',
+        defaultIcon: 'icon-files',
+        access: 'canSeeOrgAdmin',
+        component: './resources/components/model-files'
+      }
+    ]
+  },
+  {
+    name: 'gpuService',
+    path: '/gpu-service',
+    key: 'gpuService',
+    access: 'canSeeGpuService',
+    routes: [
+      {
+        path: '/gpu-service',
+        redirect: '/gpu-service/instances'
+      },
+      {
+        name: 'instances',
+        path: '/gpu-service/instances',
+        key: 'gpuServiceList',
+        icon: 'icon-cloud-outlined',
+        selectedIcon: 'icon-cloud-filled',
+        defaultIcon: 'icon-cloud-outlined',
+        component: './gpu-service/instances'
+      },
+      {
+        name: 'instanceTypes',
+        path: '/gpu-service/instance-types',
+        key: 'gpuServiceInstanceTypes',
+        icon: 'icon-instance-type-outlined',
+        access: 'canSeeOrgAdmin',
+        selectedIcon: 'icon-instance-type-filled',
+        defaultIcon: 'icon-instance-type-outlined',
+        component: './gpu-service/instance-types'
+      },
+      {
+        name: 'templates',
+        path: '/gpu-service/templates',
+        key: 'gpuServiceTemplates',
+        icon: 'icon-instance-template-outlined',
+        selectedIcon: 'icon-instance-template-filled',
+        defaultIcon: 'icon-instance-template-outlined',
+        component: './gpu-service/templates'
+      },
+      {
+        name: 'storage',
+        path: '/gpu-service/storage',
+        key: 'gpuServiceStorage',
+        icon: 'icon-database-outlined',
+        selectedIcon: 'icon-database-filled',
+        defaultIcon: 'icon-database-outlined',
+        component: './gpu-service/storage'
+      },
+      {
+        name: 'storageTypes',
+        path: '/gpu-service/storage-types',
+        key: 'gpuServiceStorageTypes',
+        icon: 'icon-storage-outlined',
+        // Storage types are tenant-scoped on the backend (Org owners
+        // can create/list their own), so the menu shouldn't be
+        // platform-admin-only. ``canSeeOrgAdmin`` keeps the gate at
+        // "admin or current-org owner" — Org members still don't see
+        // it, which matches the read/write model in the route.
+        access: 'canSeeOrgAdmin',
+        selectedIcon: 'icon-storage-filled',
+        defaultIcon: 'icon-storage-outlined',
+        component: './gpu-service/storage-types'
+      },
+      {
+        name: 'publicKeys',
+        path: '/gpu-service/public-keys',
+        key: 'gpuServicePublicKeys',
+        icon: 'icon-ssh-outlined',
+        selectedIcon: 'icon-ssh-filled',
+        defaultIcon: 'icon-ssh-outlined',
+        component: './gpu-service/public-keys'
+      }
+    ]
+  },
+  {
+    name: 'resources',
+    path: '/resources',
+    key: 'resources',
+    access: 'canSeeOrgAdmin',
+    routes: [
+      {
+        path: '/resources',
+        redirect: '/resources/workers'
+      },
+      {
+        name: 'clusters',
+        path: '/resources/clusters/list',
+        key: 'clusters',
+        icon: 'icon-cluster2-outline',
+        selectedIcon: 'icon-cluster2-filled',
+        defaultIcon: 'icon-cluster2-outline',
+        component: './cluster-management/clusters',
+        subMenu: ['/resources/clusters/create']
+      },
+      {
+        name: 'workers',
+        path: '/resources/workers',
+        key: 'workers',
+        icon: 'icon-resources',
+        selectedIcon: 'icon-resources-filled',
+        defaultIcon: 'icon-resources',
+        component: './resources/components/workers'
+      },
+      {
+        name: 'gpus',
+        path: '/resources/gpus',
+        key: 'gpus',
+        icon: 'icon-gpu1',
+        selectedIcon: 'icon-gpu-filled',
+        defaultIcon: 'icon-gpu1',
+        component: './resources/components/gpus'
+      },
+      {
+        name: 'credentials',
+        path: '/resources/credentials',
+        key: 'credentials',
+        icon: 'icon-credential-outline',
+        selectedIcon: 'icon-credential-filled',
+        defaultIcon: 'icon-credential-outline',
+        component: './cluster-management/credentials'
+      }
+    ]
+  },
+  {
+    // Cross-resource consumption (tokens + GPU/CPU instances + storage).
+    // A folder so it matches the other top-level groups; more usage views can
+    // graduate in here later.
+    name: 'billingAndUsage',
+    path: '/usage',
+    key: 'usageGroup',
+    icon: 'icon-usage-outlined',
+    selectedIcon: 'icon-usage-filled',
+    defaultIcon: 'icon-usage-outlined',
+    routes: [
+      {
+        path: '/usage',
+        redirect: '/usage/overview'
+      },
+      {
+        name: 'usage',
+        path: '/usage/overview',
+        key: 'usage',
+        icon: 'icon-usage-outlined',
+        selectedIcon: 'icon-usage-filled',
+        defaultIcon: 'icon-usage-outlined',
+        component: './usage/index'
+      },
+      {
+        name: 'billing',
+        path: '/usage/billing',
+        key: 'billing',
+        icon: 'icon-billing-outlined',
+        selectedIcon: 'icon-billing-filled',
+        defaultIcon: 'icon-billing-outlined',
+        hideInMenu: process.env.ENABLE_ENTERPRISE === 'true',
+        // OSS exposes the menu as a teaser for the enterprise billing
+        // module. The page itself just renders an upsell notice — the real
+        // billing UI lives in the enterprise plugin and shadows this route
+        // via `routes.extensions.ts`.
+        component: './billing'
+      }
+    ]
+  },
+  {
+    name: 'accessControl',
+    path: '/access-control',
+    key: 'accessControl',
+    routes: [
+      {
+        path: '/access-control',
+        redirect: '/access-control/users'
+      },
+      {
+        name: 'organizations',
+        path: '/access-control/organizations',
+        key: 'organizations',
+        icon: 'icon-org-outlined',
+        selectedIcon: 'icon-org-filled',
+        defaultIcon: 'icon-org-outlined',
+        // OSS exposes the menu to platform admins as a teaser for the
+        // enterprise multi-tenancy module. The page itself just renders
+        // an upsell notice — the real CRUD UI lives in the enterprise
+        // plugin and shadows this route via `routes.extensions.ts`.
+        access: 'canSeeAdmin',
+        component: './organizations'
+      },
+      {
+        name: 'users',
+        path: '/access-control/users',
+        key: 'users',
+        icon: 'icon-users',
+        selectedIcon: 'icon-users-filled',
+        defaultIcon: 'icon-users',
+        access: 'canSeeAdmin',
+        component: './users'
+      },
+      {
+        name: 'apikeys',
+        path: '/access-control/api-keys',
+        key: 'apikeys',
+        selectedIcon: 'icon-key-filled',
+        icon: 'icon-key',
+        defaultIcon: 'icon-key',
+        component: './api-keys'
+      }
+    ]
+  },
+  {
+    name: 'apikeys',
+    path: '/api-keys',
+    key: 'apikeys',
+    hideInMenu: true,
+    selectedIcon: 'icon-key-filled',
+    icon: 'icon-key',
+    defaultIcon: 'icon-key',
+    component: './api-keys'
+  },
+  {
+    name: 'profile',
+    path: '/preferences',
+    key: 'preferences',
+    hideInMenu: true,
+    component: './profile',
+    icon: 'User'
+  },
+  {
+    name: 'login',
+    path: '/login',
+    key: 'login',
+    layout: false,
+    hideInMenu: true,
+    component: './login'
+  },
+  {
+    name: '404',
+    path: '*',
+    key: '404',
+    hideInMenu: true,
+    component: './404'
+  }
+];
+
+export default applyRouteExtensions(baseRoutes);

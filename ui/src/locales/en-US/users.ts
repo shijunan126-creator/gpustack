@@ -1,0 +1,50 @@
+export default {
+  'users.title': 'Users',
+  'users.button.create': 'Add User',
+  'users.form.edit': 'Edit User',
+  'users.form.create': 'Add User',
+  'users.table.username': 'User Name',
+  'users.table.role': 'Role',
+  'users.table.status': 'Status',
+  'users.status.active': 'Active',
+  'users.status.inactive': 'Inactive',
+  'users.form.active': 'Active Account',
+  'users.form.active.description': 'Enable or disable this user account',
+  'users.form.fullname': 'Full Name',
+  'users.form.source': 'Source',
+  'users.form.source.local': 'Local',
+  'users.form.source.tip.switchToLocal':
+    'Switching to Local requires a new password. The user will sign in via the standard login form.',
+  'users.form.source.tip.switchToExternal':
+    "Switching to an external source clears the user's local password. They will sign in via the configured identity provider.",
+  'users.table.user': 'users',
+  'users.form.admin': 'Admin',
+  'users.form.user': 'User',
+  'users.form.newpassword': 'New Password',
+  'users.form.currentpassword': 'Current Password',
+  'users.form.updatepassword': 'Modify Password',
+  'users.form.rule.password':
+    'Contains uppercase and lowercase letters, numbers, and special characters(!@#$%^&*_+.), 6 to 64 characters in length, no spaces allowed.',
+  'users.password.uppcase': 'At least one uppercase letter',
+  'users.password.lowercase': 'At least one lowercase letter',
+  'users.password.number': 'At least one number',
+  'users.password.special': 'At least one special character',
+  'users.password.length': 'Length between 6 and 64 characters',
+  'users.password.modify.title': 'Modify Password',
+  'users.password.modify.description':
+    "For your account's security, please change your initial password.",
+  'users.password.modify.tips':
+    'Regularly updating your password helps keep your account secure.',
+  'users.password.confirm': 'Confirm New Password',
+  'users.password.confirm.empty': 'Please confirm the new password.',
+  'users.password.confirm.error': 'The two passwords entered do not match.',
+  'users.login.title': 'Log in to',
+  'users.version.islatest': 'GPUStack {version} is the latest version',
+  'users.version.update': 'GPUStack {version} is available',
+  'users.settings.title': 'User Settings',
+  'users.status.activate': 'Activate Account',
+  'users.status.deactivate': 'Deactivate Account',
+  'users.status.inactiveAccount': 'Inactive Account',
+  'users.login.getInitialPassword':
+    'Run the following command on your GPUStack Server to retrieve the initial admin password.'
+};

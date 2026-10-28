@@ -1,0 +1,540 @@
+import { clusterSessionAtom, expandKeysAtom } from '@/atoms/clusters';
+import { PageAction } from '@/config';
+import { PaginationKey, TABLE_SORT_DIRECTIONS } from '@/config/settings';
+import type { PageActionType } from '@/config/types';
+import useTableFetch from '@/hooks/use-table-fetch';
+import { getGPUStackPlugin } from '@/plugins';
+import {
+  DeleteModal,
+  FilterBar,
+  IconFont,
+  NoResult,
+  Table as SealTable,
+  TableOrder,
+  TableProvider,
+  useExpandedRowKeys,
+  useWatchList
+} from '@gpustack/core-ui';
+import { useIntl, useSearchParams } from '@umijs/max';
+import { useMemoizedFn } from 'ahooks';
+import { message } from 'antd';
+import { useAtom } from 'jotai';
+import _ from 'lodash';
+import { useEffect, useState } from 'react';
+import PageBox from '../_components/page-box';
+import useGranfanaLink from '../resources/hooks/use-grafana-link';
+import {
+  CLUSTERS_API,
+  createWorkerPool,
+  deleteCluster,
+  queryClusterItem,
+  queryClusterList,
+  queryCredentialList,
+  queryWorkerPools,
+  setDefaultCluster,
+  updateCluster,
+  WORKER_POOLS_API
+} from './apis';
+import ClusterModal from './cluster-modal';
+import AddCluster from './components/add-cluster';
+import AddPool from './components/add-pool';
+import {
+  DockerStepsFromCluster,
+  K8sStepsFromCluter
+} from './components/add-worker/config';
+import PoolRows from './components/pool-rows';
+import RightActions from './components/right-actions';
+import TopologyDrawer from './components/topology';
+import { isCloudProvider, ProviderType, ProviderValueMap } from './config';
+import {
+  ClusterListItem,
+  CredentialListItem,
+  ClusterFormData as FormData,
+  ClusterListItem as ListItem,
+  NodePoolFormData
+} from './config/types';
+import useAddWorker from './hooks/use-add-worker';
+import useClusterColumns from './hooks/use-cluster-columns';
+import useCreateCluster from './hooks/use-create-cluster';
+
+const Clusters: React.FC = () => {
+  const {
+    dataSource,
+    rowSelection,
+    queryParams,
+    modalRef,
+    handleTableChange,
+    handleDelete,
+    handleDeleteBatch,
+    fetchData,
+    handlePageChange,
+    handleSearch,
+    handleNameChange
+  } = useTableFetch<ListItem>({
+    key: PaginationKey.Clusters,
+    fetchAPI: queryClusterList,
+    deleteAPI: deleteCluster,
+    watch: true,
+    API: CLUSTERS_API,
+    contentForDelete: 'menu.resources.clusters',
+    defaultQueryParams: {
+      // Management view: drop cross-Org cluster_access grants. Org
+      // Owner only sees the clusters they own here. Pickers that
+      // need "everything I can use" (GPU-instance create, etc.)
+      // query without ``mine`` and still see granted clusters.
+      mine: true
+    }
+  });
+  const { goToGrafana, ActionButton } = useGranfanaLink({
+    type: 'cluster'
+  });
+  // Cluster Access lives in the enterprise plugin: it contributes the
+  // row action and this self-controlled drawer, owning its own
+  // open/close state. OSS just mounts it (nothing without a plugin).
+  const AccessDrawer = getGPUStackPlugin()?.clusterDetail?.AccessDrawer;
+  // Node pools only exist under cloud providers — they are what makes a row
+  // expandable (see `setDisableExpand`). On a page of Docker / K8s clusters
+  // the stream would be held open for rows that can never use it, so gate it
+  // on the rows actually on screen.
+  const hasNodePoolCluster = dataSource.dataList?.some((item) =>
+    isCloudProvider(item.provider)
+  );
+  const { watchDataList: allWorkerPoolList } = useWatchList(WORKER_POOLS_API, {
+    enabled: hasNodePoolCluster
+  });
+  const [expandAtom] = useAtom(expandKeysAtom);
+  const [clusterSession, setClusterSession] = useAtom(clusterSessionAtom);
+  const { handleExpandChange, handleExpandAll, expandedRowKeys } =
+    useExpandedRowKeys(expandAtom);
+  const intl = useIntl();
+  const { handleAddWorker, checkDefaultCluster, AddWorkerModal, setStepList } =
+    useAddWorker({});
+  const { clusterModalStatus, openClusterModal, closeClusterModal } =
+    useCreateCluster({
+      refresh: handleSearch
+    });
+  const [openAddModal, setOpenAddModal] = useState<{
+    open: boolean;
+    action: PageActionType;
+    currentData?: ListItem;
+    title: string;
+    provider: ProviderType;
+  }>({
+    open: false,
+    action: PageAction.CREATE,
+    currentData: undefined,
+    title: '',
+    provider: null
+  });
+
+  const [credentialList, setCredentialList] = useState<
+    Global.BaseOption<number>[]
+  >([]);
+
+  const [addPoolStatus, setAddPoolStatus] = useState<{
+    open: boolean;
+    action: PageActionType;
+    title: string;
+    provider: ProviderType;
+    clusterId: number;
+    clusterData: ClusterListItem | null;
+  }>({
+    open: false,
+    action: PageAction.CREATE,
+    title: '',
+    provider: ProviderValueMap.DigitalOcean as ProviderType,
+    clusterId: 0,
+    clusterData: null
+  });
+
+  const handleAddPool = (row: ListItem) => {
+    setAddPoolStatus({
+      open: true,
+      action: PageAction.CREATE,
+      title: intl.formatMessage({ id: 'clusters.button.addNodePool' }),
+      provider: row.provider as ProviderType,
+      clusterId: row.id,
+      clusterData: row
+    });
+  };
+
+  const handleClickDropdown = () => {
+    openClusterModal();
+  };
+
+  const handleModalOk = async (data: FormData) => {
+    const params = {
+      ...data
+    };
+    // Deliberately not caught here: the drawer needs the rejection to put a
+    // field-level error (e.g. a rejected Chart Values path) under the field
+    // that caused it. The global handler still toasts the message.
+    if (openAddModal.action === PageAction.EDIT) {
+      await updateCluster({
+        data: params,
+        id: openAddModal.currentData!.id
+      });
+    }
+    fetchData();
+    setOpenAddModal({
+      open: false,
+      action: PageAction.CREATE,
+      currentData: undefined,
+      title: '',
+      provider: null
+    });
+    message.success(intl.formatMessage({ id: 'common.message.success' }));
+  };
+
+  const handleModalCancel = () => {
+    console.log('handleModalCancel');
+    setOpenAddModal({
+      open: false,
+      action: PageAction.CREATE,
+      currentData: undefined,
+      title: '',
+      provider: null
+    });
+  };
+
+  // Credentials are a cloud provider's field only (ClusterForm renders
+  // `CloudProvider` for no other provider), and this modal is the edit
+  // flow — creation runs through ClusterModal, which fetches its own.
+  // So load them when a cloud row opens the drawer, not on mount.
+  const fetchCredentialList = async () => {
+    const data = await queryCredentialList({ page: -1 });
+    setCredentialList(
+      data?.items?.map((item: CredentialListItem) => ({
+        label: item.name,
+        value: item.id
+      })) || []
+    );
+  };
+
+  const handleEditCluster = (row: ListItem) => {
+    setOpenAddModal({
+      open: true,
+      action: PageAction.EDIT,
+      currentData: row,
+      title: intl.formatMessage(
+        { id: 'clusters.edit.cluster' },
+        { cluster: row.name }
+      ),
+      provider: row.provider
+    });
+    if (isCloudProvider(row.provider)) {
+      fetchCredentialList();
+    }
+  };
+
+  const [topologyCluster, setTopologyCluster] = useState<{
+    id: number;
+    name?: string;
+  } | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // `?topology=<id>` is the deployment form's "go fill it in" link (§8.8): a
+  // new tab landing here should open straight into that cluster's drawer. The
+  // param is stripped once read so a reload does not reopen it.
+  useEffect(() => {
+    const param = searchParams.get('topology');
+    if (!param) {
+      return;
+    }
+    const id = Number(param);
+    searchParams.delete('topology');
+    setSearchParams(searchParams, { replace: true });
+    if (!id) {
+      return;
+    }
+    queryClusterItem({ id })
+      .then((item) => setTopologyCluster({ id, name: item?.name }))
+      .catch(() => setTopologyCluster({ id }));
+  }, []);
+
+  const handleSelect = useMemoizedFn((val: any, row: ListItem, item?: any) => {
+    if (item?.onClick) {
+      item.onClick(row);
+      return;
+    }
+    if (val === 'edit') {
+      handleEditCluster(row);
+    } else if (val === 'delete') {
+      handleDelete({ ...row, name: row.name });
+    } else if (val === 'add_worker') {
+      handleAddWorker(row);
+      setStepList(DockerStepsFromCluster);
+    } else if (val === 'addPool') {
+      handleAddPool(row);
+    } else if (val === 'register_cluster') {
+      handleAddWorker(row);
+      setStepList(K8sStepsFromCluter);
+    } else if (val === 'isDefault') {
+      setDefaultCluster({ id: row.id }).then(() => {
+        message.success(intl.formatMessage({ id: 'common.message.success' }));
+      });
+    } else if (val === 'metrics') {
+      goToGrafana(row);
+    } else if (val === 'configureTopology') {
+      setTopologyCluster({ id: row.id, name: row.name });
+    }
+  });
+
+  const handleOnToggleExpandAll = () => {
+    // do nothing
+  };
+
+  const handleToggleExpandAll = useMemoizedFn((expanded: boolean) => {
+    const keys = dataSource.dataList?.map((item) => item.id);
+    handleExpandAll(expanded, keys);
+    if (expanded) {
+      handleOnToggleExpandAll();
+    }
+  });
+
+  const handleSubmitWorkerPool = async (formdata: NodePoolFormData) => {
+    try {
+      await createWorkerPool({
+        data: formdata,
+        clusterId: addPoolStatus.clusterId
+      });
+      setAddPoolStatus({
+        ...addPoolStatus,
+        open: false
+      });
+      message.success(intl.formatMessage({ id: 'common.message.success' }));
+    } catch (error) {
+      // error
+    }
+  };
+
+  const getWorkerPoolList = useMemoizedFn(
+    async (row: ClusterListItem, options?: any) => {
+      const params = {
+        cluster_id: row.id,
+        page: -1
+      };
+      const data = await queryWorkerPools(params, {
+        token: options?.token
+      });
+      return data?.items || [];
+    }
+  );
+
+  const handleOnSortChange = (order: TableOrder | Array<TableOrder>) => {
+    handleTableChange({}, {}, order, { action: 'sort' });
+  };
+
+  const setDisableExpand = (row: ClusterListItem) => {
+    return (
+      !isCloudProvider(row.provider) ||
+      !allWorkerPoolList.some((item) => item.cluster_id === row.id)
+    );
+  };
+
+  useEffect(() => {
+    if (
+      clusterSession?.firstAddWorker &&
+      dataSource.loadend &&
+      dataSource.dataList?.length > 0
+    ) {
+      const list = dataSource.dataList?.map((item) => ({
+        label: item.name,
+        value: item.id,
+        ...item
+      }));
+      const targetCluster = checkDefaultCluster(list);
+
+      if (targetCluster) {
+        const actionMap = {
+          [ProviderValueMap.Docker]: 'add_worker',
+          [ProviderValueMap.Kubernetes]: 'register_cluster',
+          [ProviderValueMap.DigitalOcean]: 'addPool',
+          [ProviderValueMap.Shuihua]: 'addPool'
+        };
+        handleSelect(
+          actionMap[targetCluster.provider as string],
+          targetCluster as ListItem
+        );
+        // reset session
+        setClusterSession(null);
+      }
+    }
+  }, [clusterSession, dataSource.loadend, dataSource.dataList]);
+
+  // Provider hint follows the auto-open from one render to the next:
+  // the session atom is cleared right after we open the modal, but
+  // ClusterCreate mounts a tick later and needs the value to skip the
+  // provider-catalog step. Cache it locally and clear on close.
+  const [pendingProviderHint, setPendingProviderHint] = useState<{
+    providerHint?: string;
+    presetClusterType?: 'model' | 'gpu';
+  }>({
+    providerHint: undefined,
+    presetClusterType: undefined
+  });
+
+  useEffect(() => {
+    if (clusterSession?.firstAddCluster && dataSource.loadend) {
+      setPendingProviderHint({
+        providerHint: clusterSession.providerHint,
+        presetClusterType: clusterSession.presetClusterType
+      });
+      openClusterModal();
+      // reset session
+      setClusterSession(null);
+    }
+  }, [clusterSession, dataSource.loadend]);
+
+  const handleClusterModalClose = () => {
+    setPendingProviderHint({
+      providerHint: undefined,
+      presetClusterType: undefined
+    });
+    closeClusterModal();
+  };
+
+  const renderChildren = (
+    list: any,
+    options: { parent?: any; [key: string]: any }
+  ) => {
+    return (
+      <PoolRows
+        dataList={list}
+        provider={options.parent?.provider}
+        clusterId={options.parent?.id}
+        gridTemplate={options.gridTemplate}
+        prefixWidth={options.prefixWidth}
+        columns={options.columns}
+      />
+    );
+  };
+
+  const columns = useClusterColumns(handleSelect);
+
+  return (
+    <>
+      <PageBox>
+        <FilterBar
+          showSelect={false}
+          widths={{ input: 300 }}
+          buttonText={intl.formatMessage({ id: 'clusters.button.add' })}
+          rowSelection={rowSelection}
+          handleInputChange={handleNameChange}
+          handleSearch={handleSearch}
+          handleDeleteByBatch={handleDeleteBatch}
+          handleClickPrimary={handleClickDropdown}
+          right={
+            <RightActions
+              clusters={dataSource.dataList}
+              handleDeleteByBatch={handleDeleteBatch}
+              handleClickPrimary={handleClickDropdown}
+              rowSelection={rowSelection}
+              MonitorButton={ActionButton()}
+            ></RightActions>
+          }
+        ></FilterBar>
+        <TableProvider
+          value={{
+            allChildren: allWorkerPoolList,
+            setDisableExpand: setDisableExpand
+          }}
+        >
+          <SealTable
+            rowKey="id"
+            emptyMinHeight="calc(100vh - 300px)"
+            loadChildren={getWorkerPoolList}
+            sortDirections={TABLE_SORT_DIRECTIONS}
+            expandedRowKeys={expandedRowKeys}
+            onExpand={handleExpandChange}
+            onExpandAll={handleToggleExpandAll}
+            renderChildren={renderChildren}
+            onTableSort={handleOnSortChange}
+            showSorterTooltip={false}
+            dataSource={dataSource.dataList}
+            loading={dataSource.loading}
+            loadend={dataSource.loadend}
+            rowSelection={rowSelection}
+            columns={columns}
+            childParentKey="cluster_id"
+            expandable={true}
+            empty={
+              <NoResult
+                loading={dataSource.loading}
+                loadend={dataSource.loadend}
+                dataSource={dataSource.dataList}
+                image={<IconFont type="icon-cluster-outline" />}
+                filters={_.omit(queryParams, ['sort_by', 'mine'])}
+                noFoundText={intl.formatMessage({
+                  id: 'noresult.cluster.nofound'
+                })}
+                title={intl.formatMessage({ id: 'noresult.cluster.title' })}
+                subTitle={intl.formatMessage({
+                  id: 'noresult.cluster.subTitle'
+                })}
+                onClick={handleClickDropdown}
+                buttonText={intl.formatMessage({ id: 'noresult.button.add' })}
+              ></NoResult>
+            }
+            pagination={{
+              size: 'middle',
+              showSizeChanger: true,
+              pageSize: queryParams.perPage,
+              current: queryParams.page,
+              total: dataSource.total,
+              hideOnSinglePage: queryParams.perPage === 10,
+              onChange: handlePageChange
+            }}
+          ></SealTable>
+        </TableProvider>
+      </PageBox>
+      <AddCluster
+        provider={openAddModal.provider}
+        open={openAddModal.open}
+        action={openAddModal.action}
+        title={openAddModal.title}
+        currentData={openAddModal.currentData}
+        credentialList={credentialList}
+        onCancel={handleModalCancel}
+        onOk={handleModalOk}
+      ></AddCluster>
+      <AddPool
+        provider={addPoolStatus.provider}
+        open={addPoolStatus.open}
+        action={addPoolStatus.action}
+        title={addPoolStatus.title}
+        clusterData={addPoolStatus.clusterData}
+        onCancel={() => {
+          setAddPoolStatus({
+            open: false,
+            action: PageAction.CREATE,
+            title: '',
+            provider: ProviderValueMap.DigitalOcean as ProviderType,
+            clusterId: 0,
+            clusterData: null
+          });
+        }}
+        onOk={handleSubmitWorkerPool}
+      ></AddPool>
+      <DeleteModal ref={modalRef}></DeleteModal>
+      <ClusterModal
+        title={intl.formatMessage({
+          id: 'menu.resources.clusterCreate'
+        })}
+        open={clusterModalStatus.open}
+        pendingProviderHint={pendingProviderHint}
+        onClose={handleClusterModalClose}
+      ></ClusterModal>
+      <TopologyDrawer
+        open={!!topologyCluster}
+        clusterId={topologyCluster?.id}
+        clusterName={topologyCluster?.name}
+        onClose={() => setTopologyCluster(null)}
+      ></TopologyDrawer>
+      {AddWorkerModal}
+      {AccessDrawer && <AccessDrawer />}
+    </>
+  );
+};
+
+export default Clusters;

@@ -1,0 +1,133 @@
+export default {
+  'resources.title': '资源',
+  'resources.button.create': '添加节点',
+  'resources.button.edit': '编辑节点',
+  'resources.button.edittags': '编辑标签',
+  'resources.button.update': '更新标签',
+  'resources.nodes': '节点',
+  'resources.worker': '节点',
+  'resources.container': '容器',
+  'resources.table.hostname': '主机名',
+  'resources.table.key.tips': '存在相同的 key.',
+  'resources.form.label': '标签',
+  'resources.table.labels': '标签',
+  'resources.form.advanced': '高级',
+  'resources.form.enablePartialOffload': '允许 CPU 卸载',
+  'resources.form.placementStrategy': '放置策略',
+  'resources.form.workerSelector': '节点选择器',
+  'resources.form.enableDistributedInferenceAcrossWorkers':
+    '允许跨节点分布式推理',
+  'resources.form.spread.tips':
+    '使得集群整体的资源在所有节点之间分配得相对均匀。可能会在单个节点上产生较多资源碎片。',
+  'resources.form.binpack.tips':
+    '优先考虑整体集群的资源最大化利用，减少 GPU/节点上的资源碎片。',
+  'resources.form.workerSelector.description':
+    '系统在部署模型实例时，会根据预定义的标签来选择最符合要求的节点。',
+  'resources.table.ip': 'IP',
+  'resources.table.cpu': 'CPU',
+  'resources.table.memory': '内存',
+  'resources.table.gpu': 'GPU',
+  'resources.table.disk': '磁盘',
+  'resources.table.vram': '显存',
+  'resources.table.index': '序号',
+  'resources.table.workername': '节点名称',
+  'resources.table.vendor': '厂商',
+  'resources.table.temperature': '温度',
+  'resources.table.core': '核数',
+  'resources.table.gpuutilization': 'GPU 利用率',
+  'resources.table.vramutilization': '显存利用率',
+  'resources.table.utilization': '利用率',
+  'resources.table.total': '总量',
+  'resources.table.used': '已用',
+  'resources.table.allocated': '已分配',
+  'resources.table.wokers': '节点',
+  'resources.table.unified': '统一内存',
+  'resources.worker.linuxormaxos': 'Linux 或 macOS',
+  'resources.worker.add.step1':
+    '获取 Token<span class="note-text">（在 Server 上运行）</span>',
+  'resources.worker.add.step2': '注册节点',
+  'resources.worker.add.step2.tips': '（在需要添加的节点上运行。）',
+  'resources.worker.add.step3': '成功后，刷新节点列表即可看到新的节点。',
+  'resources.worker.container.supported': '不支持 macOS 和 Windows',
+  'resources.worker.current.version': '当前版本为 {version}',
+  'resources.worker.select.command': '选择一个标签生成命令并使用复制按钮复制',
+  'resources.worker.driver.install':
+    '在安装 GPUStack 之前，请安装<a href="https://docs.gpustack.ai/latest/installation/installation-requirements/" target="_blank">所需的驱动程序和库</a>。',
+  'resources.worker.script.install': '脚本安装',
+  'resources.worker.container.install': '容器安装(仅支持 Linux)',
+  'resources.worker.cann.tips':
+    '按需要挂载的 NPU index 设置 <span class="bold-text">--device /dev/davinci{index}</span>，如需挂载 NPU0 - NPU1，则添加 <span class="bold-text">--device /dev/davinci0 --device /dev/davinci1</span>',
+  'resources.modelfiles.form.path': '存储路径',
+  'resources.modelfiles.modelfile': '模型文件',
+  'resources.modelfiles.download': '添加模型文件',
+  'resources.modelfiles.size': '文件大小',
+  'resources.modelfiles.selecttarget': '选择目标位置',
+  'resources.modelfiles.form.localdir': '本地目录',
+  'resources.modelfiles.form.localdir.tips':
+    '默认存储目录为 <span class="desc-block">/var/lib/gpustack/cache</span>，或使用 <span class="desc-block">--cache-dir</span>（优先）、<span class="desc-block">--data-dir</span> 指定的目录。',
+  'resources.modelfiles.retry.download': '重新下载',
+  'resources.modelfiles.storagePath.holder': '等待下载完成...',
+  'resources.filter.worker': '按节点筛选',
+  'resources.filter.source': '按来源筛选',
+  'resources.filter.status': '按状态筛选',
+  'resources.modelfiles.delete.tips': '同时从磁盘删除文件',
+  'resources.modelfiles.copy.tips': '复制完整路径',
+  'resources.filter.path': '路径查询',
+  'resources.register.worker.step1':
+    '点击应用菜单<span class="bold-text">复制 Token</span>。',
+  'resources.register.worker.step2':
+    '点击应用菜单<span class="bold-text">快速配置</span>。',
+  'resources.register.worker.step3':
+    '点击页签<span class="bold-text">通用</span>。',
+  'resources.register.worker.step4':
+    '选择服务角色 <span class="bold-text">节点</span>。',
+  'resources.register.worker.step5':
+    '输入 <span class="bold-text">Server URL</span>：{url}。',
+  'resources.register.worker.step6':
+    '粘贴 <span class="bold-text">Token</span>。',
+  'resources.register.worker.step7':
+    '点击<span class="bold-text">重启</span>，应用设置。',
+  'resources.register.install.title': '在 {os} 上安装 GPUStack',
+  'resources.register.download':
+    '下载并安装<a href={url} target="_blank">安装包</a>，仅支持 {versions}。',
+  'resource.register.maos.support': 'M 芯片，macOS 14+',
+  'resource.register.windows.support': 'win 10, win 11',
+  'resources.model.instance': '模型实例',
+  'resources.worker.download.privatekey': '下载私钥',
+  'resources.worker.ssh.view': '查看 SSH 访问信息',
+  'resources.worker.ssh.title': 'SSH 访问信息',
+  'resources.worker.ssh.host': '主机',
+  'resources.worker.ssh.port': '端口',
+  'resources.worker.ssh.command': '连接命令',
+  'resources.worker.ssh.privatekey': '私钥',
+  'resources.worker.ssh.pending': '暂不可用',
+  'resources.worker.ssh.tip':
+    '使用该节点的私钥登录：先下载私钥，对文件执行 chmod 600，然后连接。',
+  'resources.modelfiles.form.exsting': '已下载',
+  'resources.modelfiles.form.added': '已添加',
+  'resources.modelfiles.form.isLora': '是否 LoRA',
+  'resources.worker.maintenance.title': '系统维护',
+  'resources.worker.maintenance.enable': '进入维护模式',
+  'resources.worker.maintenance.disable': '退出维护模式',
+  'resources.worker.maintenance.remark': '备注',
+  'resources.worker.maintenance.remark.rules': '请输入维护备注',
+  'resources.worker.maintenance.tips':
+    '进入维护模式后，节点将停止调度新的模型实例部署任务，正在运行的实例不会受到影响。',
+  'resources.worker.noCluster.tips': '当前无可用集群，请先创建集群再添加节点。',
+  'resources.metrics.details': '监控',
+  'resoureces.worker.upgrade.tips':
+    '节点版本与 GPUStack Server 版本不一致，请将两者保持一致。',
+  'resources.worker.version': '节点版本：{version}',
+  'resources.server.version': 'Server 版本：{version}',
+  'resources.worker.currentVersion': '当前版本：{version}',
+  'resources.worker.targetVersion': '目标版本：{version}',
+  'resources.driver.version': '驱动版本：{version}',
+
+  'resources.worker.setLabels': '设置标签',
+  'resources.worker.setLabels.count': '已选 {count} 台 worker',
+  'resources.worker.setLabels.hint':
+    '为所有选中的 worker 添加新标签，并更新同名标签的值，其他标签保持不变。如需删除标签，请单独编辑 worker。',
+
+  'resources.table.location': '拓扑层级',
+  'resources.worker.setLocation': '设置位置'
+};

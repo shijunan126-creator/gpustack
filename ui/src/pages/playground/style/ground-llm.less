@@ -1,0 +1,55 @@
+@HEADER_HEIGHT: 0px;
+
+.ground-left-wrapper {
+  display: flex;
+
+  .ground-left {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
+    position: relative;
+    height: calc(
+      100vh - var(--app-banner-height, 0px) - @HEADER_HEIGHT - 4px -
+        var(--page-content-padding) - var(--page-content-padding) -
+        var(--page-header-height)
+    );
+    width: calc(100% - 390px);
+
+    .message-list-wrap {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      padding-inline: var(--layout-content-inlinepadding);
+      overflow-y: auto;
+      padding-top: 16px;
+
+      .content {
+        flex: 1;
+      }
+
+      .hold-wrapper {
+        height: 100%;
+      }
+
+      .hold-text-icon {
+        display: flex;
+        padding: 4px;
+        justify-content: center;
+        align-items: center;
+        background-color: var(--ant-color-fill-tertiary);
+        border-radius: var(--border-radius-base);
+      }
+    }
+  }
+
+  .ant-upload-wrapper .ant-upload-drag {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .embed-chart {
+    position: relative;
+  }
+}

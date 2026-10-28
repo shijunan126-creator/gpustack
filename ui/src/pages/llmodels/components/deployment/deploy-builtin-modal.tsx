@@ -1,0 +1,481 @@
+import { PageActionType } from '@/config/types';
+import { ClusterStatusValueMap } from '@/pages/cluster-management/config';
+import {
+  ColumnWrapper,
+  createAxiosToken,
+  GSDrawer,
+  ModalFooter
+} from '@gpustack/core-ui';
+import { useIntl } from '@umijs/max';
+import { Button, message } from 'antd';
+import _ from 'lodash';
+import React, { useEffect, useRef, useState } from 'react';
+import styled from 'styled-components';
+import { queryCatalogItemSpec } from '../../apis';
+import {
+  DeployFormKeyMap,
+  mergeBackendParameters,
+  sourceOptions
+} from '../../config';
+import { CatalogFormContext } from '../../config/form-context';
+import {
+  CatalogSpec,
+  FormData,
+  ListItem,
+  SourceType
+} from '../../config/types';
+import { backendOptionsMap } from '../../constants/backend-parameters';
+import DataForm from '../../forms';
+import { useCheckCompatibility } from '../../hooks';
+import useFormInitialValues from '../../hooks/use-form-initial-values';
+import { generateGPUIds } from '../../utils';
+import CompatibilityAlert from '../compatible-alert';
+import { getCatalogFormValues } from './catalog-form-values';
+import { resolveRuntimeChoice } from './runtime-choice';
+
+const ModesMap: Record<string, string> = {
+  latency: 'models.form.mode.latency',
+  standard: 'models.form.mode.baseline',
+  throughput: 'models.form.mode.throughput'
+};
+
+const ModesTipsMap: Record<string, string> = {
+  latency: 'models.form.mode.latency.tips',
+  standard: 'models.form.mode.baseline.tips',
+  throughput: 'models.form.mode.throughput.tips'
+};
+
+// Stable empty defaults: inline `[]` literals would be a new reference on every
+// render, invalidating the context value and the form's `fields` prop.
+const EMPTY_SIZE_OPTIONS: Global.BaseOption<number>[] = [];
+const EMPTY_QUANTIZATION_OPTIONS: Global.BaseOption<string>[] = [];
+const EMPTY_FIELDS: string[] = [];
+
+type AddModalProps = {
+  title: string;
+  action: PageActionType;
+  open: boolean;
+  data?: ListItem;
+  source: SourceType;
+  width?: string | number;
+  current?: any;
+  onOk: (values: FormData) => void | Promise<void>;
+  onCancel: () => void;
+};
+
+const FormWrapper = styled.div`
+  display: flex;
+  flex: 1;
+  height: 100%;
+  max-width: 100%;
+`;
+
+const AddModal: React.FC<AddModalProps> = (props) => {
+  const {
+    title,
+    open,
+    onOk,
+    onCancel,
+    source,
+    action,
+    current,
+    width = 600
+  } = props || {};
+  const {
+    setWarningStatus,
+    handleDoEvalute,
+    cancelEvaluate,
+    clearCacheFormValues,
+    submitAnyway,
+    handleOnValuesChange,
+    warningStatus
+  } = useCheckCompatibility();
+  const { getClusterList, getWorkerList, clusterList } = useFormInitialValues();
+  const intl = useIntl();
+  const form = useRef<any>({});
+  const [isGGUF, setIsGGUF] = useState<boolean>(false);
+  const [sourceList, setSourceList] = useState<any[]>([]);
+  const [modeList, setModeList] = useState<
+    Global.BaseOption<string, { isBuiltIn: boolean; tips: string }>[]
+  >([]);
+  const sourceGroupMap = useRef<any>({});
+  const axiosToken = useRef<any>(null);
+  const specListRef = useRef<any[]>([]);
+  const noCompatibleGPUsRef = useRef<boolean>(false);
+  const backendOptionsCache = useRef<any>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const submitloadingRef = useRef<boolean>(false);
+
+  const handleSumit = () => {
+    if (submitloadingRef.current) {
+      return;
+    }
+    submitloadingRef.current = true;
+    form.current?.submit?.();
+  };
+
+  const handleSubmitAnyway = async () => {
+    if (noCompatibleGPUsRef.current) {
+      message.error(intl.formatMessage({ id: 'models.catalog.nogpus.tips' }));
+      return;
+    }
+    submitAnyway.current = true;
+    handleSumit();
+  };
+
+  const onFinishFailed = () => {
+    submitloadingRef.current = false;
+  };
+
+  const generateSubmitData = (formData: FormData) => {
+    const gpuSelector = generateGPUIds(formData);
+    return getCatalogFormValues(form.current, {
+      ..._.omit(formData, ['scheduleType', 'manualGpuMode', 'pdMode']),
+      ...gpuSelector
+    });
+  };
+
+  const getModelSpec = (mode: string) => {
+    const defaultSpec = _.find(
+      specListRef.current,
+      (item: CatalogSpec) => item.mode === mode
+    );
+    return {
+      ..._.omit(defaultSpec, ['name']),
+      categories: _.get(current, 'categories.0', null)
+    };
+  };
+
+  const applyCatalogSpec = (data: Partial<CatalogSpec>) => {
+    const runtimeChoice = resolveRuntimeChoice(data);
+    form.current?.applyCatalogSpec({
+      ..._.omit(data, ['name', ...Object.keys(runtimeChoice)]),
+      categories: _.get(current, 'categories.0', null)
+    });
+    form.current?.applyRuntimeChoice(runtimeChoice);
+  };
+
+  const handleCheckCompatibility = async (formData: FormData) => {
+    // no compatible gpus, do nothing
+    if (noCompatibleGPUsRef.current) {
+      return;
+    }
+    handleDoEvalute(formData);
+  };
+
+  const handleCheckFormData = () => {
+    const values = form.current?.getFieldsValue();
+    const allValues = generateSubmitData(values);
+    handleCheckCompatibility(allValues);
+  };
+
+  const handleSourceChange = (source: string) => {
+    const defaultSpec = _.get(sourceGroupMap.current, `${source}.0`, {});
+    // set form value
+    applyCatalogSpec(defaultSpec);
+    handleCheckFormData();
+  };
+
+  const onValuesChange = async (changedValues: any, allValues: any) => {
+    const data = getCatalogFormValues(form.current, allValues);
+
+    // no compatible gpus, do nothing
+    if (noCompatibleGPUsRef.current) {
+      return;
+    }
+    handleOnValuesChange?.({
+      changedValues,
+      allValues: data,
+      source: props.source
+    });
+  };
+
+  const handleBackendChange = (backend: string) => {
+    const defaultBackendParameters =
+      backendOptionsCache.current?.find((item: any) => item.value === backend)
+        ?.default_backend_param || [];
+
+    form.current?.setFieldsValue({
+      backend_parameters: mergeBackendParameters(
+        defaultBackendParameters,
+        form.current?.getFieldValue('backend_parameters') || []
+      )
+    });
+
+    handleCheckFormData();
+  };
+
+  const initClusterId = (): number | undefined => {
+    // When a platform admin has targeted an org via the create-scope picker,
+    // seed the cluster from that org's own clusters so the initial selection
+    // matches the (org-filtered) dropdown the form renders.
+    const scopeOrgId = form.current?.getFieldValue?.('organization_id');
+    const scopedList =
+      scopeOrgId == null
+        ? clusterList
+        : clusterList?.filter((item) => item.owner_principal_id === scopeOrgId);
+
+    const defaultCluster = scopedList?.find((item) => item.is_default);
+    if (defaultCluster) {
+      return defaultCluster.value;
+    }
+    return (
+      scopedList?.find((item) => item.state === ClusterStatusValueMap.Ready)
+        ?.value || scopedList?.[0]?.value
+    );
+  };
+
+  const fetchSpecData = async (clusterId: number) => {
+    try {
+      axiosToken.current?.cancel?.();
+      axiosToken.current = createAxiosToken();
+      const res: any = await queryCatalogItemSpec(
+        {
+          id: current.id,
+          cluster_id: clusterId
+        },
+        {
+          token: axiosToken.current.token
+        }
+      );
+      const groupList = _.groupBy(res.items, 'source');
+
+      const modes: string[] = res.items?.map((item: CatalogSpec) => {
+        return item.mode;
+      });
+
+      const modeDataList = [...new Set(modes)].map((key: string) => {
+        return {
+          label: _.get(ModesMap, key, key || ''),
+          isBuiltIn: ModesMap[key] ? true : false,
+          value: key,
+          tips: _.get(ModesTipsMap, key, '')
+        };
+      });
+
+      sourceGroupMap.current = groupList;
+
+      specListRef.current = res.items;
+
+      const sources = _.filter(sourceOptions, (item: any) => {
+        return groupList[item.value];
+      });
+
+      const list = _.sortBy(res.items, 'size');
+
+      const defaultSpec =
+        _.find(
+          list,
+          (item: CatalogSpec) => item.mode === modeDataList[0]?.value
+        ) || {};
+
+      const defaultBackendParams =
+        backendOptionsCache.current?.find(
+          (item: any) => item.value === defaultSpec.backend
+        )?.default_backend_param || [];
+
+      setModeList(modeDataList);
+      setSourceList(sources);
+      applyCatalogSpec({
+        ...defaultSpec,
+        backend_parameters: mergeBackendParameters(
+          defaultBackendParams,
+          defaultSpec.backend_parameters || []
+        ),
+        cluster_id: clusterId
+      });
+
+      const name = _.toLower(current.name).replace(/\s/g, '-') || '';
+      form.current.setFieldValue('name', name);
+
+      if (defaultSpec.backend === backendOptionsMap.llamaBox) {
+        setIsGGUF(true);
+      } else {
+        setIsGGUF(false);
+      }
+      const allValues = generateSubmitData(form.current.getFieldsValue(true));
+
+      // If no avaliable gpus for the model, show warning message
+      if (!res.items.length) {
+        noCompatibleGPUsRef.current = true;
+        setWarningStatus({
+          show: true,
+          type: 'warning',
+          message: intl.formatMessage({ id: 'models.catalog.nogpus.tips' })
+        });
+        return;
+      }
+      noCompatibleGPUsRef.current = false;
+      handleCheckCompatibility(allValues);
+    } catch (error) {
+      // ignore
+    }
+  };
+
+  const handleOnModeChange = (val: string) => {
+    const data = getModelSpec(val);
+
+    applyCatalogSpec(data);
+    handleCheckFormData();
+  };
+
+  const handleOnClusterChange = async (clusterId: number) => {
+    await fetchSpecData(clusterId);
+  };
+
+  const handleOk = async (values: FormData) => {
+    const data = getCatalogFormValues(form.current, values);
+    setLoading(true);
+    try {
+      await onOk(data);
+    } finally {
+      setLoading(false);
+      submitloadingRef.current = false;
+    }
+  };
+
+  const handleCancel = () => {
+    onCancel?.();
+    axiosToken.current?.cancel?.();
+  };
+
+  const init = async () => {
+    const clusterId = initClusterId();
+    // No cluster available for the current scope (zero clusters, or none
+    // owned by the picked org). Leave the form's cluster field empty and
+    // skip downstream fetches — the user resolves it by picking an org
+    // that owns clusters, which triggers the scope-change re-pick in the
+    // basic form.
+    if (!clusterId) return;
+
+    // The GPU options don't depend on the backend options, so start that
+    // request before awaiting instead of queueing it behind two round trips.
+    form.current?.getGPUOptionList?.({
+      clusterId: clusterId
+    });
+    backendOptionsCache.current = await form.current?.getBackendOptions?.({
+      cluster_id: clusterId
+    });
+    fetchSpecData(clusterId);
+  };
+
+  const showExtraButton =
+    warningStatus.show && warningStatus.type !== 'success';
+
+  useEffect(() => {
+    getClusterList();
+    getWorkerList();
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => {
+        init();
+      }, 100);
+    }
+    return () => {
+      axiosToken.current?.cancel?.();
+      cancelEvaluate();
+      setWarningStatus({
+        show: false,
+        title: '',
+        message: []
+      });
+    };
+  }, [open, current]);
+
+  return (
+    <GSDrawer
+      title={title}
+      open={open}
+      onClose={handleCancel}
+      destroyOnHidden={true}
+      closeIcon={false}
+      mask={{
+        closable: false
+      }}
+      keyboard={false}
+      styles={{
+        wrapper: { width: width }
+      }}
+      footer={false}
+    >
+      <CatalogFormContext.Provider
+        value={{
+          sizeOptions: EMPTY_SIZE_OPTIONS,
+          quantizationOptions: EMPTY_QUANTIZATION_OPTIONS,
+          modeList: modeList,
+          onModeChange: handleOnModeChange
+        }}
+      >
+        <FormWrapper>
+          <ColumnWrapper
+            styles={{
+              container: {
+                paddingBlock: 0
+              }
+            }}
+            footer={
+              <>
+                <CompatibilityAlert
+                  showClose={true}
+                  onClose={() => {
+                    setWarningStatus({
+                      show: false,
+                      message: ''
+                    });
+                  }}
+                  warningStatus={warningStatus}
+                  contentStyle={{ paddingInline: '0 6px' }}
+                ></CompatibilityAlert>
+                <ModalFooter
+                  onCancel={handleCancel}
+                  onOk={handleSumit}
+                  loading={loading}
+                  showOkBtn={!showExtraButton}
+                  extra={
+                    showExtraButton && (
+                      <Button type="primary" onClick={handleSubmitAnyway}>
+                        {intl.formatMessage({
+                          id: 'models.form.submit.anyway'
+                        })}
+                      </Button>
+                    )
+                  }
+                  style={{
+                    padding: '16px 24px 8px',
+                    display: 'flex',
+                    justifyContent: 'flex-end'
+                  }}
+                ></ModalFooter>
+              </>
+            }
+          >
+            <>
+              <DataForm
+                fields={EMPTY_FIELDS}
+                source={source}
+                action={action}
+                onOk={handleOk}
+                onFinishFailed={onFinishFailed}
+                ref={form}
+                isGGUF={isGGUF}
+                formKey={DeployFormKeyMap.CATALOG}
+                sourceDisable={false}
+                sourceList={sourceList}
+                clusterList={clusterList}
+                onClusterChange={handleOnClusterChange}
+                onBackendChange={handleBackendChange}
+                onSourceChange={handleSourceChange}
+                onValuesChange={onValuesChange}
+                clearCacheFormValues={clearCacheFormValues}
+              ></DataForm>
+            </>
+          </ColumnWrapper>
+        </FormWrapper>
+      </CatalogFormContext.Provider>
+    </GSDrawer>
+  );
+};
+
+export default AddModal;

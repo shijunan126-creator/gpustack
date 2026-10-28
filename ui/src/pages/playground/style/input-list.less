@@ -1,0 +1,19 @@
+.input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .input-item {
+    position: relative;
+
+    &:focus-within {
+      &::before {
+        background-color: transparent;
+      }
+    }
+
+    .input-wrap {
+      flex: 1;
+    }
+  }
+}

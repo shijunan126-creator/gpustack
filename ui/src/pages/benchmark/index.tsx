@@ -1,0 +1,328 @@
+import { ResponsiveFilterBar } from '@/components/responsive-filters';
+import { PageAction } from '@/config';
+import { PaginationKey, TABLE_SORT_DIRECTIONS } from '@/config/settings';
+import useTableFetch from '@/hooks/use-table-fetch';
+import { useBenchmarkTargetInstance } from '@/pages/llmodels/hooks/use-run-benchmark';
+import { DeleteModal, IconFont, NoResult } from '@gpustack/core-ui';
+import { useIntl, useNavigate } from '@umijs/max';
+import { useMemoizedFn } from 'ahooks';
+import { ConfigProvider, Table, message } from 'antd';
+import _ from 'lodash';
+import { useEffect } from 'react';
+import PageBox from '../_components/page-box';
+import { useQueryClusterList } from '../cluster-management/services/use-query-cluster-list';
+import {
+  BENCHMARKS_API,
+  createBenchmark,
+  deleteBenchmark,
+  queryBenchmarkList,
+  updateBenchmark
+} from './apis';
+import AddBenchmarkModal from './components/add-benchmark-modal';
+import LeftActions from './components/left-actions';
+import RightActions from './components/right-actions';
+import ViewLogsModal from './components/view-logs-modal';
+import {
+  datasetList,
+  genBenchmarkName,
+  sloFieldsFromTargets,
+  type SloTarget
+} from './config';
+import { FormData, BenchmarkListItem as ListItem } from './config/types';
+import useBenchmarkColumns from './hooks/use-benchmark-columns';
+import useCloneBenchmark from './hooks/use-clone-benchmark';
+import useColumnSettings from './hooks/use-column-settings';
+import useCreateBenchmark from './hooks/use-create-benchmark';
+import useViewLogs from './hooks/use-view-logs';
+import { useExportBenchmark } from './services/use-export-benchmark';
+import useQueryProfiles from './services/use-query-profiles';
+import useStopBenchmark from './services/use-stop-benchmark';
+
+const Benchmark: React.FC = () => {
+  const {
+    dataSource,
+    rowSelection,
+    queryParams,
+    sortOrder,
+    modalRef,
+    handleDelete,
+    handleDeleteBatch,
+    fetchData,
+    handlePageChange,
+    handleTableChange,
+    handleQueryChange,
+    handleSearch,
+    handleNameChange
+  } = useTableFetch<ListItem>({
+    key: PaginationKey.Benchmarks,
+    fetchAPI: queryBenchmarkList,
+    deleteAPI: deleteBenchmark,
+    API: BENCHMARKS_API,
+    watch: true,
+    contentForDelete: 'menu.models.benchmark'
+  });
+  const intl = useIntl();
+  const navigate = useNavigate();
+  const { openBenchmarkModal, closeBenchmarkModal, openBenchmarkModalStatus } =
+    useCreateBenchmark();
+  const { openViewLogsModal, closeViewLogsModal, openViewLogsModalStatus } =
+    useViewLogs();
+  const { handleStopBenchmark } = useStopBenchmark();
+  const { exportData } = useExportBenchmark();
+  const {
+    fetchClusterList,
+    cancelRequest: cancelClusterRequest,
+    clusterList
+  } = useQueryClusterList();
+  const { benchmarkTargetInstance } = useBenchmarkTargetInstance();
+  const { cloneSource, clearCloneSource } = useCloneBenchmark();
+  const {
+    profilesOptions,
+    fetchProfilesData,
+    cancelRequest: cancelProfilesRequest
+  } = useQueryProfiles();
+  const { SettingsButton, columns: selectedColumns } = useColumnSettings({
+    contentHeight: 320,
+    clusterList,
+    profileOptions: profilesOptions
+  });
+  useEffect(() => {
+    fetchProfilesData();
+    fetchClusterList({ page: -1 }).then(() => {
+      // Clone raised from the detail page, which has no drawer of its own: the
+      // row travelled here in an atom. Cleared on open so coming back to the
+      // list later doesn't re-open the drawer.
+      if (cloneSource) {
+        handleClone(cloneSource);
+        clearCloneSource();
+      } else if (benchmarkTargetInstance.model_name) {
+        openBenchmarkModal(
+          PageAction.CREATE,
+          intl.formatMessage({ id: 'benchmark.button.add' })
+        );
+      }
+    });
+    return () => {
+      cancelClusterRequest();
+      cancelProfilesRequest();
+    };
+  }, []);
+
+  const handleAddBenchmark = () => {
+    openBenchmarkModal(
+      PageAction.CREATE,
+      intl.formatMessage({ id: 'benchmark.button.add' })
+    );
+  };
+
+  const handleModalOk = async (data: FormData) => {
+    // `slo_targets` is the form's editable view of the 9 flat slo_*_ms
+    // thresholds. It is not an API field, so it is EXPANDED here rather than just
+    // dropped: none of the 9 flat fields is mounted by a Form.Item any more (the
+    // SLO section renders the list instead), and antd's onFinish only carries
+    // REGISTERED fields — getFieldsValue(namePathList) walks the field entities,
+    // not the store. Writing them with setFieldsValue therefore never reached the
+    // request, and every UI-created or cloned benchmark silently lost all 9
+    // thresholds while showing them in the drawer.
+    const { slo_targets: sloTargets, ...formValues } = data as FormData & {
+      slo_targets?: SloTarget[];
+    };
+    // `dataset_worker_*` are UI-only too, but unlike slo_targets they carry
+    // nothing the API wants: model-instance records the selected instance's
+    // worker so the dataset picker can filter to it. Dropped, not expanded.
+    const rest = _.omit(formValues, [
+      'dataset_worker_id',
+      'dataset_worker_name',
+      'sharegpt_filter_enabled'
+    ]);
+    const params = {
+      ...rest,
+      // Absent (the SLO section is not rendered for a fixed-rate load) => leave
+      // the fields out entirely rather than nulling them.
+      ...(sloTargets === undefined ? {} : sloFieldsFromTargets(sloTargets))
+    };
+    try {
+      if (openBenchmarkModalStatus.action === PageAction.EDIT) {
+        await updateBenchmark({
+          data: {
+            ...params
+          },
+          id: openBenchmarkModalStatus.currentData!.id
+        });
+      } else {
+        await createBenchmark({ data: params });
+      }
+      fetchData();
+      closeBenchmarkModal();
+      message.success(intl.formatMessage({ id: 'common.message.success' }));
+    } catch (error) {
+      closeBenchmarkModal();
+    }
+  };
+
+  const handleModalCancel = () => {
+    closeBenchmarkModal();
+  };
+
+  const handleEdit = (row: ListItem) => {
+    openBenchmarkModal(
+      PageAction.EDIT,
+      intl.formatMessage({ id: 'benchmark.button.edit' }),
+      row
+    );
+  };
+
+  // Clone = open the create form pre-filled with this row's config but a fresh
+  // auto-generated name (CREATE mode → fully editable, submits as a new record).
+  const handleClone = (row: ListItem) => {
+    openBenchmarkModal(
+      PageAction.CREATE,
+      intl.formatMessage({ id: 'benchmark.button.clone' }),
+      { ...row, name: genBenchmarkName(row.model_name, row.profile) }
+    );
+  };
+
+  const handleSelect = useMemoizedFn((val: any, row: ListItem) => {
+    if (val === 'edit') {
+      handleEdit(row);
+    } else if (val === 'clone') {
+      handleClone(row);
+    } else if (val === 'delete') {
+      handleDelete({ ...row, name: row.name });
+    } else if (val === 'viewlog') {
+      openViewLogsModal(row);
+    } else if (val === 'stop') {
+      handleStopBenchmark(row.id);
+    } else if (val === 'export') {
+      exportData([row.id], row.name);
+    }
+  });
+
+  const handleOnCellClick = useMemoizedFn(
+    (record: ListItem, dataIndex: string) => {
+      if (dataIndex === 'name') {
+        navigate(
+          `/models/benchmark/detail?id=${record.id}&name=${record.name}`,
+          { state: 'benchmark-details' }
+        );
+      }
+    }
+  );
+
+  const renderEmpty = (type?: string) => {
+    if (type !== 'Table') return;
+    return (
+      <NoResult
+        minHeight="calc(100vh - 300px)"
+        loading={dataSource.loading}
+        loadend={dataSource.loadend}
+        dataSource={[]}
+        image={<IconFont type="icon-speed" />}
+        filters={_.omit(queryParams, ['sort_by'])}
+        noFoundText={intl.formatMessage({
+          id: 'noresult.benchmark.nofound'
+        })}
+        title={intl.formatMessage({ id: 'noresult.benchmark.title' })}
+        subTitle={intl.formatMessage({
+          id: 'noresult.benchmark.subTitle'
+        })}
+        onClick={handleAddBenchmark}
+        buttonText={intl.formatMessage({ id: 'noresult.button.add' })}
+      ></NoResult>
+    );
+  };
+
+  const columns = useBenchmarkColumns({
+    sortOrder,
+    columns: selectedColumns,
+    handleSelect,
+    onCellClick: handleOnCellClick
+  });
+
+  const handleExportData = () => {
+    exportData(rowSelection.selectedRowKeys);
+  };
+
+  return (
+    <>
+      <PageBox>
+        <ResponsiveFilterBar
+          showSelect={false}
+          handleSearch={handleSearch}
+          // Required by FilterBar, but unreachable here: passing `left` replaces
+          // the bar's own search input, and the name filter lives in LeftActions.
+          handleInputChange={handleNameChange}
+          rowSelection={rowSelection}
+          widths={{ input: 300 }}
+          left={
+            <LeftActions
+              handleSearch={handleSearch}
+              handleQueryChange={handleQueryChange}
+              filters={queryParams}
+            ></LeftActions>
+          }
+          right={
+            <RightActions
+              settingButton={SettingsButton}
+              handleDeleteByBatch={handleDeleteBatch}
+              handleClickPrimary={handleAddBenchmark}
+              handleExport={handleExportData}
+              buttonText={intl.formatMessage({
+                id: 'benchmark.button.add'
+              })}
+              rowSelection={rowSelection}
+            />
+          }
+        ></ResponsiveFilterBar>
+        <ConfigProvider renderEmpty={renderEmpty}>
+          <Table
+            tableLayout="fixed"
+            columns={columns}
+            className={'scroll-table'}
+            dataSource={dataSource.dataList}
+            rowSelection={rowSelection}
+            loading={{
+              spinning: dataSource.loading,
+              size: 'middle'
+            }}
+            sortDirections={TABLE_SORT_DIRECTIONS}
+            showSorterTooltip={false}
+            rowKey="id"
+            scroll={{ x: 1200 }}
+            onChange={handleTableChange}
+            pagination={{
+              size: 'middle',
+              showSizeChanger: true,
+              pageSize: queryParams.perPage,
+              current: queryParams.page,
+              total: dataSource.total,
+              hideOnSinglePage: queryParams.perPage === 10,
+              onChange: handlePageChange
+            }}
+          ></Table>
+        </ConfigProvider>
+      </PageBox>
+
+      <AddBenchmarkModal
+        clusterList={clusterList}
+        open={openBenchmarkModalStatus.open}
+        action={openBenchmarkModalStatus.action}
+        title={openBenchmarkModalStatus.title}
+        currentData={openBenchmarkModalStatus.currentData}
+        profilesOptions={profilesOptions}
+        datasetList={datasetList}
+        onCancel={handleModalCancel}
+        onOk={handleModalOk}
+      ></AddBenchmarkModal>
+      <ViewLogsModal
+        open={openViewLogsModalStatus.open}
+        url={openViewLogsModalStatus.url}
+        tail={openViewLogsModalStatus.tail}
+        onCancel={closeViewLogsModal}
+      ></ViewLogsModal>
+      <DeleteModal ref={modalRef}></DeleteModal>
+    </>
+  );
+};
+
+export default Benchmark;

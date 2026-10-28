@@ -1,0 +1,67 @@
+export default {
+  'backends.title': 'Inference Backends',
+  'backend.button.add': 'Add Backend',
+  'backend.button.edit': 'Edit Backend',
+  'backend.versions': 'Version List',
+  'backend.defaultVersion': 'Default Version',
+  'backend.version': 'Version',
+  'backend.imageName': 'Image Name',
+  'backend.runCommand': 'Execution Command',
+  'backend.framework': 'Framework',
+  'backend.builtin': 'Built-in',
+  'backend.custom': 'Custom',
+  'backend.community': 'Community',
+  'backend.isDefault': 'Default',
+  'backend.availableFrameworks': 'Supported Frameworks',
+  'backend.addVersion': 'Add Version',
+  'backend.filter.framework': 'Filter by framework',
+  'backend.export.yaml': 'Export YAML',
+  'backend.mode.form': 'Form Mode',
+  'backend.mode.yaml': 'YAML Mode',
+  'backend.form.healthCheckPath': 'Health Check Path',
+  'backend.form.defaultEntrypoint': 'Default Image Entrypoint',
+  'backend.form.defaultExecuteCommand': 'Default Execution Command',
+  'backend.form.defaultExecuteCommand.tips': `'{{'model_path'}}', '{{'port'}}', '{{'worker_ip'}}' and '{{'model_name'}}' are placeholders that will be substituted with the actual values during deployment.`,
+  'backend.form.defaultBackendParameters': 'Default Backend Parameters',
+  'backend.form.flagFormat': 'Flag Format',
+  'backend.form.flagFormat.tips':
+    'The format applied between an option and its value. Leave empty to keep each parameter as entered, without normalizing it.',
+  'backend.form.flagFormat.space': 'Space Separated (--key value)',
+  'backend.form.flagFormat.equal': 'Equal Sign (--key=value)',
+  'backend.form.commonParameters': 'Common Backend Parameters',
+  'backend.form.commonParameters.tips':
+    'Shown as suggestions in the backend parameters input during deployment.',
+  'backend.form.versionConfig': 'Versions Config',
+  'backend.form.addParameter': 'Add Parameter',
+  'backend.form.noVersion': 'No versions added',
+  'backend.noVersion': 'No versions found',
+  'backend.versionInfo.autoImage': 'Automatically selected at runtime',
+  'backend.version.rules.builtin': 'Must end with "-custom"',
+  'backend.version.no.tips':
+    'The built-in backend’s custom version name must end with "-custom".',
+  'backend.backend.rules.custom':
+    'The custom backend name must end with "-custom".',
+  'backend.quickConfig': 'Quick Config',
+  'backend.version.default.not.exists':
+    'The default version does not exist in {versions}.',
+  'backend.replaceEntrypoint': 'Override Image Entrypoint',
+  'backend.entrypoint': 'Image Entrypoint',
+  'backend.entrypoint.tips':
+    'If specified, the ENTRYPOINT defined in the image will be ignored, and the command below will be used as the container startup entrypoint.',
+  'backend.form.defaultEnvironment': 'Default Environment Variables',
+  'backend.recommendModels': 'Recommended Models',
+  'backend.filter.source': 'Filter by source',
+  'backend.add.custom': 'Custom',
+  'backend.add.community': 'Community',
+  'backend.community.title': 'Community Backend Marketplace',
+  'backend.form.add.hint':
+    'To use a different version of a built-in backend (e.g., vLLM, SGLang, MindIE), please add a new version to the existing backend instead of adding a custom backend.',
+  // Backend source configuration (built-in backend versions + community library)
+  'backend.source.title': 'Backend Source',
+  'backend.source.builtin.title': 'Built-in Backend',
+  'backend.source.builtin.official':
+    'Follows the image versions GPUStack publishes for the built-in backends (vLLM, SGLang, MindIE, VoxBox).',
+  'backend.source.community.title': 'Community Backend',
+  'backend.source.community.official':
+    'Follows the community backend list GPUStack publishes, on top of the one packaged with this release.'
+};

@@ -1,0 +1,55 @@
+.message-item {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin-bottom: 12px;
+
+  &:hover {
+    .delete-btn {
+      opacity: 1;
+      transition: all 0.3s var(--seal-transition-func);
+    }
+  }
+
+  .role-type {
+    margin-right: 12px;
+    background-color: var(--ant-button-text-hover-bg);
+
+    .ant-btn {
+      text-align: left;
+      width: 100px;
+      background-color: var(--ant-button-text-hover-bg);
+      height: 46px;
+    }
+  }
+
+  .message-content-input {
+    flex: 1;
+    cursor: pointer;
+
+    &.has-img {
+      border: 1px solid var(--ant-color-fill-secondary);
+      border-radius: var(--border-radius-base);
+      overflow: hidden;
+
+      .ant-input {
+        border-radius: 0 0 var(--border-radius-base) var(--border-radius-base);
+        border-color: transparent;
+        background-color: transparent;
+      }
+
+      &:focus-within {
+        border-color: var(--ant-color-primary);
+      }
+    }
+  }
+
+  .delete-btn {
+    opacity: 0;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    transition: all 0.3s var(--seal-transition-func);
+  }
+}

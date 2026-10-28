@@ -1,0 +1,398 @@
+import PluginExtraFields from '@/components/plugin-extra-fields';
+import useRangePickerPreset from '@/pages/dashboard/hooks/use-rangepicker-preset';
+import { DownloadOutlined, SyncOutlined } from '@ant-design/icons';
+import {
+  AutoTooltip,
+  Cascader,
+  IconFont,
+  SimpleSelect
+} from '@gpustack/core-ui';
+import { useAccess, useIntl } from '@umijs/max';
+import { Button, DatePicker, Dropdown, MenuProps } from 'antd';
+import dayjs from 'dayjs';
+import React from 'react';
+import { GroupOption } from '../config';
+import { UsageFilterItem } from '../config/types';
+import FilterBarCss from '../styles/filter-bar.less';
+import DeletedTag from './deleted-tag';
+
+type valueType = string | number | null;
+const DefaultDateConfig = {
+  maxRange: 90,
+  defaultRange: 29
+};
+type OptionType = UsageFilterItem & {
+  value: string;
+};
+
+type DateType = 'date' | 'week' | 'month' | 'quarter' | 'year';
+
+interface FilterBarProps {
+  pageType?: 'page' | 'modal';
+  scope: string;
+  startDate: string;
+  endDate: string;
+  selectedRoutes: string[];
+  selectedUsers: string[];
+  selectedApiKeys: string[];
+  routeOptions: OptionType[];
+  userOptions: OptionType[];
+  apiKeyOptions: GroupOption<UsageFilterItem>[];
+  // Platform-wide "All" view only; empty otherwise (backend-gated). Rendered
+  // by the enterprise ``UsageFilterBar`` slot.
+  organizationOptions?: OptionType[];
+  userGroupOptions?: OptionType[];
+  selectedOrganizations?: string[];
+  selectedUserGroups?: string[];
+  onOrganizationsChange?: (value: string[]) => void;
+  onUserGroupsChange?: (value: string[]) => void;
+  activeApiKeys: valueType[][];
+  handlePickerChange: (picker: DateType) => void;
+  onScopeChange: (value: string) => void;
+  onDateChange: (dates: any, dateStrings: [string, string]) => void;
+  onRoutesChange: (value: string[]) => void;
+  onUsersChange: (value: string[]) => void;
+  onApiKeysChange: (value: string[]) => void;
+  handleActiveApiKeysChange: (value: valueType[][]) => void;
+  onExport?: () => void;
+  handleSearch?: () => void;
+  onExportChart?: () => void;
+  onExportTable?: () => void;
+  // A table export is two server round trips (size, then stream) with no
+  // dialog in between, so the trigger is the only place feedback can go.
+  exportingTable?: boolean;
+  commonFilters?: {
+    scope: string;
+    start_date: string;
+    end_date: string;
+    routes: string[];
+    users: string[];
+    api_keys: string[];
+  };
+}
+
+const FilterBar: React.FC<FilterBarProps> = (props) => {
+  const {
+    pageType = 'page',
+    startDate,
+    endDate,
+    selectedRoutes,
+    selectedUsers,
+    selectedApiKeys,
+    routeOptions,
+    userOptions,
+    apiKeyOptions,
+    activeApiKeys,
+    handleActiveApiKeysChange,
+    handlePickerChange,
+    onDateChange,
+    onRoutesChange,
+    onUsersChange,
+    onApiKeysChange,
+    organizationOptions,
+    userGroupOptions,
+    selectedOrganizations,
+    selectedUserGroups,
+    onOrganizationsChange,
+    onUserGroupsChange,
+    onExportChart,
+    onExportTable,
+    exportingTable,
+    handleSearch
+  } = props;
+  const intl = useIntl();
+  const {
+    disabledRangeDaysDate,
+    rangePresets,
+    picker,
+    normalizeRangeValue,
+    handleOnPickerChange
+  } = useRangePickerPreset({
+    range: DefaultDateConfig.maxRange,
+    disabledDate: true,
+    presetRanges: [
+      {
+        label: intl.formatMessage({
+          id: 'dashboard.usage.datePicker.last7days'
+        }),
+        value: [dayjs().add(-6, 'd'), dayjs()]
+      },
+      {
+        label: intl.formatMessage({
+          id: 'dashboard.usage.datePicker.last30days'
+        }),
+        value: [dayjs().add(-29, 'd'), dayjs()]
+      },
+      {
+        label: intl.formatMessage({
+          id: 'dashboard.usage.datePicker.last60days'
+        }),
+        value: [dayjs().add(-59, 'd'), dayjs()]
+      },
+      {
+        label: intl.formatMessage({
+          id: 'dashboard.usage.datePicker.last90days'
+        }),
+        value: [dayjs().add(-89, 'd'), dayjs()]
+      }
+    ]
+  });
+
+  // ``canSeeOrgAdmin`` already encodes "platform admin OR owner of the
+  // selected (non-Personal) Org" via the access seam. Mirrors the
+  // backend's ``_can_use_all_scope`` predicate for the user-filter
+  // drill-down surface.
+  const access = useAccess();
+  const canManageUsers = !!access.canSeeOrgAdmin;
+
+  const exportMenuItems: MenuProps['items'] = [
+    {
+      key: 'chart',
+      label: (
+        <span className="flex-center gap-8">
+          <IconFont type="icon-chart-01" style={{ fontSize: 14 }} />
+          <span>{intl.formatMessage({ id: 'usage.export.chart' })}</span>
+        </span>
+      ),
+      onClick: onExportChart
+    },
+    {
+      key: 'table',
+      label: (
+        <span className="flex-center gap-8">
+          <IconFont type="icon-table" style={{ fontSize: 14 }} />
+          <span>{intl.formatMessage({ id: 'usage.export.table' })}</span>
+        </span>
+      ),
+      onClick: onExportTable
+    }
+  ];
+
+  const renderTag = (tag: string) => {
+    return (
+      <span className="text-tertiary" style={{ fontSize: 12, marginRight: 4 }}>
+        [{tag}]
+      </span>
+    );
+  };
+
+  // The entity id behind a deleted option, shown in the "Deleted·#{id}" tag so
+  // two deleted entries with the same (now-stale) label stay distinguishable.
+  const getEntityId = (data: any): valueType => {
+    const current = data?.identity?.current;
+    if (!current) return null;
+    return current.user_id ?? current.api_key_id ?? current.route_id ?? null;
+  };
+
+  const deletedLabelStyle = (deleted?: boolean) =>
+    deleted ? { color: 'var(--ant-color-text-tertiary)' } : undefined;
+
+  const handleOnApiKeysChange = (
+    value: valueType[][],
+    selectedOptions: any
+  ) => {
+    const selectedValues: string[] = value.map((item) => {
+      if (Array.isArray(item)) {
+        return item[item.length - 1] as string; // Get the last value in the array
+      }
+      return item as string;
+    });
+    handleActiveApiKeysChange(value);
+    onApiKeysChange(selectedValues);
+  };
+
+  const apiKeyOptionRender = (option: any) => {
+    const { data } = option;
+    if (!data.isParent) {
+      return (
+        <span className="flex-center gap-4">
+          <AutoTooltip ghost style={deletedLabelStyle(data.deleted)}>
+            {data.label}
+          </AutoTooltip>
+          {data.deleted && <DeletedTag id={getEntityId(data)} />}
+        </span>
+      );
+    }
+
+    return (
+      <AutoTooltip ghost>
+        <span>{data.label}</span>
+      </AutoTooltip>
+    );
+  };
+
+  const singleOptionRender = (option: any) => {
+    const { data } = option;
+    return (
+      <span className="flex-center gap-4">
+        <AutoTooltip ghost style={deletedLabelStyle(data.deleted)}>
+          {data.label}
+        </AutoTooltip>
+        {data.deleted && <DeletedTag id={getEntityId(data)} />}
+      </span>
+    );
+  };
+
+  const onPickerChange = (picker: DateType) => {
+    handleOnPickerChange(picker);
+    handlePickerChange(picker);
+  };
+
+  const rangePickerValue: [dayjs.Dayjs, dayjs.Dayjs] =
+    startDate && endDate
+      ? normalizeRangeValue(startDate, endDate, picker)
+      : [dayjs().add(-DefaultDateConfig.defaultRange, 'd'), dayjs()];
+
+  const userOptionRender = (option: any) => {
+    const { data } = option;
+    return (
+      <span className="flex-center gap-4">
+        <AutoTooltip ghost style={deletedLabelStyle(data.deleted)}>
+          {data.label}
+        </AutoTooltip>
+        {data.isCurrent &&
+          renderTag(intl.formatMessage({ id: 'usage.user.currentAccount' }))}
+        {data.deleted && <DeletedTag id={getEntityId(data)} />}
+      </span>
+    );
+  };
+
+  // only for dates greater than the current day should be disabled.
+  const disabledDate = (current: dayjs.Dayjs) => {
+    return current && current > dayjs().endOf('day');
+  };
+
+  return (
+    <div className={FilterBarCss.wrapper}>
+      <div className={FilterBarCss.filters}>
+        <DatePicker.RangePicker
+          maxDate={dayjs()}
+          value={rangePickerValue}
+          format={'YYYY-MM-DD'}
+          picker={picker}
+          disabledDate={disabledDate}
+          presets={rangePresets}
+          allowClear={false}
+          style={{ width: 240 }}
+          onChange={onDateChange}
+        />
+        <SimpleSelect
+          allowClear
+          showSearch
+          mode="multiple"
+          maxTagCount={'responsive'}
+          options={routeOptions}
+          placeholder={intl.formatMessage({ id: 'usage.filter.model' })}
+          styles={{
+            wrapper: { flex: 1, maxWidth: 400, minWidth: 200 }
+          }}
+          value={selectedRoutes}
+          optionLabelRender={singleOptionRender}
+          onChange={onRoutesChange}
+        />
+        {canManageUsers && (
+          <>
+            <SimpleSelect
+              allowClear
+              showSearch
+              mode="multiple"
+              maxTagCount={'responsive'}
+              options={userOptions}
+              placeholder={intl.formatMessage({ id: 'usage.filter.user' })}
+              styles={{
+                wrapper: { flex: 1, maxWidth: 240, minWidth: 150 }
+              }}
+              value={selectedUsers}
+              optionLabelRender={userOptionRender}
+              onChange={onUsersChange}
+            />
+            <div
+              style={{
+                maxWidth: 400,
+                flex: 1,
+                minWidth: 200
+              }}
+            >
+              <Cascader
+                showSearch
+                isInFormItems={false}
+                multiple={true}
+                classNames={{
+                  popup: {
+                    root: 'cascader-popup-wrapper gpu-selector'
+                  }
+                }}
+                styles={{
+                  root: {
+                    width: '100%'
+                  },
+                  popup: {
+                    list: {
+                      flex: 1
+                    },
+                    listItem: {
+                      padding: '5px 10px'
+                    }
+                  }
+                }}
+                maxTagCount={1}
+                size="small"
+                placeholder={intl.formatMessage({ id: 'usage.filter.apikey' })}
+                options={apiKeyOptions}
+                showCheckedStrategy="SHOW_CHILD"
+                value={activeApiKeys}
+                optionNode={apiKeyOptionRender}
+                onChange={handleOnApiKeysChange}
+                getPopupContainer={(triggerNode) => triggerNode.parentNode}
+              ></Cascader>
+            </div>
+          </>
+        )}
+        {!canManageUsers && (
+          <SimpleSelect
+            allowClear
+            showSearch
+            mode="multiple"
+            maxTagCount={'responsive'}
+            options={apiKeyOptions?.[0]?.children || []}
+            placeholder={intl.formatMessage({ id: 'usage.filter.apikey' })}
+            styles={{
+              wrapper: { flex: 1, maxWidth: 240, minWidth: 100 }
+            }}
+            value={selectedApiKeys}
+            optionRender={singleOptionRender}
+            onChange={onApiKeysChange}
+          />
+        )}
+        {/* Enterprise-only Organization / User Group filters (platform-wide
+            "All" view). Renders nothing when no plugin is registered or the
+            backend returned no options. */}
+        <PluginExtraFields
+          name="UsageFilterBar"
+          context={{
+            organizationOptions: organizationOptions || [],
+            userGroupOptions: userGroupOptions || [],
+            selectedOrganizations: selectedOrganizations || [],
+            selectedUserGroups: selectedUserGroups || [],
+            onOrganizationsChange,
+            onUserGroupsChange,
+            optionLabelRender: singleOptionRender
+          }}
+        />
+        <Button
+          type="text"
+          style={{ color: 'var(--ant-color-text-tertiary)' }}
+          onClick={handleSearch}
+          icon={<SyncOutlined></SyncOutlined>}
+        ></Button>
+      </div>
+      {pageType === 'page' && (
+        <Dropdown menu={{ items: exportMenuItems }}>
+          <Button icon={<DownloadOutlined />} loading={exportingTable} />
+        </Dropdown>
+      )}
+    </div>
+  );
+};
+
+export default FilterBar;
