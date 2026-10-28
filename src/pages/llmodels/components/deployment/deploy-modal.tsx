@@ -20,7 +20,10 @@ import {
   modelSourceMap
 } from '../../config';
 import { ClusterOption, FormData, SourceType } from '../../config/types';
-import { backendOptionsMap } from '../../constants/backend-parameters';
+import {
+  backendOptionsMap,
+  defaultAscendBackend
+} from '../../constants/backend-parameters';
 import DataForm from '../../forms';
 import {
   MessageStatus,
@@ -576,7 +579,7 @@ const AddModal: FC<AddModalProps> = (props) => {
       });
     } else {
       const backend = checkOnlyAscendNPU(gpuOptions)
-        ? backendOptionsMap.ascendMindie
+        ? defaultAscendBackend
         : backendOptionsMap.vllm;
 
       const currentDefaultBackend = backendOptions?.find(

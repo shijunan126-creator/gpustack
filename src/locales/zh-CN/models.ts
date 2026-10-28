@@ -172,6 +172,8 @@ export default {
     '用于 GGUF 格式模型，支持 Linux, macOS 和 Windows。',
   'models.form.backend.vllm':
     '内置支持 NVIDIA、AMD、昇腾、海光、摩尔线程、天数智芯、沐曦和平头哥 PPU 设备。',
+  'models.form.backend.vllmAscend':
+    '在昇腾 NPU 上运行 vLLM，镜像来自 vLLM-Ascend 项目，支持 PD 分离、多机部署和投机解码。',
   'models.form.backend.voxbox': '仅支持 NVIDIA GPU 和 CPU。',
   'models.form.backend.mindie': '仅支持昇腾 NPU。',
   'models.form.backend.sglang':

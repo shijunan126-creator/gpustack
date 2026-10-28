@@ -8,6 +8,10 @@ export const backendTipsList = [
     tips: 'models.form.backend.vllm'
   },
   {
+    title: backendOptionsMap.vllmAscend,
+    tips: 'models.form.backend.vllmAscend'
+  },
+  {
     title: backendOptionsMap.SGLang,
     tips: 'models.form.backend.sglang'
   },
@@ -48,6 +52,7 @@ export const localPathTipsList = [
 export const backendLabelMap = {
   [backendOptionsMap.llamaBox]: 'llama-box',
   [backendOptionsMap.vllm]: 'vLLM',
+  [backendOptionsMap.vllmAscend]: 'vLLM-Ascend',
   [backendOptionsMap.voxBox]: 'vox-box',
   [backendOptionsMap.ascendMindie]: 'Ascend MindIE',
   [backendOptionsMap.custom]: 'Custom'
@@ -59,6 +64,10 @@ export const backendParamsHolderTips = {
     tooltip: 'models.form.backend_parameters.vllm.tips'
   },
   [backendOptionsMap.vllm]: {
+    holder: 'models.form.backend_parameters.vllm.placeholder',
+    tooltip: 'models.form.backend_parameters.vllm.tips'
+  },
+  [backendOptionsMap.vllmAscend]: {
     holder: 'models.form.backend_parameters.vllm.placeholder',
     tooltip: 'models.form.backend_parameters.vllm.tips'
   },
@@ -507,6 +516,14 @@ export const getBackendParamsTips = (backend: string) => {
       releases: 'https://github.com/vllm-project/vllm/releases',
       link: 'https://docs.vllm.ai/en/stable/cli/serve.html',
       version: 'v0.8.5'
+    };
+  }
+  if (backend === backendOptionsMap.vllmAscend) {
+    return {
+      backend: 'vLLM-Ascend',
+      releases: 'https://github.com/vllm-project/vllm-ascend/releases',
+      link: 'https://docs.vllm.ai/en/stable/cli/serve.html',
+      version: 'v0.30.0rc2'
     };
   }
   if (backend === backendOptionsMap.ascendMindie) {

@@ -178,6 +178,8 @@ export default {
     'For GGUF format models, supports Linux, macOS, and Windows.',
   'models.form.backend.vllm':
     'Built-in support for NVIDIA, AMD, Ascend, Hygon, Moore Threads, Iluvatar, MetaX, T-Head PPU devices.',
+  'models.form.backend.vllmAscend':
+    'Runs vLLM on Ascend NPUs with images from the vLLM-Ascend project. Supports prefill/decode disaggregation, multi-node deployment and speculative decoding.',
   'models.form.backend.voxbox': 'Only supports NVIDIA GPUs and CPUs.',
   'models.form.backend.mindie': 'Only supports Ascend NPUs.',
   'models.form.backend.sglang':

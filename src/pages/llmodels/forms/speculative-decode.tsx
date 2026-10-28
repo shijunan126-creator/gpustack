@@ -156,9 +156,11 @@ const SpeculativeDecode: React.FC<SpeculativeDecodeProps> = ({
 
     return (
       currentBackend?.isBuiltIn &&
-      [backendOptionsMap.SGLang, backendOptionsMap.vllm].includes(
-        backend as string
-      )
+      [
+        backendOptionsMap.SGLang,
+        backendOptionsMap.vllm,
+        backendOptionsMap.vllmAscend
+      ].includes(backend as string)
     );
   }, [backend, flatBackendOptions]);
 

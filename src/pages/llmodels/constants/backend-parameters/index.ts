@@ -10,6 +10,7 @@ import vllmParameters from './vllm';
 export const backendOptionsMap = {
   llamaBox: 'llama-box',
   vllm: 'vLLM',
+  vllmAscend: 'vLLM-Ascend',
   voxBox: 'VoxBox',
   ascendMindie: 'MindIE',
   custom: 'Custom',
@@ -19,10 +20,27 @@ export const backendOptionsMap = {
 // for checking built-in backends when selecting a gguf
 export const BuiltInBackendOptions = [
   backendOptionsMap.vllm,
+  backendOptionsMap.vllmAscend,
   backendOptionsMap.ascendMindie,
   backendOptionsMap.SGLang,
   backendOptionsMap.voxBox
 ];
+
+// Engines that run the same vLLM server and accept the same command line,
+// disaggregation recipes and speculative decoding. They differ in where their
+// images come from and which devices they run on.
+export const vllmFamily: string[] = [
+  backendOptionsMap.vllm,
+  backendOptionsMap.vllmAscend
+];
+
+export const isVllmFamily = (backend?: string | null): boolean => {
+  return !!backend && vllmFamily.includes(backend);
+};
+
+// The backend a deployment starts on when every selected device is an Ascend
+// NPU. MindIE stays selectable from the dropdown.
+export const defaultAscendBackend = backendOptionsMap.vllmAscend;
 
 export interface BackendParameter {
   label: string;
@@ -48,6 +66,7 @@ export const generateBackendParameters = (options: BackendParameter[]) => {
 export default {
   [backendOptionsMap.llamaBox]: generateBackendParameters(llamaParameters),
   [backendOptionsMap.vllm]: generateBackendParameters(vllmParameters),
+  [backendOptionsMap.vllmAscend]: generateBackendParameters(vllmParameters),
   [backendOptionsMap.ascendMindie]: generateBackendParameters(mindieParameters),
   [backendOptionsMap.voxBox]: [],
   [backendOptionsMap.custom]: [],

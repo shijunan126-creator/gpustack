@@ -27,6 +27,11 @@ const defaultCommand = {
     defaultEntry: 'vllm serve',
     defaultCommand:
       '{{model_path}} --host {{worker_ip}} --port {{port}} --served-model-name {{model_name}}'
+  },
+  [backendOptionsMap.vllmAscend]: {
+    defaultEntry: 'vllm serve',
+    defaultCommand:
+      '{{model_path}} --host {{worker_ip}} --port {{port}} --served-model-name {{model_name}}'
   }
 };
 

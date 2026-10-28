@@ -6,7 +6,10 @@ import React, { useRef } from 'react';
 import { DeployFormKeyMap, localPathTipsList, modelSourceMap } from '../config';
 import { useFormContext } from '../config/form-context';
 import { FormData } from '../config/types';
-import { backendOptionsMap } from '../constants/backend-parameters';
+import {
+  backendOptionsMap,
+  defaultAscendBackend
+} from '../constants/backend-parameters';
 import useCheckBackend from '../hooks/use-check-backend';
 
 const LocalPathForm: React.FC = () => {
@@ -54,7 +57,7 @@ const LocalPathForm: React.FC = () => {
       backend === backendOptionsMap.llamaBox
     ) {
       backend = checkOnlyAscendNPU(gpuOptions || [])
-        ? backendOptionsMap.ascendMindie
+        ? defaultAscendBackend
         : backendOptionsMap.vllm;
     }
     form.setFieldValue('backend', backend);

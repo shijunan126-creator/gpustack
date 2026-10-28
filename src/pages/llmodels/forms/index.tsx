@@ -437,7 +437,11 @@ const DataForm: React.FC<DataFormProps> = forwardRef((props, ref) => {
   const updateKVCacheConfig = (backend: string, option?: BackendOption) => {
     if (
       !option?.isBuiltIn ||
-      ![backendOptionsMap.SGLang, backendOptionsMap.vllm].includes(backend)
+      ![
+        backendOptionsMap.SGLang,
+        backendOptionsMap.vllm,
+        backendOptionsMap.vllmAscend
+      ].includes(backend)
     ) {
       return {
         extended_kv_cache: {

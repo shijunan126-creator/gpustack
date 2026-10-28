@@ -1,5 +1,8 @@
 import _ from 'lodash';
-import { backendOptionsMap } from '../constants/backend-parameters';
+import {
+  backendOptionsMap,
+  defaultAscendBackend
+} from '../constants/backend-parameters';
 
 export default function useCheckBackend() {
   // handle for ascend npu only
@@ -30,7 +33,7 @@ export default function useCheckBackend() {
     }
 
     if (checkOnlyAscendNPU(gpuOptions)) {
-      return backendOptionsMap.ascendMindie;
+      return defaultAscendBackend;
     }
     return defaultBackend;
   };

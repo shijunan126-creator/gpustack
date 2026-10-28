@@ -25,6 +25,7 @@ const SEAL_SCHEMA = jsYaml.DEFAULT_SCHEMA.extend([SealYamlType]);
 export const builtInBackendLogos: Record<string, string> = {
   [backendOptionsMap.SGLang]: SGLangLogo,
   [backendOptionsMap.vllm]: vLLMLogo,
+  [backendOptionsMap.vllmAscend]: vLLMLogo,
   [backendOptionsMap.ascendMindie]: MindIELogo,
   [backendOptionsMap.voxBox]: VoxBoxLogo
 };

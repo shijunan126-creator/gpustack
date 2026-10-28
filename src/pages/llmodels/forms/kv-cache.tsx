@@ -142,9 +142,11 @@ const KVCacheForm: React.FC<KVCacheFormProps> = ({
 
     return Boolean(
       currentBackend?.isBuiltIn &&
-      [backendOptionsMap.vllm, backendOptionsMap.SGLang].includes(
-        backend as string
-      )
+      [
+        backendOptionsMap.vllm,
+        backendOptionsMap.vllmAscend,
+        backendOptionsMap.SGLang
+      ].includes(backend as string)
     );
   }, [backend, flatBackendOptions]);
 

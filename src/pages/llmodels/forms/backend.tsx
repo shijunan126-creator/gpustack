@@ -42,6 +42,7 @@ const CaretDownWrapper = styled.span`
 // backend stays vLLM/SGLang, while the image determines its runtime features.
 const imageOverrideBackends = [
   backendOptionsMap.vllm,
+  backendOptionsMap.vllmAscend,
   backendOptionsMap.SGLang
 ];
 
