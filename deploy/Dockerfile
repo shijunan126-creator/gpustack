@@ -40,7 +40,8 @@ RUN grep -E "^__(version|git_commit)__ = " "${PKG}/__init__.py" > /tmp/version-s
 RUN find "${PKG}" -type f \( -name '*.py' -o -name '*.pyc' \) -not -path "${PKG}/ui/*" -delete
 COPY gpustack/ ${PKG}/
 RUN sed -i -E "/^__(version|git_commit)__ = /d" "${PKG}/__init__.py" \
-    && cat /tmp/version-stamp >> "${PKG}/__init__.py" && rm /tmp/version-stamp
+    && cat /tmp/version-stamp "${PKG}/__init__.py" > /tmp/init.py \
+    && mv /tmp/init.py "${PKG}/__init__.py" && rm /tmp/version-stamp
 
 # Frontend: the UI directory is replaced wholesale. The backend ships its own
 # static files into ui/static (catalog icons from the repository's static/, the
