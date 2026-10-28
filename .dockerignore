@@ -14,3 +14,9 @@ dist/
 # Offline docs are built in their own stage.
 gpustack/help/
 mkdocs.offline.generated.yml
+
+# The fork's frontend lives in ui/ and is built in its own stage.
+ui/node_modules/
+ui/dist/
+ui/src/.umi*/
+ui/.git/
