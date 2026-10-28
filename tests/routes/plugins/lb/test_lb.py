@@ -821,3 +821,52 @@ class TestEnrichFromMeta:
 
         route = ModelRoute(id=1, name="r", targets=0, ready_targets=0)
         assert asyncio.run(LBPlugin().enrich_routes([route], session=None)) == {}
+
+
+@pytest.mark.asyncio
+async def test_destinations_for_target_resolves_a_model_target():
+    """Not patched like the render tests: this runs the lazy import of the
+    controllers helper, so a removed or renamed name there fails here and not
+    only when a route is rendered in a running server."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from gpustack.routes.plugins.lb import reconciler
+
+    model = SimpleNamespace(id=5, deleted_at=None)
+    target = SimpleNamespace(model_id=5, overridden_model_name="base:lora")
+    expected = [(1, "base:lora", object())]
+    with (
+        patch.object(reconciler.Model, "one_by_id", AsyncMock(return_value=model)),
+        patch(
+            "gpustack.server.controllers.calculate_model_destinations",
+            AsyncMock(return_value=expected),
+        ) as calc,
+    ):
+        result = await reconciler._destinations_for_target(object(), target)
+
+    assert result == expected
+    calc.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_destinations_for_target_without_a_live_model_is_empty():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from gpustack.routes.plugins.lb import reconciler
+
+    assert (
+        await reconciler._destinations_for_target(
+            object(), SimpleNamespace(model_id=None, overridden_model_name=None)
+        )
+        == []
+    )
+    gone = SimpleNamespace(id=5, deleted_at="2026-01-01")
+    with patch.object(reconciler.Model, "one_by_id", AsyncMock(return_value=gone)):
+        assert (
+            await reconciler._destinations_for_target(
+                object(), SimpleNamespace(model_id=5, overridden_model_name=None)
+            )
+            == []
+        )

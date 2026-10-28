@@ -98,27 +98,20 @@ async def _destinations_for_target(
     session: AsyncSession, target: ModelRouteTarget
 ) -> DestinationTupleList:
     """The same destination list ``calculate_destinations`` builds for
-    the mapper path — cluster-registry routing, LoRA-aliased services
-    and provider DNS registries included — so LB candidates and mapper
+    the mapper path — cluster-registry routing and LoRA-aliased services
+    included — so LB candidates and mapper
     rules always address the identical clusters. Imported lazily:
     controllers imports this module, and the dependency only runs one
     way at call time."""
-    from gpustack.server.controllers import (
-        calculate_model_destinations,
-        provider_destinations,
-    )
+    from gpustack.server.controllers import calculate_model_destinations
 
-    if target.model_id is not None:
-        model = await Model.one_by_id(session, target.model_id)
-        if model is None or model.deleted_at is not None:
-            return []
-        return await calculate_model_destinations(
-            session, model, target.overridden_model_name
-        )
-    return await provider_destinations(
-        session=session,
-        provider_id=target.provider_id,
-        provider_model_name=target.overridden_model_name,
+    if target.model_id is None:
+        return []
+    model = await Model.one_by_id(session, target.model_id)
+    if model is None or model.deleted_at is not None:
+        return []
+    return await calculate_model_destinations(
+        session, model, target.overridden_model_name
     )
 
 
@@ -188,9 +181,7 @@ async def render_route(
     for (target, registries), per_instance_weight in zip(
         rendered_targets, scaled_weights
     ):
-        # Provider targets have no instances and no engine metrics;
-        # the plugin skips instance selection for kind: provider.
-        kind = "provider" if target.provider_id is not None else "instance"
+        kind = "instance"
         for _, model_name, registry in registries:
             candidates.append(
                 _build_candidate(
