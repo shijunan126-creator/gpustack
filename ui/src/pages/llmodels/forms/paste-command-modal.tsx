@@ -96,7 +96,7 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
           onChange={(e) => handleChange(e.target.value)}
         />
         {parsed.error && parsed.error !== 'empty' && (
-          <Alert type="error" showIcon message={t(`error.${parsed.error}`)} />
+          <Alert type="error" showIcon title={t(`error.${parsed.error}`)} />
         )}
         {!parsed.error && (
           <Flex vertical gap={8}>
@@ -138,7 +138,7 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
               <Alert
                 type="warning"
                 showIcon
-                message={t('variables', {
+                title={t('variables', {
                   names: _.uniq(parsed.variables).join(', ')
                 })}
               />

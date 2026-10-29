@@ -157,6 +157,8 @@ export default {
   'models.form.backend_parameters.vllm.tips':
     '{backend} parametreleri hakkında daha fazla bilgi için <a href={link} target="_blank">buraya tıklayın</a>.',
   'models.form.pasteCommand': 'Komut Yapıştır',
+  'models.form.pasteCommand.entry':
+    'Bir başlatma betiğiniz mi var? Yapıştırarak Altyapı Parametreleri ve Ortam Değişkenlerini tek seferde doldurun.',
   'models.form.pasteCommand.title': 'Başlatma Komutunu Yapıştır',
   'models.form.pasteCommand.placeholder':
     'Bir motor başlatma betiği yapıştırın, örneğin:\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',

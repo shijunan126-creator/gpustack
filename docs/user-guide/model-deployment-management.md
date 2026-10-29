@@ -368,7 +368,7 @@ For full list of supported parameters, please refer to the [Inference Backends](
 
 #### Paste a Launch Command { #paste-a-launch-command }
 
-To reuse a launch script from an engine's documentation or a recipe, click `Paste Command` next to `Backend Parameters` instead of entering each option. Paste the script as it is — the `export` lines and the `vllm serve ...` command, multi-line with `\` continuations and JSON values included — and the preview shows what was understood. Click `Apply` to fill `Backend Parameters` and `Environment Variables` together.
+To reuse a launch script from an engine's documentation or a recipe, click `Paste Command` in the notice right below `Replicas` (or the link next to `Backend Parameters`) instead of entering each option. Paste the script as it is — the `export` lines and the `vllm serve ...` command, multi-line with `\` continuations and JSON values included — and the preview shows what was understood. Click `Apply` to fill `Backend Parameters` and `Environment Variables` together.
 
 - Recognized commands: `vllm serve`, `sglang serve`, `python -m vllm.…` and `python -m sglang.…`, optionally after `export` lines, `NAME=value` prefixes or `&&`. Nothing is executed.
 - A flag you already set is replaced by the pasted one; other parameters and variables are kept, and a variable of the same name takes the pasted value.

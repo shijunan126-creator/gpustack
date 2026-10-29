@@ -160,6 +160,8 @@ export default {
   'models.form.backend_parameters.vllm.tips':
     '{backend} のパラメーターの詳細は、<a href={link} target="_blank">こちら</a>をご覧ください。',
   'models.form.pasteCommand': 'コマンドを貼り付け',
+  'models.form.pasteCommand.entry':
+    '起動スクリプトをお持ちですか？貼り付けると、バックエンドパラメータと環境変数をまとめて入力できます。',
   'models.form.pasteCommand.title': '起動コマンドを貼り付け',
   'models.form.pasteCommand.placeholder':
     '推論エンジンの起動スクリプトを貼り付けます。例：\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',

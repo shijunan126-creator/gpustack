@@ -151,6 +151,8 @@ export default {
   'models.form.backend_parameters.vllm.tips':
     '更多 {backend} 参数说明查看<a href={link} target="_blank">这里</a>。',
   'models.form.pasteCommand': '粘贴命令',
+  'models.form.pasteCommand.entry':
+    '已有启动脚本？粘贴后一次性填好后端参数和环境变量。',
   'models.form.pasteCommand.title': '粘贴启动命令',
   'models.form.pasteCommand.placeholder':
     '粘贴推理引擎的启动脚本，例如：\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',

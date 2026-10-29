@@ -157,6 +157,8 @@ export default {
   'models.form.backend_parameters.vllm.tips':
     'For more details about {backend} parameters, see <a href={link} target="_blank">here</a>.',
   'models.form.pasteCommand': 'Paste Command',
+  'models.form.pasteCommand.entry':
+    'Have a launch script? Paste it to fill Backend Parameters and Environment Variables in one go.',
   'models.form.pasteCommand.title': 'Paste Launch Command',
   'models.form.pasteCommand.placeholder':
     'Paste an engine launch script, e.g.\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',

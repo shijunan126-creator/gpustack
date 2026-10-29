@@ -24,6 +24,7 @@ import CustomBackend from './custom-backend';
 import LocalPathSource from './local-path-source';
 import ModeField from './mode-field';
 import OnlineSource from './online-source';
+import PasteCommandEntry from './paste-command-entry';
 
 interface BasicFormProps {
   /**
@@ -313,6 +314,9 @@ const BasicForm: React.FC<BasicFormProps> = (props) => {
           <input />
         </Form.Item>
       )}
+      {/* Under PD the model-level parameters are gone — each role holds its
+          own — so there is nothing here for a pasted script to fill. */}
+      {!props.pdActive && <PasteCommandEntry></PasteCommandEntry>}
       <Form.Item<FormData> name="description">
         <CInput.TextArea
           scaleSize={true}

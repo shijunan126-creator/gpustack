@@ -73,6 +73,8 @@ dom.window.matchMedia = (media) => ({
 const { createRoot } = await import('react-dom/client');
 const { Form } = await import('antd');
 const { FormContext } = await import('../../config/form-context.ts');
+const { default: PasteCommandEntry } =
+  await import('../paste-command-entry.tsx');
 const { default: BackendParametersList } =
   await import('../backend-parameters-list.tsx');
 
@@ -159,5 +161,57 @@ test('applying a pasted script fills parameters and environment together', async
     HCCL_BUFFSIZE: '1024'
   });
   assert.equal(onValuesChange.mock.callCount(), 1);
+  root.unmount();
+});
+
+test('the entry under the replica count fills the same fields', async () => {
+  const container = dom.window.document.createElement('div');
+  dom.window.document.body.appendChild(container);
+  const root = createRoot(container);
+  let form: any;
+  const Capture = () => {
+    form = Form.useFormInstance();
+    return null;
+  };
+  await act(async () => {
+    root.render(
+      createElement(
+        FormContext.Provider,
+        { value: { flatBackendOptions: [], onValuesChange: mock.fn() } as any },
+        createElement(
+          Form,
+          { initialValues: { backend: 'vLLM' } },
+          createElement(Capture),
+          createElement(PasteCommandEntry)
+        )
+      )
+    );
+  });
+
+  const buttons = () => [...dom.window.document.querySelectorAll('button')];
+  const label = 'models.form.pasteCommand';
+  await act(async () => {
+    buttons()
+      .find((b) => b.textContent === label)!
+      .click();
+  });
+  const textarea = dom.window.document.querySelector('textarea')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      dom.window.HTMLTextAreaElement.prototype,
+      'value'
+    )!.set!.call(textarea, 'export A=1\nvllm serve m --tensor-parallel-size 4');
+    textarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  });
+  await act(async () => {
+    buttons()
+      .find((b) => b.textContent === `${label}.apply`)!
+      .click();
+  });
+
+  assert.deepEqual(form.getFieldValue('backend_parameters'), [
+    '--tensor-parallel-size=4'
+  ]);
+  assert.deepEqual(form.getFieldValue('env'), { A: '1' });
   root.unmount();
 });
