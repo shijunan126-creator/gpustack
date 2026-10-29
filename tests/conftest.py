@@ -20,3 +20,16 @@ from gpustack.logging import TRACE_LEVEL, trace  # noqa: E402
 logging.addLevelName(TRACE_LEVEL, "TRACE")
 if not hasattr(logging.Logger, "trace"):
     logging.Logger.trace = trace
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_vllm_ascend_registry(monkeypatch):
+    """Building the cache provider catalog lists the vLLM-Ascend repository's
+    tags; tests never reach a registry, so it lists none."""
+    monkeypatch.setattr(
+        "gpustack.schemas.cache_provider_source.list_runners_from_registry",
+        lambda: [],
+    )

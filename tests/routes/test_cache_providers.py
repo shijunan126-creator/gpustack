@@ -56,16 +56,21 @@ class _FakeSession:
 
 @pytest.fixture(autouse=True)
 def _no_runner_overrides(monkeypatch):
-    """The check reads the runner catalog to see the versions a derived provider
-    contributes. These cases are about documents, so the installation adds
-    nothing to the packaged catalog."""
+    """The check reads the runner catalog and the vLLM-Ascend repository to see
+    the versions a derived provider contributes. These cases are about
+    documents, so the installation adds nothing to the packaged catalog and the
+    repository lists nothing."""
 
     async def none(session):
         return []
 
     monkeypatch.setattr(
-        "gpustack.routes.cache_providers.RunnerOverrideEntry.all",
+        "gpustack.schemas.cache_provider_source.RunnerOverrideEntry.all",
         staticmethod(none),
+    )
+    monkeypatch.setattr(
+        "gpustack.schemas.cache_provider_source.list_runners_from_registry",
+        lambda: [],
     )
 
 

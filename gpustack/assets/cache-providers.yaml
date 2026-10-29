@@ -932,10 +932,18 @@
   # One MetaService serves the cluster; engines on any worker reach it over
   # the network, since the pool's transfers are the engines' own.
   attach_locality: cluster
-  # The image is the one carrying the memcache_hybrid wheel and its
-  # MemFabric libraries (a vllm-ascend runner image), and it is not
-  # published under a version line of its own, so every service names it.
-  custom_version: true
+  # MemCache is not published as an image of its own: the memcache_hybrid
+  # wheel and its MemFabric libraries ship inside the vLLM-Ascend image. A
+  # version here is therefore a vLLM-Ascend release, and the MetaService runs
+  # that release's image for the worker's Ascend family. The releases the
+  # repository publishes from 0.23.0 on, the first with the AscendStore
+  # connector, are added to the one declared here, which stays when the
+  # repository cannot be reached.
+  engine_image: vllm-ascend
+  engine_versions: ">=0.23.0"
+  default_version: "0.23.0"
+  versions:
+    "0.23.0": {}
   components:
     meta:
       topology: replicas

@@ -3051,24 +3051,24 @@ def test_start_instance_writes_the_component_config_files():
     manager, clientset = _build_manager(worker_id=1)
     cache_service = _new_cache_service(
         provider_name="MemCache",
-        provider_version="custom",
+        provider_version="0.23.0",
         config=CacheServiceConfig(
             fields={"config_store_port": 6100, "evict_threshold_high": 70},
-            image="quay.io/ascend/vllm-ascend:test",
         ),
     )
 
-    create, update = _run_start(
-        manager,
-        clientset,
-        cache_service,
-        provider,
-        instance=_new_instance(component="meta"),
-    )
+    with patch.object(manager, "_detect_runtime", return_value=("cann", "8.5", "a3")):
+        create, update = _run_start(
+            manager,
+            clientset,
+            cache_service,
+            provider,
+            instance=_new_instance(component="meta"),
+        )
 
     container = create.call_args[0][0].containers[0]
     assert update.call_args[1].get("state") != CacheServiceStateEnum.ERROR
-    assert container.image == "quay.io/ascend/vllm-ascend:test"
+    assert container.image == "quay.io/ascend/vllm-ascend:v0.23.0-a3"
     assert container.execution.command[:2] == ["bash", "-c"]
     assert "MetaService.main()" in container.execution.command[2]
     env = {e.name: e.value for e in container.envs}

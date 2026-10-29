@@ -4,6 +4,8 @@ from enum import Enum
 from functools import cmp_to_key
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
 from pydantic import BaseModel, model_validator
 
 from gpustack.utils.version import compare_versions, pick_runtime_version
@@ -991,6 +993,25 @@ class CacheProvider(BaseModel):
     a declared version; the default version's run command and env templates
     still apply, so the image must be command-compatible."""
 
+    engine_image: Optional[str] = None
+    """Names the inference engine whose image carries this provider's
+    software, for a provider that ships inside that engine's image rather
+    than in one of its own. "vllm-ascend" is the only engine known: a
+    version is then a vLLM-Ascend release, and the image is that release's
+    for the node's Ascend family, named against the same repository the
+    vLLM-Ascend backend pulls from. A version declaring its own image
+    layout keeps it.
+
+    The declared `versions` are the floor: the releases the repository
+    publishes are added to them when the catalog is built (see
+    `with_runner_versions`), so a release newer than this file still shows
+    up, and an unreachable registry leaves the declared ones."""
+
+    engine_versions: Optional[str] = None
+    """PEP 440 specifier (e.g. ">=0.23.0") limiting the engine releases that
+    are offered. Applies to the releases read off the registry, not to the
+    declared `versions`."""
+
     fields: List[CacheProviderField] = []
     """Managed-mode configuration values promoted to structured form
     fields (e.g. the eviction policy), wired into the runtime config by
@@ -1317,6 +1338,10 @@ class CacheProvider(BaseModel):
                     backend: dict(images)
                     for backend, images in self.default_runtime_images.items()
                 }
+                if self.engine_image and not config.runtime_images:
+                    config.runtime_images = _engine_runtime_images(
+                        self.engine_image, version
+                    )
             params = {"version": version}
             if config.image:
                 config.image = render_template(config.image, params)
@@ -1333,7 +1358,7 @@ class CacheProvider(BaseModel):
             # the version serves accelerator nodes alone, which
             # ``supports_runtime`` reports rather than leaving to a container
             # that cannot load. A declared version has no such excuse.
-            if not config.image and not self.runner_dependency:
+            if not config.image and not (self.runner_dependency or self.engine_image):
                 raise ValueError(
                     f"Cache provider '{self.name}' version '{version}' "
                     "resolves to no image: it must declare one, or declare "
@@ -1469,6 +1494,34 @@ def _render_value(value: Any, filter_name: Optional[str] = None) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+VLLM_ASCEND_ENGINE = "vllm-ascend"
+
+# The runtime-version key of a single-build image layout: every host
+# runtime resolves to it.
+_ANY_RUNTIME = "0"
+
+
+def _engine_runtime_images(engine: str, version: str) -> Dict[str, Dict[str, str]]:
+    """The per-family images of an engine release, keyed the way
+    `CacheProviderVersionConfig.runtime_images` is: one entry per Ascend
+    family the engine publishes an image for."""
+    if engine != VLLM_ASCEND_ENGINE:
+        raise ValueError(
+            f"Unknown engine_image '{engine}': only '{VLLM_ASCEND_ENGINE}' is known"
+        )
+    # Imported here: the module reads the environment and the runner catalog,
+    # which a schema module should not pull in for every provider.
+    from gpustack import envs
+    from gpustack.utils.vllm_ascend_images import VARIANT_TAG_SUFFIX, image_for
+
+    return {
+        f"cann-{variant}": {
+            _ANY_RUNTIME: image_for(envs.VLLM_ASCEND_IMAGE_REPOSITORY, version, variant)
+        }
+        for variant in VARIANT_TAG_SUFFIX
+    }
 
 
 def render_template(value: str, params: Dict[str, Any]) -> str:
@@ -2059,6 +2112,54 @@ def derive_runner_versions(
     return versions
 
 
+def _engine_release(version: str) -> Optional[Version]:
+    try:
+        return Version(version)
+    except InvalidVersion:
+        return None
+
+
+def with_engine_versions(provider: CacheProvider, runners: List[Any]) -> CacheProvider:
+    """The provider with the engine releases found in `runners` added to its
+    declared versions.
+
+    Each release carries the images the repository publishes for it, per Ascend
+    family, so a family a release has no image for is refused rather than handed
+    another's build. A release outside `engine_versions`, or deprecated, or whose
+    version is not a release number, is left out. The default is the newest
+    release that is not a pre-release: a candidate is listed, but nobody is
+    moved onto one by not choosing.
+    """
+    spec = SpecifierSet(provider.engine_versions) if provider.engine_versions else None
+    found: Dict[str, Dict[str, Dict[str, str]]] = {}
+    for runner in runners:
+        if runner.service != provider.engine_image or getattr(
+            runner, "deprecated", False
+        ):
+            continue
+        release = _engine_release(runner.service_version)
+        if release is None or (spec and not spec.contains(release, prereleases=True)):
+            continue
+        family = f"{runner.backend}-{runner.backend_variant}"
+        found.setdefault(runner.service_version, {})[family] = {
+            _ANY_RUNTIME: runner.docker_image
+        }
+    if not found:
+        return provider
+
+    data = provider.model_dump()
+    versions = data["versions"]
+    for version, runtime_images in found.items():
+        if version not in versions:
+            versions[version] = {"runtime_images": runtime_images}
+    releases = {v: _engine_release(v) for v in versions}
+    stable = [v for v, r in releases.items() if r and not r.is_prerelease]
+    pool = stable or [v for v, r in releases.items() if r]
+    if pool:
+        data["default_version"] = max(pool, key=lambda v: releases[v])
+    return CacheProvider(**data)
+
+
 def with_runner_versions(
     providers: List[CacheProvider], runners: Optional[List[Any]]
 ) -> List[CacheProvider]:
@@ -2076,6 +2177,9 @@ def with_runner_versions(
         return providers
     resolved: List[CacheProvider] = []
     for provider in providers:
+        if provider.engine_image:
+            resolved.append(with_engine_versions(provider, runners))
+            continue
         if not provider.runner_dependency:
             resolved.append(provider)
             continue
