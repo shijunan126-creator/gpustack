@@ -46,8 +46,43 @@ from aisbench_runner.report import Strategy, build_benchmark, summary_line, writ
 _DURATION_ROWS_PER_STREAM_SECOND = 0.5
 # Never generate more rows than this for one point.
 _MAX_ROWS = 20000
+# Nor build more than this many prompt+output tokens into one point's dataset.
+# The rows are materialized as text and written to one JSONL file before
+# aisbench starts, so without a budget a high knob (a rate-axis ramp point is
+# knob x 30 requests, up to the preset ceiling of 8192) puts gigabytes of
+# prompts in the benchmark container and takes it down before it measures
+# anything.
+_MAX_DATASET_TOKENS = 24_000_000
+# How long a point may go without a recorded request before it is called
+# stuck. A request is free to take as long as the worker says it may, so this
+# floor is raised to that allowance when one is stated.
+_DEFAULT_STALL_SECONDS = 900.0
 
 CURVE_OUTCOME_VERSION = 1
+
+
+def _stall_timeout(request_timeout: Optional[float]) -> float:
+    """The per-point stall bound for the worker's per-request allowance.
+
+    The inference client aisbench builds applies no request timeout at all
+    (``ClientTimeout(total=None)``), while the worker states how long one
+    request may take -- an hour by default. Reading that as the stall bound
+    keeps a slow but healthy request from being killed as no progress.
+    """
+    if not request_timeout or request_timeout <= 0:
+        return _DEFAULT_STALL_SECONDS
+    return max(_DEFAULT_STALL_SECONDS, float(request_timeout))
+
+
+def dataset_row_limit(tokens_per_row: Optional[int]) -> int:
+    """Most rows one point may carry, given what a row costs.
+
+    A file dataset states no row cost and is bounded by the file, so only the
+    row cap applies to it."""
+    limit = _MAX_ROWS
+    if tokens_per_row:
+        limit = min(limit, max(1, _MAX_DATASET_TOKENS // tokens_per_row))
+    return limit
 
 
 @dataclass
@@ -60,6 +95,7 @@ class RunOptions:
     trust_remote_code: bool = False
     api_key: str = ""
     verify_tls: bool = True
+    request_timeout: Optional[float] = None
     mode: str = "single"
     axis: str = "rate"
     lower_bound: Optional[float] = None
@@ -155,6 +191,7 @@ class Benchmark:
             ),
             work_root=os.path.join(opts.output_dir, f"{opts.output_base}.aisbench"),
             builder=self.builder,
+            stall_timeout=_stall_timeout(opts.request_timeout),
             keep_work_dirs=os.environ.get("AISBENCH_RUNNER_KEEP_WORK_DIRS") == "1",
         )
 
@@ -166,6 +203,37 @@ class Benchmark:
             return self.sharegpt.take(count)
         assert self.random is not None
         return ensure_lengths(self.random, self.builder, count, seed)
+
+    def tokens_per_row(self) -> Optional[int]:
+        """Roughly how many tokens one synthetic row holds, prefix included.
+
+        None for a file dataset, whose rows are whatever the file carries and
+        whose count is therefore already bounded by the file.
+        """
+        if self.random is None:
+            return None
+        prefix = max((b.prefix_tokens for b in self.random.prefix_buckets), default=0)
+        return max(1, self.random.prompt_tokens + prefix + self.random.output_tokens)
+
+    def limit_count(self, count: int, name: str) -> int:
+        """Clamp one point's request count to the dataset budget.
+
+        A point that asks for more than the budget runs on a smaller dataset:
+        it is measured over fewer requests (and so for a shorter window) than
+        the knob implied, which the log says and the report's termination
+        records. Refusing instead would turn a large-but-legitimate ramp point
+        into a failed one.
+        """
+        per_row = self.tokens_per_row()
+        limit = dataset_row_limit(per_row)
+        if count <= limit:
+            return count
+        cost = f" of {per_row} tokens" if per_row else ""
+        log(
+            f"{name}: {count} requests would exceed the dataset budget "
+            f"({limit} rows{cost}); measuring {limit}"
+        )
+        return limit
 
     def measure(
         self,
@@ -179,7 +247,7 @@ class Benchmark:
     ) -> Optional[Dict[str, Any]]:
         """Run one point and return its report entry (None when nothing was
         recorded)."""
-        rows = self.rows(count, seed)
+        rows = self.rows(self.limit_count(count, name), seed)
         if strategy.kind == "constant":
             concurrency, request_rate = len(rows), float(strategy.rate or 0.0)
         else:

@@ -144,7 +144,7 @@ gpustack start [OPTIONS]
 | `--worker-ifname` значение                  | (пусто)                                | Имя сетевого интерфейса узла-воркера. По умолчанию определяется автоматически. |
 | `--kv-transfer-ifname` значение                      | (пусто)                                | Сетевой интерфейс для передачи KV-кэша при разделённом развёртывании prefill/decode. Определяется автоматически, если на хосте ровно один маршрутизируемый интерфейс. При нескольких интерфейсах обязателен, поскольку неверный выбор заставляет движок объявлять адрес, недоступный другому участнику. |
 | `--proxy-mode` значение                     | (пусто)                                | Режим проксирования для доступа к экземплярам моделей: `direct`, `worker` или `tunnel` (воркер сам соединяется с сервером; для воркеров за межсетевым экраном/NAT). По умолчанию — `direct` для встроенного и `worker` для отдельного воркера. |
-| `--benchmark-image-repo` значение           | `gpustack/benchmark-runner`            | Переопределить репозиторий образа контейнера бенчмарков GPUStack по умолчанию. В отличие от `--image-repo`, значение используется как есть, поэтому включайте тег.<br/>Если образ `gpustack/benchmark-runner:<tag>` находится вне пространства имён `gpustack`, например `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`, сначала укажите реестр с родительским пространством имён через `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup`, затем задайте этому флагу (либо ключу конфигурации воркера `benchmark_image_repo`, либо переменной среды `GPUSTACK_BENCHMARK_IMAGE_REPO`) значение `gpustack-ai/benchmark-runner:<tag>`. |
+| `--benchmark-image-repo` значение           | `aisbench-runner:v0.1.1` | Переопределить репозиторий образа контейнера бенчмарков GPUStack по умолчанию. В отличие от `--image-repo`, значение используется как есть, поэтому включайте тег.<br/>Если образ `gpustack/benchmark-runner:<tag>` находится вне пространства имён `gpustack`, например `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`, сначала укажите реестр с родительским пространством имён через `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup`, затем задайте этому флагу (либо ключу конфигурации воркера `benchmark_image_repo`, либо переменной среды `GPUSTACK_BENCHMARK_IMAGE_REPO`) значение `gpustack-ai/benchmark-runner:<tag>`. |
 | `--benchmark-dir` значение                  | `<data-dir>/benchmarks`                | Каталог хранения результатов бенчмарков. |
 | `--benchmark-max-duration-seconds` значение | (пусто)                                | Максимальная длительность бенчмарка до тайм-аута. Пустое значение отключает ограничение. |
 
@@ -168,7 +168,7 @@ debug: false
 data_dir: /path/to/data_dir
 cache_dir: /path/to/cache_dir
 benchmark_dir: /path/to/benchmark_dir
-benchmark_image_repo: gpustack/benchmark-runner
+benchmark_image_repo: aisbench-runner:v0.1.1
 token: your_token
 huggingface_token: your_huggingface_token
 insecure_tls: false

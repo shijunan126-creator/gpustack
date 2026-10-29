@@ -145,29 +145,51 @@ def build_benchmark(
 
     ``requested`` is the number of requests the point was sized for and
     ``stop_reason`` the constraint that ended it (``max_requests`` when every
-    request ran, ``max_seconds`` when the duration cap cut it short), which
+    request ran, ``max_seconds`` when the duration cap cut it short,
+    ``runner_aborted`` when the runner stopped aisbench itself), which
     GPUStack surfaces as the point's termination. ``clock_offset`` converts
-    aisbench's ``perf_counter`` timestamps to Unix time. Returns None when not
-    a single request was recorded, which GPUStack reads as a failed point.
+    aisbench's ``perf_counter`` timestamps to Unix time.
+
+    Returns None only when no request was recorded at all, which GPUStack
+    reads as a failed point. A point whose requests all failed is still
+    reported, with its error counts: dropping it left a hole in the curve
+    where a 100%-error point had been measured.
     """
-    measured = trim(records, warmup, cooldown)
-    if not measured:
+    if not records:
         return None
+    measured = trim(records, warmup, cooldown)
+    # A request that never got a time point (a refused connection, one cut
+    # short by the kill) has no place in send order, so the warmup trim cannot
+    # see it. It is still an error, and counting it is what keeps a point with
+    # a third of its requests refused from reading as 100% successful.
+    untimed = [r for r in records if r.start is None]
+    counted = list(measured) + untimed
     offset = (
         clock_offset if clock_offset is not None else time.time() - time.perf_counter()
     )
 
     ok = [r for r in measured if r.measurable]
-    bad = [r for r in measured if not r.measurable]
+    bad = [r for r in counted if not r.measurable]
 
-    start = min(r.start for r in measured)
-    end = max(r.end for r in measured)
-    duration = max(end - start, 1e-9)
+    # The measured window comes from the timed requests only: an untimed one
+    # has no start to place on it. A point with no timed request at all still
+    # reports, with a zero-length window and zero rates, so its failures are
+    # visible instead of the point going missing.
+    if measured:
+        start = min(r.start for r in measured)
+        end = max(r.end for r in measured)
+        duration = max(end - start, 1e-9)
+    else:
+        start = end = time.perf_counter()
+        duration = 0.0
+
+    def rate(numerator: float) -> float:
+        return numerator / duration if duration > 0 else 0.0
 
     def tokens_per_second(select) -> float:
-        return sum(select(r) for r in ok) / duration
+        return rate(sum(select(r) for r in ok))
 
-    rps_mean = len(ok) / duration
+    rps_mean = rate(len(ok))
     output_tps = tokens_per_second(lambda r: r.output_tokens)
     input_tps = tokens_per_second(lambda r: r.input_tokens)
     total_tps = output_tps + input_tps
@@ -180,7 +202,7 @@ def build_benchmark(
     concurrency = stats.concurrency_series(
         [(r.start, r.end) for r in measured], start, end
     )
-    concurrency_mean = sum(r.latency for r in measured) / duration
+    concurrency_mean = rate(sum(r.latency for r in measured))
 
     def iterations(r: RequestRecord) -> int:
         return max(1, len(r.time_points) - 1)
@@ -190,7 +212,7 @@ def build_benchmark(
             "successful": len(ok),
             "errored": len(bad),
             "incomplete": 0,
-            "total": len(measured),
+            "total": len(counted),
         },
         "requests_per_second": stats.with_mean(
             stats.status_summary(stats.per_second_series(completions, start, end)),

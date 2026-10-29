@@ -383,6 +383,7 @@ class CacheServiceManager:
                     f"{cache_service.provider_name} version {resolved_version}"
                 )
 
+            self._check_host_ports(component_spec, provider, cache_service)
             self._prepare_data_dirs(component_spec, params)
             run_container = Container(
                 image=image,
@@ -755,6 +756,41 @@ class CacheServiceManager:
             ContainerFile(path=path, content=render_template(content, params))
             for path, content in component_spec.files.items()
         ]
+
+    @staticmethod
+    def _check_host_ports(
+        component_spec: Optional[CacheProviderComponent],
+        provider: CacheProvider,
+        cache_service: CacheServicePublic,
+    ) -> None:
+        """Refuse to start when a port the component takes from a field is
+        already held on this worker.
+
+        Such a port is not one the worker allocates, so it is in no
+        reservation: a second service, or a model workload, can hold the same
+        number. The container would then die on bind and the restart budget
+        would park the service in ERROR with a message that says nothing about
+        the port.
+        """
+        if component_spec is None or not component_spec.host_ports:
+            return
+        fields = (cache_service.config.fields if cache_service.config else None) or {}
+        values = resolved_field_values(provider.fields, fields)
+        for name in component_spec.host_ports:
+            value = values.get(name)
+            if value in (None, ""):
+                continue
+            try:
+                port = int(float(value))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"Field '{name}' must resolve to a port number, got {value!r}"
+                )
+            if not network.is_port_available(port):
+                raise ValueError(
+                    f"Port {port} from field '{name}' is already in use on this "
+                    "worker; choose a free one for this service"
+                )
 
     @staticmethod
     def _prepare_data_dirs(component_spec, params: Dict[str, Any]) -> None:

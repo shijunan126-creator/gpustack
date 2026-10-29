@@ -3089,3 +3089,89 @@ def test_start_instance_without_component_files_mounts_none():
     manager, clientset = _build_manager(worker_id=1)
     create, _ = _run_start(manager, clientset, _new_cache_service(), _new_provider())
     assert not create.call_args[0][0].containers[0].files
+
+
+def _host_port_provider() -> CacheProvider:
+    """A component binding a port it reads from a field."""
+    return _new_provider(
+        components={
+            "meta": CacheProviderComponent(
+                topology="replicas",
+                replicas=1,
+                attach_endpoint=True,
+                gpu_access=False,
+                ports=["port"],
+                host_ports=["config_store_port"],
+            )
+        },
+        fields=[
+            CacheProviderField(
+                name="config_store_port",
+                type="number",
+                default=6000,
+                min=1025,
+                max=65535,
+            )
+        ],
+    )
+
+
+def test_start_refuses_a_field_port_the_worker_already_holds():
+    """Such a port is in no reservation, so a second service can take the
+    same number; the start then fails with a message naming the field,
+    instead of leaving a bind error in a container that restarts until the
+    budget parks it in ERROR."""
+    manager, clientset = _build_manager(worker_id=1)
+    service = _new_cache_service(
+        provider_version="v1",
+        config=CacheServiceConfig(fields={"config_store_port": 6000}),
+    )
+    with patch(
+        "gpustack.worker.cache_service_manager.network.is_port_available",
+        return_value=False,
+    ):
+        create, update = _run_start(
+            manager,
+            clientset,
+            service,
+            _host_port_provider(),
+            instance=_new_instance(component="meta"),
+        )
+
+    create.assert_not_called()
+    assert update.call_args[1]["state"] == CacheServiceStateEnum.ERROR
+    message = update.call_args[1]["state_message"]
+    assert "config_store_port" in message
+    assert "6000" in message
+
+
+def test_start_proceeds_when_the_field_port_is_free():
+    manager, clientset = _build_manager(worker_id=1)
+    service = _new_cache_service(
+        provider_version="v1",
+        config=CacheServiceConfig(fields={"config_store_port": 6000}),
+    )
+    with patch(
+        "gpustack.worker.cache_service_manager.network.is_port_available",
+        return_value=True,
+    ):
+        create, update = _run_start(
+            manager,
+            clientset,
+            service,
+            _host_port_provider(),
+            instance=_new_instance(component="meta"),
+        )
+
+    assert update.call_args[1].get("state") != CacheServiceStateEnum.ERROR
+    create.assert_called_once()
+
+
+def test_a_component_without_host_ports_is_not_checked():
+    manager, clientset = _build_manager(worker_id=1)
+    with patch(
+        "gpustack.worker.cache_service_manager.network.is_port_available",
+    ) as available:
+        _run_start(manager, clientset, _new_cache_service(), _new_provider())
+
+    available.assert_not_called()

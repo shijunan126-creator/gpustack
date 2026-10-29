@@ -2899,3 +2899,74 @@ async def test_update_does_not_run_creation_memory_check(monkeypatch):
     workers.assert_not_awaited()
     models.assert_not_awaited()
     caches.assert_not_awaited()
+
+
+def _bounded_provider() -> CacheProvider:
+    """Two number fields a declaration puts in one order only."""
+    provider = _provider()
+    provider.fields = provider.fields + [
+        CacheProviderField(name="high", type="number", default=90, min=1, max=99),
+        CacheProviderField(
+            name="low",
+            type="number",
+            default=80,
+            min=1,
+            max=98,
+            at_most="high",
+        ),
+    ]
+    return provider
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fields,fragment",
+    [
+        # Both values are inside their own bounds; only the pair is wrong.
+        ({"low": 95, "high": 90}, "must not exceed"),
+        # The default fills the other side, so the check reads what a launch
+        # would render rather than what the request carried.
+        ({"low": 95}, "must not exceed"),
+    ],
+)
+async def test_create_rejects_a_field_above_its_declared_bound(
+    monkeypatch, fields, fragment
+):
+    """A low watermark above the high one is legal per field and wrong as a
+    pair; the pool then evicts in an order nothing downstream can reason
+    about. Refused where every other field value is."""
+    _patch_provider(monkeypatch, _bounded_provider())
+    _patch_create_prereqs(
+        monkeypatch, worker=SimpleNamespace(id=5, cluster_id=1, deleted_at=None)
+    )
+
+    create_in = _managed_create(
+        config=CacheServiceConfig(fields={"ram_size": 20, **fields})
+    )
+    with pytest.raises(BadRequestException) as exc_info:
+        await cache_services_route.create_cache_service(
+            session=MagicMock(), ctx=_user_ctx(), cache_service_in=create_in
+        )
+    assert fragment in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_create_accepts_a_field_at_its_declared_bound(monkeypatch):
+    """The bound is inclusive, and a pair in order passes."""
+    _patch_provider(monkeypatch, _bounded_provider())
+    _patch_create_prereqs(
+        monkeypatch, worker=SimpleNamespace(id=5, cluster_id=1, deleted_at=None)
+    )
+    service = MagicMock()
+    service.name = "svc"
+    create = AsyncMock(return_value=service)
+    monkeypatch.setattr(cache_services_route.CacheService, "create", create)
+
+    await cache_services_route.create_cache_service(
+        session=MagicMock(),
+        ctx=_user_ctx(),
+        cache_service_in=_managed_create(
+            config=CacheServiceConfig(fields={"ram_size": 20, "low": 90, "high": 90})
+        ),
+    )
+    create.assert_awaited_once()

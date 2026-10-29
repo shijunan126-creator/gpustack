@@ -208,6 +208,8 @@ export default {
     '提前停止:达到单档时间上限,仅完成 {processed}/{requested} 个请求。',
   'benchmark.detail.termination.maxErrors':
     '提前停止:错误过多,仅完成 {processed}/{requested} 个请求。',
+  'benchmark.detail.termination.runnerAborted':
+    '提前停止:运行端中止了 aisbench,仅完成 {processed}/{requested} 个请求。',
   'benchmark.detail.termination.default':
     '提前停止({reason}):仅完成 {processed}/{requested} 个请求。',
   'benchmark.detail.summary.stageDetail': '阶段详情',

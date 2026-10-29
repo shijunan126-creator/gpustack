@@ -542,6 +542,14 @@ class CacheProviderField(BaseModel):
     """Numeric bounds and stepper increment for number-typed fields;
     the UI control and the API validation both honor them."""
 
+    at_most: Optional[str] = None
+    """Name of another declared number field this one may not exceed.
+    For a pair that only makes sense in one order -- an eviction
+    high/low watermark, a max that cannot sit under a min -- which the
+    per-field bounds cannot express: both values are legal on their own.
+    Enforced when a service is created or edited, against the values the
+    launch resolves."""
+
 
 class CacheProviderComponentPort(BaseModel):
     """A port a component binds, optionally only for the configurations
@@ -685,6 +693,15 @@ class CacheProviderComponent(BaseModel):
     its settings from a path (named by an env var, say) rather than from
     flags. An unknown placeholder is left as written, as in a launch
     template."""
+
+    host_ports: List[str] = []
+    """Names of declared fields whose value is a port this component binds
+    on the worker's own network namespace, rather than one the platform
+    allocates. A field takes no part in the worker's port reservations, so
+    nothing stops a second instance -- or a model workload -- from taking the
+    same number; the worker checks these before it starts the container and
+    reports an occupied one instead of leaving a bind error in a service that
+    keeps restarting."""
 
     data_dirs: List[str] = []
     """Directories this component keeps its data in (templates, e.g. a
@@ -1243,6 +1260,53 @@ class CacheProvider(BaseModel):
                     )
         return self
 
+    @model_validator(mode="after")
+    def _validate_field_relations(self) -> "CacheProvider":
+        """Relations between declared fields, which per-field bounds cannot
+        state: an ``at_most`` bound, and the port fields a component binds on
+        its host.
+
+        A relation naming something that does not exist resolves to nothing at
+        runtime -- the bound silently stops applying, or the port check passes
+        over the field it was meant to guard -- so both are rejected at load
+        time, where the declaration that carries them is still identifiable.
+        """
+        declared = {field.name: field for field in self.fields}
+        for field in self.fields:
+            other = field.at_most
+            if other is None:
+                continue
+            if other == field.name:
+                raise ValueError(
+                    f"provider '{self.name}' field '{field.name}' is bounded "
+                    "by itself"
+                )
+            target = declared.get(other)
+            if target is None:
+                raise ValueError(
+                    f"provider '{self.name}' field '{field.name}' is bounded "
+                    f"by '{other}', which it does not declare"
+                )
+            if field.type != "number" or target.type != "number":
+                raise ValueError(
+                    f"provider '{self.name}' bounds field '{field.name}' by "
+                    f"'{other}': at_most needs two number fields"
+                )
+        for name, component in self.components.items():
+            for port_field in component.host_ports:
+                field = declared.get(port_field)
+                if field is None:
+                    raise ValueError(
+                        f"component '{name}' binds host port '{port_field}', "
+                        "which is not a declared field"
+                    )
+                if field.type != "number":
+                    raise ValueError(
+                        f"component '{name}' binds host port '{port_field}', "
+                        "which is not a number field"
+                    )
+        return self
+
     def attach_component(self) -> str:
         """Name of the component engines attach to ("" for
         single-component providers)."""
@@ -1765,6 +1829,48 @@ def validate_injection_templates(provider: "CacheProvider") -> List[str]:
                 f"{prefix} references placeholder '{name}', which is not a "
                 "reserved placeholder, a declared field, or a key present "
                 "in every locality bucket"
+            )
+    return errors
+
+
+RESERVED_COMPONENT_PLACEHOLDERS = frozenset(
+    {"host", "port", "metrics_port", "service_id", "worker_ip"}
+)
+"""Placeholders the platform itself supplies when a component's launch
+namespace is built (see ``_build_template_params`` in the worker)."""
+
+
+def validate_component_file_templates(provider: "CacheProvider") -> List[str]:
+    """Check the config files a component declares against the placeholders
+    that component's launch namespace resolves; returns human-readable
+    violations (empty when clean).
+
+    Enforced at load time for the reason the injection templates are: an
+    unknown placeholder renders literally into the file, and a component that
+    reads its settings from it then starts with a value nobody asked for.
+    """
+    errors: List[str] = []
+    declared = {field.name for field in provider.fields}
+    addresses = {f"component.{name}.address" for name in provider.components}
+    for name, component in provider.components.items():
+        if not component.files:
+            continue
+        ports = {
+            f"ports.{port_name}{suffix}"
+            for port_name in component.declared_ports()
+            for suffix in ("", ".url")
+        }
+        allowed = set(RESERVED_COMPONENT_PLACEHOLDERS) | declared | addresses | ports
+        referenced = {
+            match.group(1)
+            for content in component.files.values()
+            for match in _TEMPLATE_PATTERN.finditer(content)
+        }
+        for placeholder in sorted(referenced - allowed):
+            errors.append(
+                f"component '{name}' file references placeholder "
+                f"'{placeholder}', which is not a reserved placeholder, a "
+                "declared field, a component address, or one of its ports"
             )
     return errors
 

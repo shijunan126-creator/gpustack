@@ -79,6 +79,15 @@ _ERR_LINE_RE = re.compile(r"^[A-Za-z_.]*(?:Error|Exception)\b.*$", re.MULTILINE)
 
 STOP_MAX_REQUESTS = "max_requests"
 STOP_MAX_SECONDS = "max_seconds"
+# The runner ended the point itself: aisbench's inference task failed, or the
+# target stopped answering. Reported as its own reason so a truncated point is
+# not read back as one that simply finished its requests.
+STOP_RUNNER_ABORTED = "runner_aborted"
+
+# Minimum spacing between passes over aisbench's output files. Every line it
+# prints used to trigger one, and each pass re-counts the records from the top
+# of the file, which is quadratic on a point with thousands of requests.
+_OBSERVE_INTERVAL_SECONDS = 1.0
 
 
 @dataclass
@@ -351,8 +360,9 @@ class Engine:
         if watch.task_failed:
             return (
                 "the inference task failed; stopping aisbench",
-                STOP_MAX_REQUESTS,
-                None,
+                STOP_RUNNER_ABORTED,
+                "the inference task failed; the point measured what it recorded "
+                "before that",
             )
         if watch.done >= total and now - watch.last_activity > _DONE_GRACE_SECONDS:
             return (
@@ -378,7 +388,7 @@ class Engine:
                 f"aisbench made no progress for {self.stall_timeout:.0f}s and was "
                 "stopped; the target may have stopped answering"
             )
-            return error, STOP_MAX_REQUESTS, error
+            return error, STOP_RUNNER_ABORTED, error
         return None
 
 
@@ -396,6 +406,7 @@ class _Watch:
     error: Optional[str] = None
     stream_open: bool = True
     task_failed: bool = False
+    observed_at: float = 0.0
 
     def __post_init__(self) -> None:
         self.last_activity = self.launched
@@ -411,8 +422,18 @@ class _Watch:
 
     def observe(self, out_dir: str) -> Optional[int]:
         """Refresh from the files aisbench writes; returns the completed
-        request count when it changed."""
+        request count when it changed.
+
+        Throttled: counting means re-reading the records aisbench has written
+        so far, and the loop calls this once per output line as well as once
+        per second. A second of staleness changes no decision -- the duration
+        cap and the stall bound are both measured in tens of seconds -- and it
+        keeps the count linear in the run length rather than quadratic.
+        """
         now = time.monotonic()
+        if now - self.observed_at < _OBSERVE_INTERVAL_SECONDS:
+            return None
+        self.observed_at = now
         if self.sending_at is None and (
             _infer_log_has(out_dir, _SENDING_MARKER)
             or now - self.launched > _SENDING_MARKER_TIMEOUT

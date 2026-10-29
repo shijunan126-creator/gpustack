@@ -1246,6 +1246,40 @@ def _validate_required_fields(
             )
 
 
+def _as_number(value: Any) -> Optional[float]:
+    """A field value as the number a comparison needs; None when it is not
+    one (the per-field check reports that separately)."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_field_relations(
+    provider: CacheProvider, values: Dict[str, Any], stored: Optional[Dict[str, Any]]
+) -> None:
+    """Relations between two declared fields (at_most): each value is legal on
+    its own, so the per-field bounds cannot catch an inverted pair. Judged
+    against the values the launch resolves, defaults included, because that is
+    what the worker renders."""
+    resolved = resolved_field_values(provider.fields, {**(stored or {}), **values})
+    for field in provider.fields:
+        upper = field.at_most
+        if upper is None:
+            continue
+        mine = _as_number(resolved.get(field.name))
+        ceiling = _as_number(resolved.get(upper))
+        if mine is None or ceiling is None:
+            continue
+        if mine > ceiling:
+            raise BadRequestException(
+                message=(
+                    f"config.fields.{field.name} must not exceed "
+                    f"config.fields.{upper}"
+                )
+            )
+
+
 def _validate_fields(
     cache_service_in: CacheServiceBase,
     provider: Optional[CacheProvider],
@@ -1329,6 +1363,8 @@ def _validate_fields(
                     "backslashes, or line breaks"
                 )
             )
+
+    _validate_field_relations(provider, values, stored)
 
 
 @router.post("", response_model=CacheServicePublic)

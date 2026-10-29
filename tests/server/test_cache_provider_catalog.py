@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from gpustack.schemas.cache_providers import (
     CPU_BACKEND,
     CacheProvider,
+    CacheProviderField,
     CacheProviderL2Backend,
     CacheProviderL2Field,
     CacheProviderVersionConfig,
@@ -16,6 +17,7 @@ from gpustack.schemas.cache_providers import (
     render_template,
     render_typed_template,
     resolved_field_values,
+    validate_component_file_templates,
     validate_injection_templates,
     validate_localized_text,
     with_runner_versions,
@@ -1827,3 +1829,97 @@ def test_memcache_field_values_reach_the_engine_config():
     assert "config_store_url = tcp://10.0.0.5:6100" in local_conf
     assert "protocol = device_sdma" in local_conf
     assert "dram.size = 40GB" in local_conf
+
+
+def test_a_component_file_must_render_inside_its_launch_namespace():
+    """A component reads its settings from the file, so a placeholder the
+    launch namespace does not resolve lands in it verbatim and the component
+    starts on a value nobody configured. Flagged at load time, like the
+    injection templates it sits beside."""
+    provider = CacheProvider(
+        name="bad-files",
+        custom_version=True,
+        fields=[
+            CacheProviderField(name="cap_gb", type="number", default=8),
+        ],
+        components={
+            "meta": {
+                "attach_endpoint": True,
+                "ports": ["port"],
+                "files": {
+                    "/tmp/meta.conf": (
+                        "url = tcp://{{worker_ip}}:{{port}}\n"
+                        "cap = {{cap_gb}}\n"
+                        "typo = {{config_stor_port}}\n"
+                        "peer = {{component.meta.address}}\n"
+                        "other = {{ports.port.url}}\n"
+                    )
+                },
+            }
+        },
+    )
+
+    errors = validate_component_file_templates(provider)
+    joined = "\n".join(errors)
+    assert "placeholder 'config_stor_port'" in joined
+    # only the typo: reserved keys, declared fields, component addresses and
+    # the component's own ports are all resolvable here
+    assert len(errors) == 1
+
+
+def test_bundled_catalog_passes_the_component_file_contract():
+    """Every shipped provider must satisfy the contract the loader enforces."""
+    for provider in asset_providers():
+        assert validate_component_file_templates(provider) == []
+
+
+def test_memcache_declares_the_port_and_watermark_relations():
+    """The config store port is bound from a field (so the worker checks it),
+    and the low watermark cannot be set above the high one."""
+    provider = _asset_provider("MemCache")
+    meta = provider.get_component("meta")
+    assert meta.host_ports == ["config_store_port"]
+    low = next(f for f in provider.fields if f.name == "evict_threshold_low")
+    assert low.at_most == "evict_threshold_high"
+
+
+def test_a_relation_must_name_a_declared_number_field():
+    """A relation naming nothing resolves to nothing at runtime: the bound
+    silently stops applying, so it is refused where it is declared."""
+    with pytest.raises(ValidationError, match="does not declare"):
+        CacheProvider(
+            name="bound-to-nothing",
+            custom_version=True,
+            fields=[{"name": "low", "type": "number", "at_most": "high"}],
+        )
+
+    with pytest.raises(ValidationError, match="two number fields"):
+        CacheProvider(
+            name="bound-to-a-string",
+            custom_version=True,
+            fields=[
+                {"name": "low", "type": "number", "at_most": "high"},
+                {"name": "high", "type": "string"},
+            ],
+        )
+
+
+def test_host_ports_must_name_a_declared_number_field():
+    with pytest.raises(ValidationError, match="not a declared field"):
+        CacheProvider(
+            name="port-from-nothing",
+            custom_version=True,
+            components={
+                "meta": {"attach_endpoint": True, "host_ports": ["config_store_port"]}
+            },
+        )
+
+    with pytest.raises(ValidationError, match="not a number field"):
+        CacheProvider(
+            name="port-from-a-string",
+            custom_version=True,
+            fields=[{"name": "config_store_port", "type": "string"}],
+            components={
+                "meta": {"attach_endpoint": True, "host_ports": ["config_store_port"]}
+            },
+        )
