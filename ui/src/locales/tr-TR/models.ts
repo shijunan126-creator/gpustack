@@ -156,6 +156,29 @@ export default {
     'örn., --context-length=8192 (ad ve değeri ayırmak için = veya boşluk kullanın)',
   'models.form.backend_parameters.vllm.tips':
     '{backend} parametreleri hakkında daha fazla bilgi için <a href={link} target="_blank">buraya tıklayın</a>.',
+  'models.form.pasteCommand': 'Komut Yapıştır',
+  'models.form.pasteCommand.title': 'Başlatma Komutunu Yapıştır',
+  'models.form.pasteCommand.placeholder':
+    'Bir motor başlatma betiği yapıştırın, örneğin:\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
+  'models.form.pasteCommand.tips':
+    'export satırlarını ve vLLM veya SGLang serve komutunu Altyapı Parametreleri ile Ortam Değişkenleri olarak okur. Önceden ayarlanmış parametreler yapıştırılanlarla değiştirilir, diğerleri korunur.',
+  'models.form.pasteCommand.apply': 'Uygula',
+  'models.form.pasteCommand.params': 'Altyapı Parametreleri ({count})',
+  'models.form.pasteCommand.env': 'Ortam Değişkenleri ({count})',
+  'models.form.pasteCommand.skipped': 'Uygulanmayanlar',
+  'models.form.pasteCommand.skipped.managed':
+    'GPUStack bunu her örnek için kendisi ayarlar',
+  'models.form.pasteCommand.skipped.model': 'model, model kaynağında seçilir',
+  'models.form.pasteCommand.model':
+    'Komuttaki model: {model}. Model kaynağında seçin.',
+  'models.form.pasteCommand.variables':
+    "Bunlar GPUStack'in çözemediği kabuk değişkenlerini kullanıyor: {names}. Uyguladıktan sonra gerçek değerlerle değiştirin.",
+  'models.form.pasteCommand.error.empty':
+    'Önizlemek için bir başlatma komutu yapıştırın.',
+  'models.form.pasteCommand.error.no_command':
+    'vLLM veya SGLang başlatma komutu bulunamadı. Desteklenenler: vllm serve, sglang serve, python -m vllm.… ve python -m sglang.…',
+  'models.form.pasteCommand.error.unterminated_quote':
+    'Bir tırnak kapatılmamış. Yapıştırılan metni kontrol edin.',
   'models.logs.pagination.prev': 'Önceki {lines} Satır',
   'models.logs.pagination.next': 'Sonraki {lines} Satır',
   'models.logs.pagination.last': 'Son Sayfa',

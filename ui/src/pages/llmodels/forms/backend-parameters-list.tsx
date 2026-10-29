@@ -1,9 +1,9 @@
 import { getDocumentationUrl } from '@/utils/documentation';
 import { ListInput } from '@gpustack/core-ui';
 import { useIntl } from '@umijs/max';
-import { Form } from 'antd';
+import { Button, Form } from 'antd';
 import _ from 'lodash';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { backendParamsHolderTips, getBackendParamsTips } from '../config';
 import { useFormContext } from '../config/form-context';
 import { FormData, PDMode } from '../config/types';
@@ -11,6 +11,11 @@ import BackendParameters, {
   backendOptionsMap
 } from '../constants/backend-parameters';
 import { getRouterParameterConfig } from '../constants/backend-parameters/router';
+import {
+  LaunchCommandResult,
+  mergeLaunchCommand
+} from '../utils/launch-command';
+import PasteCommandModal from './paste-command-modal';
 
 interface BackendParametersListProps {
   /**
@@ -37,6 +42,7 @@ const BackendParametersList: React.FC<BackendParametersListProps> = ({
   // model's engine it will actually run — so fall back to it, otherwise the
   // role's list would offer no suggestions at all. Without a prefix both
   // watches read the same field and the fallback is a no-op.
+  const [pasteOpen, setPasteOpen] = useState(false);
   const roleBackend = Form.useWatch(path('backend'), form);
   const modelBackend = Form.useWatch('backend', form);
   const backend = roleBackend ?? modelBackend;
@@ -80,46 +86,83 @@ const BackendParametersList: React.FC<BackendParametersListProps> = ({
     onValuesChange?.({}, form.getFieldsValue());
   };
 
+  // Writes the parameters and the environment together, since a launch script
+  // carries both and one without the other is half a configuration.
+  const handlePasteApply = (parsed: LaunchCommandResult) => {
+    const merged = mergeLaunchCommand(
+      {
+        parameters: form.getFieldValue(path('backend_parameters')),
+        env: form.getFieldValue(path('env'))
+      },
+      parsed
+    );
+    form.setFieldValue(path('backend_parameters'), merged.parameters);
+    form.setFieldValue(path('env'), merged.env);
+    setPasteOpen(false);
+    onValuesChange?.({}, form.getFieldsValue());
+  };
+
   return (
-    <Form.Item<FormData> name={path('backend_parameters')}>
-      <ListInput
-        trim={false}
-        placeholder={
-          holder
-            ? intl.formatMessage({
-                id: holder
-              })
-            : ''
-        }
-        btnText={intl.formatMessage({ id: 'common.button.addParams' })}
-        label={intl.formatMessage({
-          id: 'models.form.backend_parameters'
-        })}
-        onBlur={handleBackendParametersOnBlur}
-        onDelete={handleDeleteBackendParameters}
-        options={paramsConfig}
-        description={
-          backendParamsLink && (
-            <span>
-              <span
-                style={{
-                  marginLeft: backend === backendOptionsMap.ascendMindie ? 4 : 0
-                }}
-                dangerouslySetInnerHTML={{
-                  __html: intl.formatMessage(
-                    { id: 'models.form.backend_parameters.vllm.tips' },
-                    {
-                      backend: backendParamsTips.backend || '',
-                      link: backendParamsLink
-                    }
-                  )
-                }}
-              ></span>
-            </span>
-          )
-        }
-      ></ListInput>
-    </Form.Item>
+    <>
+      <Form.Item<FormData> name={path('backend_parameters')}>
+        <ListInput
+          trim={false}
+          placeholder={
+            holder
+              ? intl.formatMessage({
+                  id: holder
+                })
+              : ''
+          }
+          btnText={intl.formatMessage({ id: 'common.button.addParams' })}
+          label={intl.formatMessage({
+            id: 'models.form.backend_parameters'
+          })}
+          labelExtra={
+            // A router's arguments are not engine arguments, and a launch script
+            // has nothing to say about them.
+            router === undefined && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => setPasteOpen(true)}
+              >
+                {intl.formatMessage({ id: 'models.form.pasteCommand' })}
+              </Button>
+            )
+          }
+          onBlur={handleBackendParametersOnBlur}
+          onDelete={handleDeleteBackendParameters}
+          options={paramsConfig}
+          description={
+            backendParamsLink && (
+              <span>
+                <span
+                  style={{
+                    marginLeft:
+                      backend === backendOptionsMap.ascendMindie ? 4 : 0
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: intl.formatMessage(
+                      { id: 'models.form.backend_parameters.vllm.tips' },
+                      {
+                        backend: backendParamsTips.backend || '',
+                        link: backendParamsLink
+                      }
+                    )
+                  }}
+                ></span>
+              </span>
+            )
+          }
+        ></ListInput>
+      </Form.Item>
+      <PasteCommandModal
+        open={pasteOpen}
+        onCancel={() => setPasteOpen(false)}
+        onApply={handlePasteApply}
+      />
+    </>
   );
 };
 

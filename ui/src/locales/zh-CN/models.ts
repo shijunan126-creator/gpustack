@@ -150,6 +150,27 @@ export default {
     '例如，--context-length=8192（参数名和值用 = 号或空格分隔）',
   'models.form.backend_parameters.vllm.tips':
     '更多 {backend} 参数说明查看<a href={link} target="_blank">这里</a>。',
+  'models.form.pasteCommand': '粘贴命令',
+  'models.form.pasteCommand.title': '粘贴启动命令',
+  'models.form.pasteCommand.placeholder':
+    '粘贴推理引擎的启动脚本，例如：\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
+  'models.form.pasteCommand.tips':
+    '把 export 行和 vLLM、SGLang 的 serve 命令解析为后端参数和环境变量。已设置的同名参数会被粘贴的值替换，其余保留。',
+  'models.form.pasteCommand.apply': '应用',
+  'models.form.pasteCommand.params': '后端参数（{count}）',
+  'models.form.pasteCommand.env': '环境变量（{count}）',
+  'models.form.pasteCommand.skipped': '未应用',
+  'models.form.pasteCommand.skipped.managed': 'GPUStack 会为每个实例自动设置',
+  'models.form.pasteCommand.skipped.model': '模型在模型来源中选择',
+  'models.form.pasteCommand.model':
+    '命令中的模型：{model}。请在模型来源中选择。',
+  'models.form.pasteCommand.variables':
+    '以下内容引用了 GPUStack 无法解析的 shell 变量：{names}。应用后请改成实际的值。',
+  'models.form.pasteCommand.error.empty': '粘贴启动命令后可预览解析结果。',
+  'models.form.pasteCommand.error.no_command':
+    '没有找到 vLLM 或 SGLang 的启动命令。支持 vllm serve、sglang serve、python -m vllm.… 和 python -m sglang.…',
+  'models.form.pasteCommand.error.unterminated_quote':
+    '有引号没有闭合，请检查粘贴的内容。',
   'models.logs.pagination.prev': '上一 {lines} 行',
   'models.logs.pagination.next': '下一 {lines} 行',
   'models.logs.pagination.last': '最后一页',

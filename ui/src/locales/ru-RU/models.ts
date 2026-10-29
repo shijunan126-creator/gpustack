@@ -159,6 +159,30 @@ export default {
     'например: --context-length=8192（параметр и значение разделены знаком = или пробелом）',
   'models.form.backend_parameters.vllm.tips':
     'Для получения подробной информации о параметрах {backend} см. <a href={link} target="_blank">здесь</a>.',
+  'models.form.pasteCommand': 'Вставить команду',
+  'models.form.pasteCommand.title': 'Вставить команду запуска',
+  'models.form.pasteCommand.placeholder':
+    'Вставьте скрипт запуска движка, например:\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
+  'models.form.pasteCommand.tips':
+    'Строки export и команда serve для vLLM или SGLang разбираются в параметры бэкенда и переменные окружения. Уже заданные параметры заменяются вставленными, остальные сохраняются.',
+  'models.form.pasteCommand.apply': 'Применить',
+  'models.form.pasteCommand.params': 'Параметры бэкенда ({count})',
+  'models.form.pasteCommand.env': 'Переменные окружения ({count})',
+  'models.form.pasteCommand.skipped': 'Не применяется',
+  'models.form.pasteCommand.skipped.managed':
+    'GPUStack задаёт это для каждого экземпляра',
+  'models.form.pasteCommand.skipped.model':
+    'модель выбирается в источнике модели',
+  'models.form.pasteCommand.model':
+    'Модель в команде: {model}. Выберите её в источнике модели.',
+  'models.form.pasteCommand.variables':
+    'Эти значения используют переменные оболочки, которые GPUStack не может разрешить: {names}. После применения замените их реальными значениями.',
+  'models.form.pasteCommand.error.empty':
+    'Вставьте команду запуска, чтобы увидеть результат разбора.',
+  'models.form.pasteCommand.error.no_command':
+    'Команда запуска vLLM или SGLang не найдена. Поддерживаются vllm serve, sglang serve, python -m vllm.… и python -m sglang.…',
+  'models.form.pasteCommand.error.unterminated_quote':
+    'Кавычка не закрыта. Проверьте вставленный текст.',
   'models.logs.pagination.prev': 'Предыдущие {lines} строк',
   'models.logs.pagination.next': 'Следующие {lines} строк',
   'models.logs.pagination.last': 'Последняя страница',

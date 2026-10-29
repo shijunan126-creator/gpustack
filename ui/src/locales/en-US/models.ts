@@ -156,6 +156,30 @@ export default {
     'e.g., --context-length=8192 (use = or a space to separate name and value)',
   'models.form.backend_parameters.vllm.tips':
     'For more details about {backend} parameters, see <a href={link} target="_blank">here</a>.',
+  'models.form.pasteCommand': 'Paste Command',
+  'models.form.pasteCommand.title': 'Paste Launch Command',
+  'models.form.pasteCommand.placeholder':
+    'Paste an engine launch script, e.g.\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
+  'models.form.pasteCommand.tips':
+    'Reads the export lines and the vLLM or SGLang serve command into Backend Parameters and Environment Variables. Parameters already set are replaced by the pasted ones; the rest is kept.',
+  'models.form.pasteCommand.apply': 'Apply',
+  'models.form.pasteCommand.params': 'Backend Parameters ({count})',
+  'models.form.pasteCommand.env': 'Environment Variables ({count})',
+  'models.form.pasteCommand.skipped': 'Not applied',
+  'models.form.pasteCommand.skipped.managed':
+    'GPUStack sets this for each instance',
+  'models.form.pasteCommand.skipped.model':
+    'the model is chosen in the model source',
+  'models.form.pasteCommand.model':
+    'Model in the command: {model}. Select it in the model source.',
+  'models.form.pasteCommand.variables':
+    'These read a shell variable GPUStack cannot resolve: {names}. Replace them with real values after applying.',
+  'models.form.pasteCommand.error.empty':
+    'Paste a launch command to preview it.',
+  'models.form.pasteCommand.error.no_command':
+    'No vLLM or SGLang launch command found. Supported: vllm serve, sglang serve, python -m vllm.… and python -m sglang.…',
+  'models.form.pasteCommand.error.unterminated_quote':
+    'A quote is not closed. Check the pasted text.',
   'models.logs.pagination.prev': 'Previous {lines} Lines',
   'models.logs.pagination.next': 'Next {lines} Lines',
   'models.logs.pagination.last': 'Last Page',

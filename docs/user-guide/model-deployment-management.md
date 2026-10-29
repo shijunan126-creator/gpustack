@@ -366,6 +366,16 @@ Input the parameters for the backend you want to customize when running the mode
 
 For full list of supported parameters, please refer to the [Inference Backends](built-in-inference-backends.md) section.
 
+#### Paste a Launch Command { #paste-a-launch-command }
+
+To reuse a launch script from an engine's documentation or a recipe, click `Paste Command` next to `Backend Parameters` instead of entering each option. Paste the script as it is — the `export` lines and the `vllm serve ...` command, multi-line with `\` continuations and JSON values included — and the preview shows what was understood. Click `Apply` to fill `Backend Parameters` and `Environment Variables` together.
+
+- Recognized commands: `vllm serve`, `sglang serve`, `python -m vllm.…` and `python -m sglang.…`, optionally after `export` lines, `NAME=value` prefixes or `&&`. Nothing is executed.
+- A flag you already set is replaced by the pasted one; other parameters and variables are kept, and a variable of the same name takes the pasted value.
+- `--host`, `--port` and `--served-model-name` are not applied, because GPUStack sets them for each instance and a pasted value would break routing. The model (`vllm serve <model>`, `--model`, `--model-path`) is not applied either; choose it in the model source.
+- Shell variables such as `$MODEL_PATH` are not expanded. Values that use one are flagged in the preview; replace them with real values after applying.
+- Not available for the router of a PD deployment.
+
 ### Environment Variables
 
 Environment variables used when running the model. These variables are passed to the backend process at startup.

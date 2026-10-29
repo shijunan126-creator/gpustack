@@ -159,6 +159,29 @@ export default {
     '例: --context-length=8192（=または空白で名前と値を分ける）',
   'models.form.backend_parameters.vllm.tips':
     '{backend} のパラメーターの詳細は、<a href={link} target="_blank">こちら</a>をご覧ください。',
+  'models.form.pasteCommand': 'コマンドを貼り付け',
+  'models.form.pasteCommand.title': '起動コマンドを貼り付け',
+  'models.form.pasteCommand.placeholder':
+    '推論エンジンの起動スクリプトを貼り付けます。例：\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
+  'models.form.pasteCommand.tips':
+    'export 行と vLLM / SGLang の serve コマンドを、バックエンドパラメータと環境変数として読み取ります。設定済みの同名パラメータは貼り付けた値で置き換えられ、それ以外は保持されます。',
+  'models.form.pasteCommand.apply': '適用',
+  'models.form.pasteCommand.params': 'バックエンドパラメータ（{count}）',
+  'models.form.pasteCommand.env': '環境変数（{count}）',
+  'models.form.pasteCommand.skipped': '適用されないもの',
+  'models.form.pasteCommand.skipped.managed':
+    'GPUStack がインスタンスごとに設定します',
+  'models.form.pasteCommand.skipped.model': 'モデルはモデルソースで選択します',
+  'models.form.pasteCommand.model':
+    'コマンド内のモデル：{model}。モデルソースで選択してください。',
+  'models.form.pasteCommand.variables':
+    '次の項目は GPUStack が解決できるシェル変数を参照しています：{names}。適用後に実際の値へ置き換えてください。',
+  'models.form.pasteCommand.error.empty':
+    '起動コマンドを貼り付けるとプレビューが表示されます。',
+  'models.form.pasteCommand.error.no_command':
+    'vLLM または SGLang の起動コマンドが見つかりません。vllm serve、sglang serve、python -m vllm.…、python -m sglang.… に対応しています。',
+  'models.form.pasteCommand.error.unterminated_quote':
+    '引用符が閉じていません。貼り付けた内容を確認してください。',
   'models.logs.pagination.prev': '前の{lines}行',
   'models.logs.pagination.next': '次の{lines}行',
   'models.logs.pagination.last': '最終ページ',
