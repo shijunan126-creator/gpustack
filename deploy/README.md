@@ -22,6 +22,17 @@ deploy/build.sh my/tag:1 --build-arg NPM_REGISTRY=https://registry.npmmirror.com
 构建会在以下情况直接失败(而不是等服务启动后才发现):前端没构建出来、代码里有
 解析不了的 import(包括写在函数内部的)、目录图标或 Helm chart 缺失、版本戳丢失。
 
+构建结束后 `deploy/build.sh` 还会逐个核对镜像自带的
+`GPUSTACK_RUNTIME_DOCKER_MIRRORED_NAME_FILTER_LABELS`:worker 靠这些
+`org.opencontainers.image.*` 标签找到自己的容器,再把运行时和设备透传给推理容器,
+其中任何一个被改写都会让推理容器没有 GPU(表现为 "Failed to infer device type"),
+所以这里不一致就直接失败,而不是等部署后排查。fork 的提交号单独记在自己的标签上,
+官方标签保持基础镜像的值:
+
+```bash
+docker inspect -f '{{index .Config.Labels "io.github.shijunan126-creator.gpustack.commit"}}' gpustack-custom:<tag>
+```
+
 内网/离线的生产机:在联网机器上构建后搬运镜像。
 
 ```bash
@@ -50,6 +61,18 @@ deploy/build-benchmark-runner.sh --build-arg SHAREGPT_URL=https://hf-mirror.com/
 这个镜像不在任何公共仓库里,**每台 worker 都要有**:`docker save` / `docker load` 搬过去,
 或推到内网 Registry 后用 worker 的 `--benchmark-image-repo <registry>/aisbench-runner:<版本>` 指过去。
 worker 找不到镜像时,测试会停在拉取镜像失败。
+
+`gpustack save-images` / `copy-images` **不包含这个镜像**:它们只从 registry 拉取
+(`skopeo copy docker://…`),本地构建的镜像列进去会让整次 save 失败。所以离线部署时必须按
+上面两种方式单独搬运。
+
+还有两处容易踩的地方:
+
+- 配了 `--system-default-container-registry` 时,worker 会把裸名改写成
+  `<registry>/aisbench-runner:<版本>`。此时只 `docker load` 裸名是对不上的:要么按这个名字
+  `docker tag` 后推上去,要么显式设 `--benchmark-image-repo` 指向实际名字。
+- amd64 与 arm64 用的是同一个 tag;把两种架构推到同一个 registry tag 会互相覆盖。
+  混布架构时用 `--platform` 分别构建,各自 `docker load` 到对应架构的机器上。
 
 ## 运行
 
