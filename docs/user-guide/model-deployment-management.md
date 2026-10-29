@@ -53,7 +53,7 @@ To deploy a local path model:
 
 2. Fill in the `Name` of the deployment.
 
-3. Fill in the `Model Path`.
+3. Fill in the `Model Path`, or pick it from the dropdown. Focusing the field lists the directories of a ready worker in the selected cluster, and typing narrows the list. Choosing a directory opens it; a directory that holds `config.json` or `model_index.json` (marked `Model`) and a `.gguf` file end the selection. With more than one ready worker, `Browse on worker` chooses whose filesystem is listed. Only directory names and `.gguf` files are shown, and hidden entries are skipped. The picker needs a ready worker; without one the field still accepts a typed path.
 
 4. Adjust the `Cluster`, `Backend`, `Backend Version`, and `Replicas` as needed.
 
@@ -368,7 +368,7 @@ For full list of supported parameters, please refer to the [Inference Backends](
 
 #### Paste a Launch Command { #paste-a-launch-command }
 
-To reuse a launch script from an engine's documentation or a recipe, click `Paste Command` next to `Backend Parameters` instead of entering each option. Paste the script as it is — the `export` lines and the `vllm serve ...` command, multi-line with `\` continuations and JSON values included — and the preview shows what was understood. Click `Apply` to fill `Backend Parameters` and `Environment Variables` together.
+To reuse a launch script from an engine's documentation or a recipe, click `Paste Command` in the notice right below `Replicas` (or the link next to `Backend Parameters`) instead of entering each option. Paste the script as it is — the `export` lines and the `vllm serve ...` command, multi-line with `\` continuations and JSON values included — and the preview shows what was understood. Click `Apply` to fill `Backend Parameters` and `Environment Variables` together.
 
 - Recognized commands: `vllm serve`, `sglang serve`, `python -m vllm.…` and `python -m sglang.…`, optionally after `export` lines, `NAME=value` prefixes or `&&`. Nothing is executed.
 - A flag you already set is replaced by the pasted one; other parameters and variables are kept, and a variable of the same name takes the pasted value.

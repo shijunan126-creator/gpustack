@@ -160,6 +160,8 @@ export default {
   'models.form.backend_parameters.vllm.tips':
     'Для получения подробной информации о параметрах {backend} см. <a href={link} target="_blank">здесь</a>.',
   'models.form.pasteCommand': 'Вставить команду',
+  'models.form.pasteCommand.entry':
+    'Есть скрипт запуска? Вставьте его, чтобы разом заполнить параметры бэкенда и переменные окружения.',
   'models.form.pasteCommand.title': 'Вставить команду запуска',
   'models.form.pasteCommand.placeholder':
     'Вставьте скрипт запуска движка, например:\nexport HCCL_BUFFSIZE=1024\nvllm serve $MODEL_PATH \\\n  --max-model-len 8192 \\\n  --tensor-parallel-size 4',
@@ -217,6 +219,8 @@ export default {
   'models.filter.category': 'Фильтр по категориям',
   'models.list.more.logs': 'Показать больше',
   'models.catalog.release.date': 'Дата выпуска',
+  'models.localpath.browseWorker': 'Просмотр на воркере',
+  'models.localpath.modelTag': 'Модель',
   'models.localpath.gguf.tips.title': 'Модель формата GGUF',
   'models.localpat.safe.tips.title': 'Модель формата Safetensors',
   'models.localpath.shared.tips.title': 'Шардированная GGUF-модель',

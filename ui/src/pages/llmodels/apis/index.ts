@@ -11,6 +11,7 @@ import {
   CatalogItem,
   CatalogSpec,
   DeploymentImportResult,
+  DirectoryListing,
   DraftModelItem,
   EvaluateResult,
   EvaluateSpec,
@@ -718,5 +719,21 @@ export async function resolvePDMode(params: {
   return request<PDModeResolution>(`${PD_MODES_API}/resolve`, {
     method: 'GET',
     params
+  });
+}
+
+// ===================== Local path =====================
+
+/** The directories and GGUF files directly inside a directory of a worker. */
+export async function queryWorkerDirectory(
+  workerId: number,
+  path: string
+): Promise<DirectoryListing> {
+  return request<DirectoryListing>(`/workers/${workerId}/directories`, {
+    method: 'GET',
+    params: { path },
+    // A path that is mid-typing is often not a directory yet; the form just
+    // offers nothing then.
+    skipErrorHandler: true
   });
 }

@@ -3,7 +3,7 @@ import logging
 from typing import Dict
 
 import aiohttp
-from gpustack.schemas.filesystem import FileExistsResponse
+from gpustack.schemas.filesystem import DirectoryListing, FileExistsResponse
 from gpustack.schemas.models import Model
 from gpustack.schemas.workers import Worker
 from gpustack.server.worker_request import request_to_worker
@@ -94,6 +94,32 @@ class WorkerFilesystemClient:
             timeout=aiohttp.ClientTimeout(total=_TIMEOUT, sock_connect=5),
         )
         return FileExistsResponse.model_validate_json(body)
+
+    async def list_directory(
+        self,
+        worker: Worker,
+        path: str,
+    ) -> DirectoryListing:
+        """
+        List the sub-directories and GGUF files of a directory on a worker.
+
+        Args:
+            worker: The worker to query
+            path: The directory to list
+
+        Returns:
+            The entries directly inside the directory
+        """
+        _, body = await request_to_worker(
+            worker=worker,
+            method="GET",
+            path="files/list-dir",
+            proxy_client=self._http_client,
+            no_proxy_client=self._http_client_no_proxy,
+            params={"path": path},
+            timeout=aiohttp.ClientTimeout(total=_TIMEOUT, sock_connect=5),
+        )
+        return DirectoryListing.model_validate_json(body)
 
     async def get_model_weight_size(
         self,

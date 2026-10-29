@@ -1032,3 +1032,19 @@ export interface SpanningPreview {
   roles: { name: string; gpus: number }[];
   widest_worker_gpus: number;
 }
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  /** A directory holding config.json / model_index.json, or a GGUF file. */
+  is_model: boolean;
+}
+
+export interface DirectoryListing {
+  path: string;
+  parent: string | null;
+  is_model: boolean;
+  entries: DirectoryEntry[];
+  truncated: boolean;
+}
