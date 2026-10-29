@@ -80,8 +80,8 @@ MemCache 是昇腾基于 MemFabric 构建的分布式 KV Cache 池。它与 LMCa
 使用要求：
 
 - vLLM-Ascend 0.23.0 及以上，运行在 Ascend A2、A3 或 950PR/950DT 的 worker 上。
-- 镜像需包含 `memcache_hybrid` 与 `memfabric_hybrid` 包。MemCache 没有独立的发布版本线，因此请将`版本`选为`自定义`并填写镜像，通常就是部署所用的 vLLM-Ascend 镜像。
-- 按所选传输方式完成宿主机准备，参见 [vllm-ascend KV 池指南](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html)：RoCE 需要大页（`vm.nr_hugepages`）与 `/etc/hccn.conf`，A3 上使用 `device_sdma` 需要灵衢计算网络 1.5 及以上。
+- 无需选择镜像。MemCache 随 vLLM-Ascend 镜像一同发布（`memcache_hybrid` 与 `memfabric_hybrid`），因此缓存服务的`版本`就是 vLLM-Ascend 的发布版本，`MetaService` 会运行该版本对应 worker 昇腾型号的镜像，镜像仓库与 vLLM-Ascend 后端一致（`GPUSTACK_VLLM_ASCEND_IMAGE_REPOSITORY`）。仓库中发布的 0.23.0 及以后的版本都可选，在服务端启动或提供商来源变更时读取；0.23.0 始终在列表中，仓库不可达时仍可用。请选择部署所用的版本。
+- 按所选传输方式完成宿主机准备，参见 [vllm-ascend KV 池指南](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html)与 MemCache 的 [A2 PD 分离最佳实践](https://gitcode.com/Ascend/memcache/wiki/MMC%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E2%80%94DSV4-Flash+A2-PD%E5%88%86%E7%A6%BB.md)：A2 使用 `device_rdma` 时，NPU 驱动固件不低于 25.5.1，OS 页大小为 4K（`getconf PAGESIZE`，64K 无法使用 MemCache），并需要 `/etc/hccn.conf`；A3 上使用 `device_sdma` 需要灵衢计算网络 1.5 及以上。静态大页（`vm.nr_hugepages`）适用于主机内存类协议，`device_rdma` 不需要。推荐使用 MemCache 1.1.5。
 
 按[创建缓存服务](#create-a-cache-service)的步骤创建，并设置：
 

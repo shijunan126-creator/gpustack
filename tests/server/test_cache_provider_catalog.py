@@ -1763,10 +1763,8 @@ def test_a_component_may_declare_its_own_completion_hints():
 def test_memcache_attaches_vllm_ascend_through_the_ascend_store_connector():
     provider = _asset_provider("MemCache")
     assert provider is not None
-    # The pool is reached over the network from any worker, and its image is
-    # whichever carries the memcache wheel, so a service names it itself.
+    # The pool is reached over the network from any worker.
     assert provider.attach_locality == "cluster"
-    assert provider.custom_version
     assert provider.attach_component() == "meta"
 
     rendered = render_injection(
@@ -1797,6 +1795,88 @@ def test_memcache_attaches_vllm_ascend_through_the_ascend_store_connector():
     assert "ock.mmc.local_service.protocol = device_rdma" in local_conf
     assert "ock.mmc.local_service.dram.size = 20GB" in local_conf
     assert "{{" not in local_conf
+
+
+def test_memcache_runs_the_vllm_ascend_image_of_the_workers_family():
+    """MemCache ships inside the vLLM-Ascend image, so a service picks a
+    vLLM-Ascend release and never names an image."""
+    provider = _asset_provider("MemCache")
+    assert not provider.custom_version
+    assert provider.default_version in provider.versions
+    version = provider.versions[provider.default_version]
+    assert version.image is None
+    expected = {
+        "910b": "quay.io/ascend/vllm-ascend:v0.23.0",
+        "a3": "quay.io/ascend/vllm-ascend:v0.23.0-a3",
+        "310p": "quay.io/ascend/vllm-ascend:v0.23.0-310p",
+        "950": "quay.io/ascend/vllm-ascend:v0.23.0-a5",
+    }
+    for variant, image in expected.items():
+        assert version.resolve_image("cann", "8.5", variant) == image
+    # 910 (Atlas 800T A1) has no published image, so it is refused instead
+    # of handed another family's build.
+    assert not version.supports_runtime("cann", "910")
+    assert not version.supports_runtime("cuda", None)
+
+
+def test_engine_image_follows_the_vllm_ascend_repository(monkeypatch):
+    from gpustack import envs
+
+    monkeypatch.setattr(envs, "VLLM_ASCEND_IMAGE_REPOSITORY", "registry.local/ascend")
+    provider = CacheProvider(
+        **{**_asset_provider("MemCache").model_dump(), "versions": {"0.23.0": {}}}
+    )
+    version = provider.versions["0.23.0"]
+    assert version.resolve_image("cann", None, "910b") == (
+        "registry.local/ascend:v0.23.0"
+    )
+
+
+def test_memcache_offers_the_releases_the_repository_publishes():
+    from gpustack.utils.vllm_ascend_images import synthesize_runners
+
+    tags = [
+        "v0.21.0rc1",  # before the AscendStore connector
+        "v0.23.0",
+        "v0.23.0-a3",
+        "v0.24.1",
+        "v0.24.1-a3",
+        "v0.25.0rc1",
+        "v0.25.0rc1-310p",
+        "nightly-releases-v0.26.0rc",
+    ]
+    runners = synthesize_runners(tags, "quay.io/ascend/vllm-ascend")
+    (provider,) = with_runner_versions([_asset_provider("MemCache")], runners)
+
+    assert set(provider.versions) == {"0.23.0", "0.24.1", "0.25.0rc1"}
+    # A release is run only where the repository publishes it.
+    newest = provider.versions["0.24.1"]
+    assert newest.resolve_image("cann", None, "a3") == (
+        "quay.io/ascend/vllm-ascend:v0.24.1-a3"
+    )
+    assert not newest.supports_runtime("cann", "310p")
+    only_310p = provider.versions["0.25.0rc1"]
+    assert only_310p.supports_runtime("cann", "310p")
+    assert not only_310p.supports_runtime("cann", "a3")
+    # A candidate is listed, but nobody lands on one by not choosing.
+    assert provider.default_version == "0.24.1"
+
+
+def test_memcache_keeps_its_declared_release_without_a_repository():
+    for runners in (None, []):
+        (provider,) = with_runner_versions([_asset_provider("MemCache")], runners)
+        assert set(provider.versions) == {"0.23.0"}
+        assert provider.default_version == "0.23.0"
+
+
+def test_unknown_engine_image_is_refused():
+    with pytest.raises(ValueError, match="engine_image"):
+        CacheProvider(
+            name="X",
+            engine_image="other",
+            versions={"1": {}},
+            default_version="1",
+        )
 
 
 def test_memcache_is_scoped_to_ascend_workers():

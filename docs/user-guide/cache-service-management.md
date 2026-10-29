@@ -76,8 +76,8 @@ MemCache is Ascend's distributed KV cache pool, built on MemFabric. It differs f
 Requirements:
 
 - vLLM-Ascend 0.23.0 or later, on Ascend A2, A3 or 950PR/950DT workers.
-- An image that carries the `memcache_hybrid` and `memfabric_hybrid` packages. MemCache has no release line of its own, so select `Custom` as the `Version` and enter the image, normally the vLLM-Ascend image the deployments use.
-- Host setup for the transport you choose, as described in the [vllm-ascend KV pool guide](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html): huge pages (`vm.nr_hugepages`) and `/etc/hccn.conf` on RoCE, and LingQu Computing Network 1.5 or later for `device_sdma` on A3.
+- No image to choose. MemCache ships inside the vLLM-Ascend image (`memcache_hybrid` and `memfabric_hybrid`), so the `Version` of the service is a vLLM-Ascend release and the `MetaService` runs that release's image for the worker's Ascend family, pulled from the repository the vLLM-Ascend backend uses (`GPUSTACK_VLLM_ASCEND_IMAGE_REPOSITORY`). The releases from 0.23.0 on that the repository publishes are offered, read when the server starts or the provider sources change; 0.23.0 is always listed, so an unreachable repository leaves it. Pick the release the deployments run.
+- Host setup for the transport you choose, as described in the [vllm-ascend KV pool guide](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/kv_cache_pool_ascend_store.html) and MemCache's [A2 PD best practice](https://gitcode.com/Ascend/memcache/wiki/MMC%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E2%80%94DSV4-Flash+A2-PD%E5%88%86%E7%A6%BB.md): on A2 with `device_rdma`, NPU driver and firmware 25.5.1 or later, an OS page size of 4K (`getconf PAGESIZE`; MemCache cannot be used at 64K) and `/etc/hccn.conf`; LingQu Computing Network 1.5 or later for `device_sdma` on A3. Static huge pages (`vm.nr_hugepages`) apply to the host-memory protocols, not `device_rdma`. MemCache 1.1.5 is the recommended release.
 
 Create the service as in [Create a Cache Service](#create-a-cache-service), then set:
 

@@ -23,6 +23,7 @@ from sqlmodel import SQLModel, Field as SQLField
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from gpustack.mixins import BaseModelMixin
+from gpustack.utils.vllm_ascend_images import list_runners_from_registry
 
 from .cache_providers import (
     CacheProvider,
@@ -347,6 +348,17 @@ def build_cache_provider_entries(
     return entries
 
 
+async def catalog_runners(session: AsyncSession) -> List[Any]:
+    """The runners a catalog build reads release lines from: the runner
+    catalog, and the releases the vLLM-Ascend repository publishes, which that
+    catalog does not list. A repository that cannot be reached contributes
+    none."""
+    runners = merged_runners(await RunnerOverrideEntry.all(session))
+    # Off the loop: listing the repository's tags is a network call.
+    engine = await asyncio.to_thread(list_runners_from_registry)
+    return [*runners, *engine]
+
+
 async def reconcile_cache_providers(
     session: AsyncSession, sources: List[SourceContent]
 ) -> None:
@@ -362,7 +374,7 @@ async def reconcile_cache_providers(
     the two have to be read together or the table would hold images from one
     moment and declarations from another.
     """
-    runners = merged_runners(await RunnerOverrideEntry.all(session))
+    runners = await catalog_runners(session)
     # Off the loop: parsing and validating a catalog runs into tens of ms, and a
     # request handler awaiting the database during a reconcile would wait it out.
     entries = await asyncio.to_thread(build_cache_provider_entries, sources, runners)
