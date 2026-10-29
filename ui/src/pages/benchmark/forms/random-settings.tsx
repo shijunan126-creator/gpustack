@@ -1,8 +1,6 @@
 import { PageAction } from '@/config';
 import {
   ControlOutlined,
-  MinusOutlined,
-  PlusOutlined,
   QuestionCircleOutlined,
   ReloadOutlined,
   ThunderboltOutlined
@@ -21,7 +19,6 @@ import {
   Checkbox,
   Flex,
   Form,
-  InputNumber,
   Segmented,
   Switch,
   Tag,
@@ -311,22 +308,6 @@ const RandomSettingsForm: React.FC<{
       ]);
     }
   };
-  // Multi-turn (synthetic-only `turns`): shapes what each request IS (a running
-  // conversation), so it's an opt-in card in Workload alongside the other
-  // data-shape cards. On => turns >= 2; off => cleared (backend treats absent as
-  // single-turn). turns == 1 (legacy) reads as off.
-  const turns = Form.useWatch('turns', form);
-  const multiTurnOn = !!turns && turns > 1;
-  const handleMultiTurnToggle = (checked: boolean) => {
-    form.setFieldValue('turns', checked ? 2 : null);
-  };
-  // The −/+ stepper only runs while multi-turn is on; the switch owns on/off
-  // (clamping the floor to 2, since 1 turn == single-turn == off).
-  const handleTurnUp = () =>
-    form.setFieldValue('turns', Math.min(64, (Number(turns) || 1) + 1));
-  const handleTurnDown = () =>
-    form.setFieldValue('turns', Math.max(2, (Number(turns) || 2) - 1));
-
   // The bucket list is controlled the same way Add Cluster's Image Credentials
   // are (MetadataList + a form array): add / delete / per-field edits all
   // rewrite prefix_buckets on the form. `prefixValidated` flips on the first
@@ -945,88 +926,6 @@ const RandomSettingsForm: React.FC<{
                 </div>
               )}
             </div>
-            {/* Multi-turn: synthetic `turns`. A data-shape knob (each request
-                becomes a running conversation), so it belongs with the other
-                Workload cards, not a generic "advanced" bucket. One-row card —
-                the turns stepper + enable switch both sit in the header. */}
-            <div className={styles.sectionCard}>
-              <div className="section-title" style={{ marginBottom: 0 }}>
-                <span className="title-label">
-                  {intl.formatMessage({ id: 'benchmark.form.multiTurn' })}
-                  <Tooltip
-                    title={intl.formatMessage({
-                      id: 'benchmark.form.multiTurn.tips'
-                    })}
-                  >
-                    <QuestionCircleOutlined className="title-help" />
-                  </Tooltip>
-                </span>
-                <Flex align="center" gap={8}>
-                  {/* "turns" label + −/+ stepper in one bordered pill (dimmed
-                      when off), then the enable switch — mirrors the design. The
-                      stepper is small so the row stays as short as a plain switch
-                      card rather than towering over it. */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      border: '1px solid var(--ant-color-border)',
-                      borderRadius: 8,
-                      background: 'var(--ant-color-fill-quaternary)',
-                      padding: '0 2px 0 8px',
-                      opacity: multiTurnOn ? 1 : 0.5
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: 'var(--ant-color-text-tertiary)'
-                      }}
-                    >
-                      {intl.formatMessage({ id: 'benchmark.form.turns.unit' })}
-                    </span>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<MinusOutlined />}
-                      disabled={disabled || !multiTurnOn}
-                      onClick={handleTurnDown}
-                    />
-                    <Form.Item<FormData>
-                      name="turns"
-                      getValueProps={(value) => ({ value: value ?? 1 })}
-                      noStyle
-                    >
-                      <InputNumber
-                        // When off the field shows a disabled "1"; keep min at 1
-                        // then so antd doesn't flag it out-of-range (red). On =>
-                        // floor is 2 (1 turn == single-turn == off).
-                        min={multiTurnOn ? 2 : 1}
-                        size="small"
-                        controls={false}
-                        variant="borderless"
-                        disabled={disabled || !multiTurnOn}
-                        style={{ width: 36, textAlign: 'center' }}
-                      />
-                    </Form.Item>
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      disabled={disabled || !multiTurnOn}
-                      onClick={handleTurnUp}
-                    />
-                  </div>
-                  <Switch
-                    size="small"
-                    checked={multiTurnOn}
-                    disabled={disabled}
-                    onChange={handleMultiTurnToggle}
-                  />
-                </Flex>
-              </div>
-            </div>
           </>
         </>
       )}
@@ -1636,85 +1535,6 @@ const RandomSettingsForm: React.FC<{
     </div>
   );
 
-  // ---- Group: Stop Conditions (when the benchmark stops) ----
-  // General runtime caps that apply to ANY mode (the auto-tune budget lives in
-  // the Load / Stages card). Every field here now has a real home, so there is no
-  // longer an "Advanced" catch-all: turns → Workload, warmup/cooldown → Load,
-  // per-stage seed → the Seed card.
-  const executionLimitsContent = (
-    <>
-      {/* Max Errors + Max Error Rate are a natural pair, so they share a row.
-          Default bottom margin (no marginBottom:0) so the row doesn't overlap the
-          Stop-on-Saturation card below it. */}
-      <Flex gap={12}>
-        <Form.Item<FormData> name="max_errors" style={{ flex: 1 }}>
-          <CInputNumber
-            min={0}
-            disabled={disabled}
-            label={intl.formatMessage({ id: 'benchmark.form.maxErrors' })}
-            style={{ width: '100%' }}
-          ></CInputNumber>
-        </Form.Item>
-        <Form.Item<FormData> name="max_error_rate" style={{ flex: 1 }}>
-          <CInputNumber
-            // A whole percent, like Warmup / Cooldown above — the API column
-            // holds guidellm's fraction and the form converts on submit (see
-            // `forms/index.tsx`). Bounded to 1-99 because guidellm's constraint
-            // rejects both endpoints of (0, 1): "tolerate everything" is
-            // expressed by leaving this empty, not by entering 100.
-            min={1}
-            max={99}
-            disabled={disabled}
-            label={
-              <>
-                {intl.formatMessage({ id: 'benchmark.form.maxErrorRate' })}
-                <Tooltip
-                  title={intl.formatMessage({
-                    id: 'benchmark.form.maxErrorRate.tips'
-                  })}
-                >
-                  {/* Same as Warmup / Cooldown: the glyph is appended straight
-                      onto the label text rather than sitting in a `.title-label`
-                      flex row, so it needs its own leading space or it collides
-                      with the "(%)" it follows. */}
-                  <QuestionCircleOutlined
-                    className="title-help"
-                    style={{ marginInlineStart: 6 }}
-                  />
-                </Tooltip>
-              </>
-            }
-            style={{ width: '100%' }}
-          ></CInputNumber>
-        </Form.Item>
-      </Flex>
-      {/* Stop-on-saturation maps to guidellm's native OverSaturationConstraint
-          (stop once throughput saturates). A general cap (not auto-tune only),
-          rendered as an opt-in card to match the Workload cards' look. */}
-      <div className={styles.sectionCard}>
-        <div className="section-title" style={{ marginBottom: 0 }}>
-          <span className="title-label">
-            {intl.formatMessage({ id: 'benchmark.form.stopOnSaturation' })}
-            <Tooltip
-              title={intl.formatMessage({
-                id: 'benchmark.form.stopOnSaturation.tips'
-              })}
-            >
-              <QuestionCircleOutlined className="title-help" />
-            </Tooltip>
-          </span>
-          <Form.Item<FormData>
-            name="stop_on_saturation"
-            valuePropName="checked"
-            noStyle
-          >
-            <Switch size="small" disabled={disabled} />
-          </Form.Item>
-        </div>
-      </div>
-    </>
-  );
-
   // Top-level collapsible groups (order = the user's flow: what data → the goal
   // → how to drive → when to stop). SLO is the goal, so it sits right after
   // Workload and before Load. The header carries a data-field anchor so the top
@@ -1749,12 +1569,6 @@ const RandomSettingsForm: React.FC<{
           label: groupLabel('load', 'benchmark.form.group.load'),
           forceRender: true,
           children: loadContent
-        },
-        {
-          key: 'execution',
-          label: groupLabel('execution', 'benchmark.form.group.execution'),
-          forceRender: true,
-          children: executionLimitsContent
         }
       ]}
     ></CollapsePanel>

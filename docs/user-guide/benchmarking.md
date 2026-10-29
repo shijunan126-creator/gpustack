@@ -2,6 +2,21 @@
 
 GPUStack can run benchmarks against running model instances. Benchmarks are executed by workers in a dedicated benchmark container image, with results and logs stored on the worker.
 
+## Benchmark Engine
+
+Every measured point is executed by [AISBench](https://github.com/AISBench/benchmark)
+in the `aisbench-runner` image, which the worker starts for each run. The image
+is built from `aisbench-runner/` with `deploy/build-benchmark-runner.sh` and must
+be present on the worker, or reachable through `--benchmark-image-repo`.
+
+A run sends requests with exactly the configured input and output token
+counts (the output is held with `ignore_eos`), at a fixed concurrency or
+request rate. The Max Throughput and Meet Latency SLO presets search the load
+the same way as before; only the measurement of each point changed.
+
+Not supported by this engine: multi-turn conversations, and the error-count,
+error-rate and stop-on-saturation limits.
+
 ## Prerequisites
 
 - A model instance is running and healthy.
