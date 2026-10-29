@@ -57,7 +57,7 @@ translation_status: translated
 
 2. 填写部署的 `Name`。
 
-3. 填写 `Model Path`。
+3. 填写 `Model Path`，或从下拉列表中选择。点击输入框会列出所选集群中一个就绪 Worker 上的目录，继续输入会缩小范围。选择普通目录会进入该目录；包含 `config.json` 或 `model_index.json` 的目录（标有 `模型`）以及 `.gguf` 文件会直接作为最终选择。有多个就绪 Worker 时，可用 `浏览的 Worker` 切换列出哪台机器的文件系统。只显示目录名和 `.gguf` 文件，隐藏项会被跳过。选择器需要有就绪的 Worker，没有时输入框仍可手动输入路径。
 
 4. 根据需要调整 `Cluster`、`Backend`、`Backend Version` 和 `Replicas`。
 

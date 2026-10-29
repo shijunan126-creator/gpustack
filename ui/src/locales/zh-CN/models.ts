@@ -205,6 +205,8 @@ export default {
   'models.filter.category': '按类别过滤',
   'models.list.more.logs': '查看更多',
   'models.catalog.release.date': '发布日期',
+  'models.localpath.browseWorker': '浏览的 Worker',
+  'models.localpath.modelTag': '模型',
   'models.localpath.gguf.tips.title': 'GGUF 格式模型',
   'models.localpat.safe.tips.title': 'safetensors 格式模型',
   'models.localpath.shared.tips.title': '分片的 GGUF 格式模型',

@@ -53,7 +53,7 @@ To deploy a local path model:
 
 2. Fill in the `Name` of the deployment.
 
-3. Fill in the `Model Path`.
+3. Fill in the `Model Path`, or pick it from the dropdown. Focusing the field lists the directories of a ready worker in the selected cluster, and typing narrows the list. Choosing a directory opens it; a directory that holds `config.json` or `model_index.json` (marked `Model`) and a `.gguf` file end the selection. With more than one ready worker, `Browse on worker` chooses whose filesystem is listed. Only directory names and `.gguf` files are shown, and hidden entries are skipped. The picker needs a ready worker; without one the field still accepts a typed path.
 
 4. Adjust the `Cluster`, `Backend`, `Backend Version`, and `Replicas` as needed.
 

@@ -216,6 +216,8 @@ export default {
   'models.filter.category': 'カテゴリでフィルタ',
   'models.list.more.logs': 'さらに表示',
   'models.catalog.release.date': 'リリース日',
+  'models.localpath.browseWorker': '参照する Worker',
+  'models.localpath.modelTag': 'モデル',
   'models.localpath.gguf.tips.title': 'GGUF形式のモデル',
   'models.localpat.safe.tips.title': 'Safetensors形式のモデル',
   'models.localpath.shared.tips.title': '分割されたGGUF形式のモデル',

@@ -217,6 +217,8 @@ export default {
   'models.filter.category': 'Фильтр по категориям',
   'models.list.more.logs': 'Показать больше',
   'models.catalog.release.date': 'Дата выпуска',
+  'models.localpath.browseWorker': 'Просмотр на воркере',
+  'models.localpath.modelTag': 'Модель',
   'models.localpath.gguf.tips.title': 'Модель формата GGUF',
   'models.localpat.safe.tips.title': 'Модель формата Safetensors',
   'models.localpath.shared.tips.title': 'Шардированная GGUF-модель',

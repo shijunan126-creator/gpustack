@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from gpustack.api.auth import worker_auth
 from gpustack.config.config import Config
 from gpustack.schemas.filesystem import (
+    DirectoryEntry,
+    DirectoryListing,
     FileExistsResponse,
     GGUFParseRequest,
     GGUFParseResponse,
@@ -22,7 +24,6 @@ from gpustack.scheduler.calculator import (
     GPUOffloadEnum,
     calculate_local_model_weight_size,
 )
-
 
 router = APIRouter(dependencies=[Depends(worker_auth)])
 
@@ -182,6 +183,102 @@ async def file_exists(path: str = Query(..., description="Path to check")):
     except Exception as e:
         logger.error(f"Error checking path {path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to check path: {str(e)}")
+
+
+# Files whose presence marks a directory as a model.
+MODEL_MARKER_FILES = ("config.json", "model_index.json")
+MODEL_WEIGHT_SUFFIXES = (".safetensors", ".gguf")
+MAX_LISTED_ENTRIES = 500
+
+
+def _is_model_directory(path: str) -> bool:
+    """Cheap check used for every child: two stats, no directory read."""
+    try:
+        return any(os.path.isfile(os.path.join(path, f)) for f in MODEL_MARKER_FILES)
+    except OSError:
+        return False
+
+
+def list_directory(path: str) -> DirectoryListing:
+    """List the sub-directories and GGUF files directly inside ``path``.
+
+    Only names are returned, never file contents. Hidden entries are skipped and
+    the result is capped so a directory of millions of files cannot stall the
+    worker.
+
+    Raises:
+        HTTPException: 404 if the path is missing, 400 if it is not a directory,
+            403 if it cannot be read.
+    """
+    resolved = validate_path_security(path)
+    if not os.path.exists(resolved):
+        raise HTTPException(status_code=404, detail=f"Path not found: {path}")
+    if not os.path.isdir(resolved):
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+
+    directories = []
+    files = []
+    holds_weights = False
+    truncated = False
+    try:
+        with os.scandir(resolved) as it:
+            for entry in it:
+                if entry.name.startswith("."):
+                    continue
+                try:
+                    is_dir = entry.is_dir()
+                    is_file = not is_dir and entry.is_file()
+                except OSError:
+                    continue
+                if is_file and entry.name.endswith(MODEL_WEIGHT_SUFFIXES):
+                    holds_weights = True
+                if len(directories) + len(files) >= MAX_LISTED_ENTRIES:
+                    truncated = True
+                    continue
+                if is_dir:
+                    directories.append(
+                        DirectoryEntry(
+                            name=entry.name,
+                            path=entry.path,
+                            is_dir=True,
+                            is_model=_is_model_directory(entry.path),
+                        )
+                    )
+                elif is_file and entry.name.endswith(".gguf"):
+                    files.append(
+                        DirectoryEntry(
+                            name=entry.name,
+                            path=entry.path,
+                            is_dir=False,
+                            is_model=True,
+                        )
+                    )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list: {str(e)}")
+
+    directories.sort(key=lambda e: e.name.lower())
+    files.sort(key=lambda e: e.name.lower())
+    parent = os.path.dirname(resolved)
+    return DirectoryListing(
+        path=resolved,
+        parent=parent if parent != resolved else None,
+        is_model=holds_weights or _is_model_directory(resolved),
+        entries=directories + files,
+        truncated=truncated,
+    )
+
+
+@router.get("/files/list-dir", response_model=DirectoryListing)
+async def list_dir(path: str = Query("/", description="Directory to list")):
+    """List the sub-directories and GGUF files of a directory on this worker.
+
+    Security:
+    - Uses os.path.realpath to resolve symlinks
+    - Returns names only; never reads file contents
+    """
+    return await asyncio.to_thread(list_directory, path)
 
 
 def is_diffusion_model(path: str) -> bool:

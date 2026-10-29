@@ -214,6 +214,8 @@ export default {
   'models.filter.category': 'Filter by category',
   'models.list.more.logs': 'View More',
   'models.catalog.release.date': 'Release Date',
+  'models.localpath.browseWorker': 'Browse on worker',
+  'models.localpath.modelTag': 'Model',
   'models.localpath.gguf.tips.title': 'GGUF format model',
   'models.localpat.safe.tips.title': 'Safetensors format model',
   'models.localpath.shared.tips.title': 'Sharded GGUF format model',

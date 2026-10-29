@@ -38,6 +38,7 @@ from gpustack.routes import (
     users,
     models,
     openai,
+    worker_files,
     workers,
     usage,
     resource_usage,
@@ -317,6 +318,14 @@ tenant_routers = model_routers + [
         "dependencies": _org_owner_only,
     },
     {"router": gpu_devices.router, "prefix": "/gpu-devices", "tags": ["GPU Devices"]},
+    # Directory picker of the local-path model source: browses a worker's
+    # filesystem, so it is limited to the roles that may deploy models.
+    {
+        "router": worker_files.router,
+        "prefix": "/workers",
+        "tags": ["Workers"],
+        "dependencies": _org_owner_only,
+    },
     {
         "router": model_routes.router,
         "prefix": "/model-routes",

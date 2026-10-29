@@ -214,6 +214,8 @@ export default {
   'models.filter.category': 'Kategoriye göre filtrele',
   'models.list.more.logs': 'Daha Fazla Göster',
   'models.catalog.release.date': 'Yayınlanma Tarihi',
+  'models.localpath.browseWorker': 'Worker üzerinde gözat',
+  'models.localpath.modelTag': 'Model',
   'models.localpath.gguf.tips.title': 'GGUF biçiminde model',
   'models.localpat.safe.tips.title': 'Safetensors biçiminde model',
   'models.localpath.shared.tips.title': 'Parçalı GGUF format model',
