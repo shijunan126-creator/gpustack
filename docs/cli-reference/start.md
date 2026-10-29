@@ -143,7 +143,7 @@ gpustack start [OPTIONS]
 | `--worker-ifname` value                  | (empty)                                | Network interface name of the worker node. Auto-detected by default.                                                                                                                         |
 | `--kv-transfer-ifname` value                      | (empty)                                | Network interface carrying KV-cache traffic for disaggregated (prefill/decode) deployments. Auto-detected when the host has exactly one routable interface; required when it has several, since picking the wrong one makes the engine advertise an address its peer cannot reach. |
 | `--proxy-mode` value                     | (empty)                                | Proxy mode for accessing model instances: `direct`, `worker`, or `tunnel` (worker dials out to the server; for workers behind firewall/NAT). Default `direct` embedded, `worker` standalone. |
-| `--benchmark-image-repo` value           | `gpustack/benchmark-runner`            | Override the default benchmark image repo for the GPUStack benchmark container. Unlike `--image-repo`, this value is used as-is, so include the tag.<br/>If the image `gpustack/benchmark-runner:<tag>` lives outside the `gpustack` namespace, e.g. `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`, first point `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` to the registry with the parent namespace, then set this flag (or the worker `benchmark_image_repo` config key, or the `GPUSTACK_BENCHMARK_IMAGE_REPO` environment variable) to `gpustack-ai/benchmark-runner:<tag>`. |
+| `--benchmark-image-repo` value           | `aisbench-runner:v0.1.1` (built locally) | Override the default benchmark image repo for the GPUStack benchmark container. The default image is built from this repository (`deploy/build-benchmark-runner.sh`) and is published to no registry, so it must be present on every worker or pushed to one. Unlike `--image-repo`, this value is used as-is, so include the tag.<br/>If the image lives outside the default namespace, e.g. `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/aisbench-runner:<tag>`, first point `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` to the registry with the parent namespace, then set this flag (or the worker `benchmark_image_repo` config key, or the `GPUSTACK_BENCHMARK_IMAGE_REPO` environment variable) to `gpustack-ai/aisbench-runner:<tag>`. The image is not part of `gpustack save-images`; see the deployment notes. |
 | `--benchmark-dir` value                  | `<data-dir>/benchmarks`                | Directory to store benchmark results.                                                                                                                                                        |
 | `--benchmark-max-duration-seconds` value | (empty)                                | Max duration for a benchmark before timeout. Disabled when empty.                                                                                                                            |
 
@@ -167,7 +167,7 @@ debug: false
 data_dir: /path/to/data_dir
 cache_dir: /path/to/cache_dir
 benchmark_dir: /path/to/benchmark_dir
-benchmark_image_repo: gpustack/benchmark-runner
+benchmark_image_repo: aisbench-runner:v0.1.1
 token: your_token
 huggingface_token: your_huggingface_token
 insecure_tls: false

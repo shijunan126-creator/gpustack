@@ -144,7 +144,7 @@ gpustack start [OPTIONS]
 | `--worker-ifname` değer                  | (boş)                                | Worker düğümünün ağ arayüzü adı. Varsayılan olarak otomatik algılanır. |
 | `--kv-transfer-ifname` değer                      | (boş)                                | Ayrıştırılmış (prefill/decode) dağıtımlarda KV önbellek trafiğini taşıyan ağ arayüzü. Ana makinede yalnızca bir yönlendirilebilir arayüz varsa otomatik algılanır. Birden çok arayüz olduğunda gereklidir; yanlış seçim, motorun karşı uçtan erişilemeyen bir adresi duyurmasına neden olur. |
 | `--proxy-mode` değer                     | (boş)                                | Model örneklerine erişim için proxy modu: `direct`, `worker` veya `tunnel` (worker'ın sunucuya dışa doğru bağlantı kurduğu, güvenlik duvarı/NAT arkasındaki worker'lara yönelik mod). Varsayılan, yerleşik worker için `direct`, bağımsız worker için `worker` değeridir. |
-| `--benchmark-image-repo` değer           | `gpustack/benchmark-runner`            | GPUStack benchmark konteyneri için varsayılan imaj deposunu geçersiz kılar. `--image-repo` seçeneğinden farklı olarak bu değer olduğu gibi kullanılır; etiketi ekleyin.<br/>`gpustack/benchmark-runner:<tag>` imajı `gpustack` ad alanı dışındaysa, örneğin `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`, önce üst ad alanını içeren kayıt deposunu `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` ile belirtin. Sonra bu bayrağı (veya worker yapılandırma anahtarı `benchmark_image_repo` ya da `GPUSTACK_BENCHMARK_IMAGE_REPO` ortam değişkenini) `gpustack-ai/benchmark-runner:<tag>` olarak ayarlayın. |
+| `--benchmark-image-repo` değer           | `aisbench-runner:v0.1.1` | GPUStack benchmark konteyneri için varsayılan imaj deposunu geçersiz kılar. `--image-repo` seçeneğinden farklı olarak bu değer olduğu gibi kullanılır; etiketi ekleyin.<br/>`gpustack/benchmark-runner:<tag>` imajı `gpustack` ad alanı dışındaysa, örneğin `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`, önce üst ad alanını içeren kayıt deposunu `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` ile belirtin. Sonra bu bayrağı (veya worker yapılandırma anahtarı `benchmark_image_repo` ya da `GPUSTACK_BENCHMARK_IMAGE_REPO` ortam değişkenini) `gpustack-ai/benchmark-runner:<tag>` olarak ayarlayın. |
 | `--benchmark-dir` değer                  | `<data-dir>/benchmarks`                | Benchmark sonuçlarının saklanacağı dizin. |
 | `--benchmark-max-duration-seconds` değer | (boş)                                | Zaman aşımından önceki en uzun benchmark süresi. Boşsa devre dışıdır. |
 
@@ -168,7 +168,7 @@ debug: false
 data_dir: /path/to/data_dir
 cache_dir: /path/to/cache_dir
 benchmark_dir: /path/to/benchmark_dir
-benchmark_image_repo: gpustack/benchmark-runner
+benchmark_image_repo: aisbench-runner:v0.1.1
 token: your_token
 huggingface_token: your_huggingface_token
 insecure_tls: false

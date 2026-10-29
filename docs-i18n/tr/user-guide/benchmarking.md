@@ -6,6 +6,16 @@ translation_status: translated
 
 GPUStack, çalışan model örnekleri üzerinde benchmark çalıştırabilir. Benchmark'lar çalışanlar tarafından özel bir konteyner imajında yürütülür; sonuçlar ve günlükler çalışanda saklanır.
 
+## Benchmark motoru { #benchmark-engine }
+
+Ölçülen her nokta, Worker'ın her çalıştırma için başlattığı `aisbench-runner` imajı içinde [AISBench](https://github.com/AISBench/benchmark) tarafından yürütülür. İmaj, `aisbench-runner/` dizininden `deploy/build-benchmark-runner.sh` ile oluşturulur ve her Worker'da bulunmalı ya da `--benchmark-image-repo` ile erişilebilir olmalıdır.
+
+Bir çalıştırma, yapılandırılan giriş/çıkış token sayılarıyla (çıkış `ignore_eos` ile sabitlenir) sabit eşzamanlılıkta veya istek hızında istek gönderir. Maksimum Verim ve Gecikme SLO ön ayarları yükü eskisi gibi arar; yalnızca her noktanın ölçümü değişti.
+
+Bu motor çok turlu sohbetleri ve hata sayısı, hata oranı, doygunlukta durma sınırlarını desteklemez. Motor değişmeden önce oluşturulmuş bir benchmark bunları taşıyorsa günlüğe yazılır ve yok sayılır.
+
+İmaj yerelde oluşturulduğu için `gpustack save-images` onu içermez (bu komut imajları yalnızca registry'den çeker). İmajı her Worker'a kendiniz taşıyın veya registry'ye gönderip `--benchmark-image-repo` ile belirtin. `--system-default-container-registry` ayarlıysa varsayılan imaj adı yeniden yazılır; gönderdiğiniz ad buna uymalıdır.
+
 ## Önkoşullar { #prerequisites }
 
 - Bir model örneği çalışıyor ve sağlıklı durumda.

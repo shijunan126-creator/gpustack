@@ -1,6 +1,6 @@
 import argparse
 
-from gpustack import __aisbench_runner_version__, __operator_version__
+from gpustack import __operator_version__
 from gpustack_higress_plugins import __version__ as __higress_plugins_version__
 
 from gpustack_runtime.cmds import (
@@ -37,9 +37,12 @@ python_version = "3.12-alpine"
 
 # Append images used by GPUStack here. The GPUStack image itself is appended
 # from _append_self_image() instead, since it cannot be resolved at import time.
+# The benchmark image, aisbench-runner:<version>, is deliberately not listed:
+# it is built locally (deploy/build-benchmark-runner.sh) and published to no
+# registry, while every tool here copies its images from one
+# (skopeo copy docker://<source>/<image>), so a listed image that cannot be
+# pulled fails the whole save. deploy/README.md says how to carry it instead.
 append_images(
-    # Built locally by deploy/build.sh, not published to a registry.
-    f"aisbench-runner:{__aisbench_runner_version__}",
     f"gpustack/higress-plugins:{__higress_plugins_version__}",
     f"gpustack/mirrored-higress-higress:{higress_version}",
     f"gpustack/mirrored-higress-pilot:{higress_version}",

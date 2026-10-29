@@ -6,6 +6,16 @@ translation_status: translated
 
 GPUStack 可以对运行中的模型实例执行基准测试。基准测试由 Worker 在专用基准测试容器镜像中执行，结果和日志存储在 Worker 上。
 
+## 基准测试引擎 { #benchmark-engine }
+
+每个测试点都由 [AISBench](https://github.com/AISBench/benchmark) 在 `aisbench-runner` 镜像中执行，worker 为每次测试启动一个容器。该镜像由 `deploy/build-benchmark-runner.sh` 从 `aisbench-runner/` 构建，必须存在于 worker 上，或通过 `--benchmark-image-repo` 指向可访问的镜像。
+
+一次测试按配置的输入/输出 token 数发送请求（输出由 `ignore_eos` 固定），并发数或请求速率固定。最大吞吐与延迟 SLO 两个预设的搜索方式不变，只是每个测试点的测量方式变了。
+
+此引擎不支持：多轮对话，以及错误数、错误率和过饱和停止条件。在引擎切换前创建的测试可能仍带有这些配置，它们会被记录到日志并忽略。
+
+镜像为本地构建，`gpustack save-images` 不包含它（该命令只从 registry 拉取镜像）。请自行搬运到每台 worker，或推送到内网 registry 后用 `--benchmark-image-repo` 指过去。注意配置了 `--system-default-container-registry` 时默认镜像名会被改写，推送的名字要与之匹配。
+
 ## 前提条件 { #prerequisites }
 
 - 模型实例正在运行且状态正常。

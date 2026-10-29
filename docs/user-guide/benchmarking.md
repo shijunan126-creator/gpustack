@@ -15,7 +15,14 @@ request rate. The Max Throughput and Meet Latency SLO presets search the load
 the same way as before; only the measurement of each point changed.
 
 Not supported by this engine: multi-turn conversations, and the error-count,
-error-rate and stop-on-saturation limits.
+error-rate and stop-on-saturation limits. A benchmark created before the
+engine changed may still carry them; they are logged and ignored.
+
+Because the image is built locally, `gpustack save-images` does not
+include it (those commands copy images from a registry only). Carry it to every
+worker yourself, or push it to your registry and point `--benchmark-image-repo`
+at it. Note that a configured `--system-default-container-registry` rewrites
+the default image name, so a pushed image has to match the rewritten name.
 
 ## Prerequisites
 

@@ -2,6 +2,16 @@
 
 GPUStack は、実行中のモデルインスタンスを対象にベンチマークを実行できます。Worker が専用のベンチマークコンテナイメージで実行し、結果とログは Worker に保存されます。
 
+## ベンチマークエンジン { #benchmark-engine }
+
+各測定ポイントは [AISBench](https://github.com/AISBench/benchmark) によって `aisbench-runner` イメージ内で実行され、Worker は実行ごとにコンテナを起動します。このイメージは `aisbench-runner/` から `deploy/build-benchmark-runner.sh` でビルドし、各 Worker に配置するか、`--benchmark-image-repo` で参照できるようにする必要があります。
+
+1 回の実行では、設定した入力/出力トークン数（出力は `ignore_eos` で固定）のリクエストを、固定の同時実行数またはリクエストレートで送信します。Max Throughput と Meet Latency SLO のプリセットの探索方法は従来どおりで、変わるのは各ポイントの測定方法だけです。
+
+このエンジンでは、マルチターン会話、エラー数・エラー率・飽和時の停止条件をサポートしません。エンジン変更前に作成したベンチマークに残っている場合は、ログに記録して無視します。
+
+イメージはローカルでビルドするため、`gpustack save-images` には含まれません（このコマンドは registry からのみ取得します）。各 Worker に個別に運ぶか、レジストリに push して `--benchmark-image-repo` で指定してください。`--system-default-container-registry` を設定している場合、既定のイメージ名が書き換えられるため、push する名前を合わせる必要があります。
+
 ## 前提条件 { #prerequisites }
 
 - モデルインスタンスが実行中で、正常に動作していること。

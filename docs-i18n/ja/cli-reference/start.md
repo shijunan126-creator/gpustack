@@ -144,7 +144,7 @@ gpustack start [OPTIONS]
 | `--worker-ifname` 値                  | （空）                                | ワーカーノードのネットワークインターフェース名。デフォルトでは自動検出します。 |
 | `--kv-transfer-ifname` 値                      | （空）                                | 分離型（prefill/decode）デプロイでKVキャッシュ転送に使用するネットワークインターフェース。ホストにルーティング可能なインターフェースが1つだけある場合は自動検出します。複数ある場合は指定が必要です。誤ったインターフェースを選ぶと、エンジンが相手から到達できないアドレスを通知するためです。 |
 | `--proxy-mode` 値                     | （空）                                | モデルインスタンスへのアクセスに使用するプロキシーモード：`direct`、`worker`、`tunnel`（ワーカーがサーバーへ接続する方式。ファイアウォール/NAT配下のワーカー向け）。組み込みワーカーのデフォルトは`direct`、スタンドアロンワーカーは`worker`です。 |
-| `--benchmark-image-repo` 値           | `gpustack/benchmark-runner`            | GPUStackベンチマークコンテナーのデフォルトのイメージリポジトリーを上書きします。`--image-repo`と異なり、この値はそのまま使用されるためタグを含めてください。<br/>イメージ`gpustack/benchmark-runner:<tag>`が`gpustack`名前空間の外（例：`awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`）にある場合、まず`--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup`で親の名前空間を含むレジストリーを指定し、次にこのフラグ（またはワーカーの設定キー`benchmark_image_repo`、環境変数`GPUSTACK_BENCHMARK_IMAGE_REPO`）を`gpustack-ai/benchmark-runner:<tag>`に設定してください。 |
+| `--benchmark-image-repo` 値           | `aisbench-runner:v0.1.1` | GPUStackベンチマークコンテナーのデフォルトのイメージリポジトリーを上書きします。`--image-repo`と異なり、この値はそのまま使用されるためタグを含めてください。<br/>イメージ`gpustack/benchmark-runner:<tag>`が`gpustack`名前空間の外（例：`awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`）にある場合、まず`--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup`で親の名前空間を含むレジストリーを指定し、次にこのフラグ（またはワーカーの設定キー`benchmark_image_repo`、環境変数`GPUSTACK_BENCHMARK_IMAGE_REPO`）を`gpustack-ai/benchmark-runner:<tag>`に設定してください。 |
 | `--benchmark-dir` 値                  | `<data-dir>/benchmarks`                | ベンチマーク結果を保存するディレクトリー。 |
 | `--benchmark-max-duration-seconds` 値 | （空）                                | ベンチマークがタイムアウトするまでの最大時間。空の場合は無効です。 |
 
@@ -168,7 +168,7 @@ debug: false
 data_dir: /path/to/data_dir
 cache_dir: /path/to/cache_dir
 benchmark_dir: /path/to/benchmark_dir
-benchmark_image_repo: gpustack/benchmark-runner
+benchmark_image_repo: aisbench-runner:v0.1.1
 token: your_token
 huggingface_token: your_huggingface_token
 insecure_tls: false

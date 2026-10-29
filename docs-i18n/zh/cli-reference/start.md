@@ -144,7 +144,7 @@ gpustack start [OPTIONS]
 | `--worker-ifname` value                  | (empty)                                | Worker 节点的网络接口名称，默认自动检测。                                                                                                                         |
 | `--kv-transfer-ifname` value                      | (empty)                                | 预填充与解码分离部署中承载 KV-cache 流量的网络接口。宿主机只有一个可路由接口时自动检测；存在多个接口时必须指定，选错接口会导致引擎公布对端无法访问的地址。 |
 | `--proxy-mode` value                     | (empty)                                | 访问模型实例的代理模式：`direct`、`worker` 或 `tunnel`（Worker 主动连接 Server，适用于防火墙或 NAT 后的 Worker）。内置 Worker 默认为 `direct`，独立 Worker 默认为 `worker`。 |
-| `--benchmark-image-repo` value           | `gpustack/benchmark-runner`            | 覆盖 GPUStack 基准测试容器的默认镜像仓库。与 `--image-repo` 不同，此值直接使用，因此需包含标签。<br/>如果镜像 `gpustack/benchmark-runner:<tag>` 位于 `gpustack` 命名空间之外，例如 `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`，请先将 `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` 指向包含父命名空间的镜像仓库，再将此参数（或 Worker 的 `benchmark_image_repo` 配置键，或 `GPUSTACK_BENCHMARK_IMAGE_REPO` 环境变量）设置为 `gpustack-ai/benchmark-runner:<tag>`。 |
+| `--benchmark-image-repo` value           | `aisbench-runner:v0.1.1` | 覆盖 GPUStack 基准测试容器的默认镜像仓库。与 `--image-repo` 不同，此值直接使用，因此需包含标签。<br/>如果镜像 `gpustack/benchmark-runner:<tag>` 位于 `gpustack` 命名空间之外，例如 `awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>`，请先将 `--system-default-container-registry=awesome.com/amazing-group/amazing-subgroup` 指向包含父命名空间的镜像仓库，再将此参数（或 Worker 的 `benchmark_image_repo` 配置键，或 `GPUSTACK_BENCHMARK_IMAGE_REPO` 环境变量）设置为 `gpustack-ai/benchmark-runner:<tag>`。 |
 | `--benchmark-dir` value                  | `<data-dir>/benchmarks`                | 基准测试结果存储目录。                                                                                                                                                        |
 | `--benchmark-max-duration-seconds` value | (empty)                                | 基准测试超时前的最长运行时间。为空时不限制。                                                                                                                            |
 
@@ -168,7 +168,7 @@ debug: false
 data_dir: /path/to/data_dir
 cache_dir: /path/to/cache_dir
 benchmark_dir: /path/to/benchmark_dir
-benchmark_image_repo: gpustack/benchmark-runner
+benchmark_image_repo: aisbench-runner:v0.1.1
 token: your_token
 huggingface_token: your_huggingface_token
 insecure_tls: false
