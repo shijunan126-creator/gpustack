@@ -577,6 +577,11 @@ def _validate_positive_knobs(benchmark_in: BenchmarkCreate) -> None:
         value = getattr(benchmark_in, field, None)
         if value is not None and value <= 0:
             raise BadRequestException(message=f"Field {field} must be > 0")
+    # The aisbench runner sends every request as one independent chat turn.
+    if benchmark_in.turns is not None and benchmark_in.turns > 1:
+        raise BadRequestException(
+            message="Multi-turn benchmarks (turns > 1) are not supported"
+        )
 
 
 def _validate_point_budget(benchmark_in: BenchmarkCreate) -> None:

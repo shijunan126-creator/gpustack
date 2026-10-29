@@ -4,6 +4,7 @@
 
 - `gpustack/`:后端,新增独立的 **vLLM-Ascend** 后端,移除了"模型提供商"。
 - `ui/`:前端(原 `gpustack-ui` 仓库并入,保留了历史)。
+- `aisbench-runner/`:基准测试的执行端,每个测试点由 aisbench 实际压测(替代官方基于 guidellm 的 benchmark-runner)。
 - `deploy/`:镜像构建和部署说明(本目录)。
 
 镜像是在官方 `gpustack/gpustack:v2.3.0` 之上叠加本仓库的后端源码和前端构建产物,
@@ -28,6 +29,27 @@ docker save gpustack-custom:<tag> | gzip > gpustack-custom.tar.gz
 # 拷到生产机后
 gunzip -c gpustack-custom.tar.gz | docker load
 ```
+
+### 基准测试执行端镜像
+
+"基准测试"页面的每次测试由 worker 另起一个容器执行,默认镜像是
+`aisbench-runner:<版本>`(版本见 `gpustack/__init__.py` 的 `__aisbench_runner_version__`)。
+它基于华为的 aisbench 镜像,并内置 ShareGPT 数据集。基础镜像有 amd64 / arm64 两种架构(构建时用
+`--platform` 选),以及两个系统版本:
+
+- `swr.cn-south-1.myhuaweicloud.com/ascendhub/aisbench_benchmark:v3.1-20260630-master-ubuntu22.04-py310`(默认,已验证)
+- `swr.cn-south-1.myhuaweicloud.com/ascendhub/aisbench_benchmark:v3.1-20260630-master-openeuler24.03-py311`(未验证,用 `--build-arg AISBENCH_IMAGE=...` 指定)
+
+
+```bash
+deploy/build-benchmark-runner.sh                               # 产出 aisbench-runner:<版本>
+deploy/build-benchmark-runner.sh --platform linux/arm64        # 鲲鹏机器
+deploy/build-benchmark-runner.sh --build-arg SHAREGPT_URL=https://hf-mirror.com/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+```
+
+这个镜像不在任何公共仓库里,**每台 worker 都要有**:`docker save` / `docker load` 搬过去,
+或推到内网 Registry 后用 worker 的 `--benchmark-image-repo <registry>/aisbench-runner:<版本>` 指过去。
+worker 找不到镜像时,测试会停在拉取镜像失败。
 
 ## 运行
 

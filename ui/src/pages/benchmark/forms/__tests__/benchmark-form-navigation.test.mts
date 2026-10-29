@@ -211,8 +211,7 @@ const clickTab = async (key: string) => {
     name: 'common.title.basicInfo',
     dataset: 'benchmark.form.group.dataset',
     slo: 'benchmark.form.group.slo',
-    load: 'benchmark.form.group.load',
-    execution: 'benchmark.form.group.execution'
+    load: 'benchmark.form.group.load'
   };
   const tab = [
     ...dom.window.document.querySelectorAll('.segment-line .ant-segmented-item')
@@ -324,7 +323,6 @@ test('validation opens invalid groups, scrolls the first invalid field and relea
     );
     await toggleGroup('dataset');
     await toggleGroup('load');
-    await toggleGroup('execution');
     scrolled = [];
     await view.submit();
     assert.equal(view.release.mock.callCount(), 1);
@@ -336,7 +334,6 @@ test('validation opens invalid groups, scrolls the first invalid field and relea
     );
     assert.equal(isOpen('dataset'), true);
     assert.equal(isOpen('load'), true);
-    assert.equal(isOpen('execution'), false);
     if (supportsControlledTabs) {
       assert.equal(selectedTab(), 'benchmark.form.group.dataset');
     }
@@ -425,7 +422,6 @@ test('an invalid SLO row reveals its group and scrolls the SLO wrapper', async (
     );
     await toggleGroup('slo');
     await toggleGroup('load');
-    await toggleGroup('execution');
     scrolled = [];
     await view.submit();
     const wrapper = dom.window.document.getElementById('benchmark_slo_targets');
@@ -436,7 +432,6 @@ test('an invalid SLO row reveals its group and scrolls the SLO wrapper', async (
     assert.equal(scrolled[0]?.visible, true);
     assert.equal(isOpen('slo'), true);
     assert.equal(isOpen('load'), false);
-    assert.equal(isOpen('execution'), false);
     if (supportsControlledTabs) {
       assert.equal(selectedTab(), 'benchmark.form.group.slo');
     }
@@ -461,7 +456,6 @@ test('an invalid enabled shared prefix reveals workload and scrolls the prefix w
     );
     await toggleGroup('dataset');
     await toggleGroup('load');
-    await toggleGroup('execution');
     scrolled = [];
     await view.submit();
     const wrapper = dom.window.document.getElementById(
@@ -474,7 +468,6 @@ test('an invalid enabled shared prefix reveals workload and scrolls the prefix w
     assert.equal(scrolled[0]?.visible, true);
     assert.equal(isOpen('dataset'), true);
     assert.equal(isOpen('load'), false);
-    assert.equal(isOpen('execution'), false);
     assert.equal(view.release.mock.callCount(), 1);
   } finally {
     await view.unmount();
@@ -487,7 +480,6 @@ test('a required profile error scrolls its field without opening groups', async 
     await act(async () => form.setFieldValue('profile', undefined));
     await toggleGroup('dataset');
     await toggleGroup('load');
-    await toggleGroup('execution');
     scrolled = [];
     await view.submit();
     const control = dom.window.document.getElementById('benchmark_profile')!;
@@ -504,7 +496,6 @@ test('a required profile error scrolls its field without opening groups', async 
     assert.equal(scrolled[0]?.visible, true);
     assert.equal(isOpen('dataset'), false);
     assert.equal(isOpen('load'), false);
-    assert.equal(isOpen('execution'), false);
     assert.equal(view.release.mock.callCount(), 1);
   } finally {
     await view.unmount();
@@ -600,7 +591,7 @@ test(
         form.setFieldValue('dataset_input_tokens', undefined)
       );
       await toggleGroup('dataset');
-      await toggleGroup('execution');
+      await toggleGroup('load');
       const revealTimer = holdNextRevealTimer(context);
       scrolled = [];
       await view.submit(25);
@@ -609,14 +600,14 @@ test(
       assert.equal(revealTimer.isPending(), true);
       assert.equal(scrolled.length, 0);
 
-      await clickTab('execution');
-      assert.equal(selectedTab(), 'benchmark.form.group.execution');
-      assert.equal(isOpen('execution'), false);
+      await clickTab('load');
+      assert.equal(selectedTab(), 'benchmark.form.group.load');
+      assert.equal(isOpen('load'), false);
       assert.equal(revealTimer.isPending(), false);
       await act(async () => revealTimer.run());
       assert.equal(scrolled.length, 0);
       assert.equal(isOpen('dataset'), true);
-      assert.equal(isOpen('execution'), false);
+      assert.equal(isOpen('load'), false);
     } finally {
       await view.unmount();
     }
@@ -639,7 +630,7 @@ test('successful validation submits without scrolling to a field', async () => {
 test('SLO visibility changes preserve form state, disclosure state and submission', async () => {
   const view = await renderForm();
   try {
-    await toggleGroup('execution');
+    await toggleGroup('load');
     const distributionTitle = [
       ...dom.window.document.querySelectorAll('.section-title')
     ].find((title) =>
@@ -667,7 +658,7 @@ test('SLO visibility changes preserve form state, disclosure state and submissio
     assert.equal(dom.window.document.querySelector('[data-field="slo"]'), null);
     assert.equal(form.getFieldValue('name'), 'user-benchmark');
     assert.equal(form.getFieldValue('dataset_input_tokens'), 2048);
-    assert.equal(isOpen('execution'), false);
+    assert.equal(isOpen('load'), false);
     assert.ok(
       dom.window.document.getElementById('benchmark_dataset_input_stdev')
     );
@@ -681,7 +672,7 @@ test('SLO visibility changes preserve form state, disclosure state and submissio
     }
     await clickTab('slo');
     assert.equal(selectedTab(), 'benchmark.form.group.slo');
-    assert.equal(isOpen('execution'), false);
+    assert.equal(isOpen('load'), false);
     assert.equal(form.getFieldValue('dataset_input_tokens'), 2048);
     assert.ok(
       dom.window.document.getElementById('benchmark_dataset_input_stdev')

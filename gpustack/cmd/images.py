@@ -1,6 +1,6 @@
 import argparse
 
-from gpustack import __benchmark_runner_version__, __operator_version__
+from gpustack import __aisbench_runner_version__, __operator_version__
 from gpustack_higress_plugins import __version__ as __higress_plugins_version__
 
 from gpustack_runtime.cmds import (
@@ -38,7 +38,8 @@ python_version = "3.12-alpine"
 # Append images used by GPUStack here. The GPUStack image itself is appended
 # from _append_self_image() instead, since it cannot be resolved at import time.
 append_images(
-    f"gpustack/benchmark-runner:{__benchmark_runner_version__}",
+    # Built locally by deploy/build.sh, not published to a registry.
+    f"aisbench-runner:{__aisbench_runner_version__}",
     f"gpustack/higress-plugins:{__higress_plugins_version__}",
     f"gpustack/mirrored-higress-higress:{higress_version}",
     f"gpustack/mirrored-higress-pilot:{higress_version}",

@@ -146,7 +146,7 @@ def start_cmd_options(parser_server: argparse.ArgumentParser):
     common_group.add_argument(
         "--benchmark-image-repo",
         type=str,
-        help="Override the default benchmark image repository gpustack/benchmark-runner for the GPUStack benchmark container. Unlike --image-repo, this value is used as-is, so include the tag. If the image lives outside the 'gpustack' namespace (e.g. 'awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>'), set --system-default-container-registry to the parent path (e.g. 'awesome.com/amazing-group/amazing-subgroup') first, then set this to 'gpustack-ai/benchmark-runner:<tag>'.",
+        help="Override the default benchmark image aisbench-runner:<version> (built from aisbench-runner/ by deploy/build.sh) for the GPUStack benchmark container. Unlike --image-repo, this value is used as-is, so include the tag. If the image lives outside the 'gpustack' namespace (e.g. 'awesome.com/amazing-group/amazing-subgroup/gpustack-ai/benchmark-runner:<tag>'), set --system-default-container-registry to the parent path (e.g. 'awesome.com/amazing-group/amazing-subgroup') first, then set this to 'gpustack-ai/benchmark-runner:<tag>'.",
         default=get_gpustack_env("BENCHMARK_IMAGE_REPO"),
     )
     common_group.add_argument(

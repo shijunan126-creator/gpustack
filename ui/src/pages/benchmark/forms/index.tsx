@@ -101,8 +101,7 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
   const [groupKeys, setGroupKeys] = useState<string[]>([
     'dataset',
     'slo',
-    'load',
-    'execution'
+    'load'
   ]);
   const errorScrollTimer = useRef<ReturnType<typeof setTimeout>>();
   // What warmup / cooldown held when this form was seeded, for the two of them
@@ -112,7 +111,7 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
   const seededCounts = useRef<{ warmup?: number; cooldown?: number }>({});
 
   // The nav jumps to each real section instead of a single "Configuration": Basic
-  // + Workload / SLO / Load / Stop Conditions. Each `field` matches the section
+  // + Workload / SLO / Load. Each `field` matches the section
   // header's data-field anchor (see random-settings).
   //
   // SLO is shown per TARGET, not per axis: it is available on both load axes and
@@ -153,12 +152,6 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
       label: intl.formatMessage({ id: 'benchmark.form.group.load' }),
       icon: <IconFont type="icon-speed" />,
       field: 'load'
-    },
-    {
-      value: 'execution',
-      label: intl.formatMessage({ id: 'benchmark.form.group.execution' }),
-      icon: <IconFont type="icon-rule_settings" />,
-      field: 'execution'
     }
   ];
 

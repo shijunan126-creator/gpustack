@@ -164,6 +164,16 @@ class TestValidateLoadConfig:
             _validate_load_config(_create(**{field: 0}))
         assert field in str(e.value.message)
 
+    @pytest.mark.parametrize("turns, refused", [(1, False), (2, True), (8, True)])
+    def test_multi_turn_is_refused(self, turns, refused):
+        # Every request the runner sends is one independent chat turn.
+        if refused:
+            with pytest.raises(BadRequestException) as e:
+                _validate_load_config(_create(turns=turns))
+            assert "Multi-turn" in str(e.value.message)
+        else:
+            _validate_load_config(_create(turns=turns))
+
     def test_a_point_budget_the_grid_cannot_hold_is_refused(self):
         # The results upload caps a grid at MAX_BENCHMARK_RESULT_POINTS, and that
         # check runs at the END of the run: without this one, a 600-point benchmark
