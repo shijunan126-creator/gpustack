@@ -370,6 +370,16 @@ GPUStack 支持针对模型部署进行定制配置。
 
 支持的完整参数列表参见[推理后端](built-in-inference-backends.md)。
 
+#### 粘贴启动命令 { #paste-a-launch-command }
+
+要复用推理引擎文档或配方里的启动脚本，不必逐项填写：点击`后端参数`旁的`粘贴命令`，把脚本原样粘贴进去——包含 `export` 行和 `vllm serve ...` 命令，带 `\` 续行的多行写法和 JSON 值都可以——预览会显示解析结果。点击`应用`，`后端参数`和`环境变量`会一并填好。
+
+- 识别的命令：`vllm serve`、`sglang serve`、`python -m vllm.…` 和 `python -m sglang.…`，前面可以有 `export` 行、`NAME=value` 前缀或 `&&`。命令不会被执行。
+- 已设置的同名参数会被粘贴的值替换，其余参数和环境变量保留，同名环境变量取粘贴的值。
+- `--host`、`--port` 和 `--served-model-name` 不会应用：GPUStack 会为每个实例自行设置，粘贴的值会导致请求无法路由。模型（`vllm serve <model>`、`--model`、`--model-path`）同样不会应用，请在模型来源中选择。
+- `$MODEL_PATH` 这类 shell 变量不会被展开。用到变量的值会在预览中提示，应用后请改成实际的值。
+- PD 部署的路由器不提供此功能。
+
 ### 环境变量 { #environment-variables }
 
 运行模型时使用的环境变量，在启动时传递给后端进程。
