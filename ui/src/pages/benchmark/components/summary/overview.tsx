@@ -296,7 +296,8 @@ const Overview: React.FC<OverviewProps> = ({
       max_seconds: 'benchmark.detail.termination.maxSeconds',
       max_duration: 'benchmark.detail.termination.maxSeconds',
       max_errors: 'benchmark.detail.termination.maxErrors',
-      max_error_rate: 'benchmark.detail.termination.maxErrors'
+      max_error_rate: 'benchmark.detail.termination.maxErrors',
+      runner_aborted: 'benchmark.detail.termination.runnerAborted'
     };
     return t(map[term?.reason] || 'benchmark.detail.termination.default', {
       reason: term?.reason ?? '-',

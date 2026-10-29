@@ -35,6 +35,21 @@ def _json(value: str) -> Any:
     return json.loads(value)
 
 
+def _timeout(value: Any) -> Optional[float]:
+    """The backend kwargs' per-request allowance, when one was stated.
+
+    Anything unparseable is treated as no statement: the runner falls back
+    to its own stall bound rather than refusing to start over a hand-edited
+    config."""
+    if value is None or value == "":
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds > 0 else None
+
+
 def _phase(value: str) -> Optional[float]:
     """``--warmup`` / ``--cooldown``: a bare number, or GPUStack's
     ``{"percent": p}`` / ``{"value": n}`` object."""
@@ -152,6 +167,7 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         trust_remote_code=bool(processor_args.get("trust_remote_code")),
         api_key=str(backend.get("api_key") or ""),
         verify_tls=bool(backend.get("verify", True)),
+        request_timeout=_timeout(backend.get("timeout")),
         mode="auto" if args.auto_tune else ("stages" if args.stages else "single"),
         axis=args.axis,
         lower_bound=args.lower_bound,

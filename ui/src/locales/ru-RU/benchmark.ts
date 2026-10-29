@@ -213,6 +213,8 @@ export default {
     'Остановлено досрочно: достигнут лимит времени этапа — выполнено {processed}/{requested} запросов.',
   'benchmark.detail.termination.maxErrors':
     'Остановлено досрочно: слишком много ошибок — выполнено {processed}/{requested} запросов.',
+  'benchmark.detail.termination.runnerAborted':
+    'Остановлено досрочно: раннер остановил aisbench, выполнено {processed}/{requested} запросов.',
   'benchmark.detail.termination.default':
     'Остановлено досрочно ({reason}): выполнено {processed}/{requested} запросов.',
   'benchmark.detail.summary.stageDetail': 'Детали этапа',

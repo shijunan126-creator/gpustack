@@ -210,6 +210,8 @@ export default {
     '早期終了:ステージの時間上限に達しました。{processed}/{requested} 件を実行。',
   'benchmark.detail.termination.maxErrors':
     '早期終了:エラーが多すぎます。{processed}/{requested} 件を実行。',
+  'benchmark.detail.termination.runnerAborted':
+    '早期に停止:ランナーが aisbench を中止しました。{processed}/{requested} 件のリクエストを実行しました。',
   'benchmark.detail.termination.default':
     '早期終了({reason}):{processed}/{requested} 件を実行。',
   'benchmark.detail.summary.stageDetail': 'ステージ詳細',

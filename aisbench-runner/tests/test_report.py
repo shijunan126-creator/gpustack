@@ -154,3 +154,38 @@ def test_written_report_is_valid_json(tmp_path):
     with open(path) as f:
         assert json.load(f) == {"benchmarks": []}
     assert not os.path.exists(path + ".tmp")
+
+
+def test_a_request_without_timings_still_counts_as_an_error(tmp_path):
+    """A refused connection has no time points, so the warmup trim cannot
+    place it; it is still one of the requests the point ran."""
+    records = ten_requests()
+    records.append(RequestRecord(success=False, error="Connection refused"))
+    bm = build_benchmark(
+        records, Strategy("concurrent", streams=2), requested=11, clock_offset=0.0
+    )
+    report = load(tmp_path, bm)
+    point = report.to_results()[0]
+    assert point["request_total"] == 11
+    assert point["request_successful"] == 10
+    assert point["request_errored"] == 1
+    errored = report.benchmarks[0].requests_truncated.errored
+    assert errored[0].info.error == "Connection refused"
+
+
+def test_a_point_whose_requests_all_failed_is_still_reported(tmp_path):
+    """All-error points carry the failure, rather than vanishing from the
+    curve as a point nobody measured."""
+    records = [
+        RequestRecord(success=False, error="Connection refused") for _ in range(3)
+    ]
+    bm = build_benchmark(
+        records, Strategy("constant", rate=4.0), requested=3, clock_offset=0.0
+    )
+    assert bm is not None
+    point = load(tmp_path, bm).to_results()[0]
+    assert point["request_total"] == 3
+    assert point["request_successful"] == 0
+    assert point["request_errored"] == 3
+    assert point["requests_per_second_mean"] == 0.0
+    assert point["raw_metrics"]["duration"] == 0.0

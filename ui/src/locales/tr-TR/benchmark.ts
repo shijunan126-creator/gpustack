@@ -210,6 +210,8 @@ export default {
     'Erken durduruldu: aşama süre sınırına ulaşıldı — {processed}/{requested} istek çalıştı.',
   'benchmark.detail.termination.maxErrors':
     'Erken durduruldu: çok fazla hata — {processed}/{requested} istek çalıştı.',
+  'benchmark.detail.termination.runnerAborted':
+    'Erken durduruldu: çalıştırıcı aisbench sürecini durdurdu, {processed}/{requested} istek çalıştırıldı.',
   'benchmark.detail.termination.default':
     'Erken durduruldu ({reason}): {processed}/{requested} istek çalıştı.',
   'benchmark.detail.summary.stageDetail': 'Aşama ayrıntısı',

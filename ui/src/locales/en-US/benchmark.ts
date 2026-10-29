@@ -210,6 +210,8 @@ export default {
     'Stopped early: hit the per-stage time limit — {processed}/{requested} requests ran.',
   'benchmark.detail.termination.maxErrors':
     'Stopped early: too many errors — {processed}/{requested} requests ran.',
+  'benchmark.detail.termination.runnerAborted':
+    'Stopped early: the runner stopped aisbench - {processed}/{requested} requests ran.',
   'benchmark.detail.termination.default':
     'Stopped early ({reason}): {processed}/{requested} requests ran.',
   'benchmark.detail.summary.stageDetail': 'Stage detail',
