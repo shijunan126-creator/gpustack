@@ -947,6 +947,9 @@
       # because an engine's injection sees the endpoint's address and
       # service port but not the instance's other allocations.
       ports: [port, metrics]
+      # Bound from the field, so the worker checks it before starting the
+      # container instead of letting a second service claim the same number.
+      host_ports: [config_store_port]
       health_check:
         scheme: tcp
       env:
@@ -1029,6 +1032,7 @@
       max: 99
       step: 1
     - name: evict_threshold_low
+      at_most: evict_threshold_high
       label: { default: Eviction Low Watermark (%), zh-CN: 淘汰低水位（%） }
       description:
         default: Pool usage percentage at which eviction stops.

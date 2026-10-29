@@ -26,6 +26,7 @@ from gpustack.mixins import BaseModelMixin
 
 from .cache_providers import (
     CacheProvider,
+    validate_component_file_templates,
     validate_injection_templates,
     with_runner_versions,
     validate_localized_text,
@@ -232,6 +233,7 @@ def load_cache_providers_document(
         # connector config, secrets riding into instance snapshots, text that
         # renders for no locale), so it never reaches the catalog.
         violations = validate_injection_templates(provider)
+        violations += validate_component_file_templates(provider)
         violations += validate_localized_text(provider)
         violations += validate_template_filters(provider)
         if violations:
