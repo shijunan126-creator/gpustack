@@ -471,6 +471,9 @@ export default {
   'models.table.category': '类别',
   'models.instance.currentRun': '当前运行',
   'models.instance.previousRun': '上一次运行',
+  'models.instance.fullLogs': '完整日志',
+  'models.instance.fullLogs.tips':
+    '同时显示模型下载和 Worker 的拉起过程日志（拉取镜像、启动命令）。默认只显示推理引擎自身的输出。',
   'models.instance.startHistory': '运行记录',
   'models.instance.startHistory.tips':
     '显示上一次因错误自动重启之前的那次运行的日志。',

@@ -14,6 +14,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Tuple,
@@ -71,6 +72,18 @@ default_offset = Query(
 )
 default_limit = Query(
     default=1000, gt=0, description="How many lines to return from offset"
+)
+
+# Which of a serving instance's logs to read: "all" for the model download, the
+# worker's provisioning log and the engine container's output together, or
+# "engine" for the engine container's output alone.
+ServeLogSource = Literal["all", "engine"]
+default_serve_log_source = Query(
+    default="all",
+    description=(
+        "'all' for the download, provisioning and engine logs together; "
+        "'engine' for only the inference engine container's output"
+    ),
 )
 
 

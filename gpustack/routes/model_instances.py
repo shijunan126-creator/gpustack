@@ -17,7 +17,11 @@ from gpustack import envs
 from gpustack.server.services import ModelInstanceService
 from gpustack.server.worker_request import request_to_worker, stream_to_worker
 from gpustack.utils.command import resolve_executor_backend
-from gpustack.worker.logs import LogOptionsDep
+from gpustack.worker.logs import (
+    LogOptionsDep,
+    ServeLogSource,
+    default_serve_log_source,
+)
 from gpustack.api.exceptions import (
     InternalServerErrorException,
     NotFoundException,
@@ -233,6 +237,7 @@ async def get_serving_logs(  # noqa: C901
     log_options: LogOptionsDep,
     worker_id: Optional[int] = None,
     container_name: Optional[str] = None,
+    source: ServeLogSource = default_serve_log_source,
 ):
     # Inline session released after the initial lookups so a long-lived
     # follow-log stream doesn't hold a database connection for its duration.
@@ -276,6 +281,7 @@ async def get_serving_logs(  # noqa: C901
             container_name=container_name,
             offset=log_options.offset,
             limit=log_options.limit,
+            source=source,
         )
 
     timeout = aiohttp.ClientTimeout(total=envs.PROXY_TIMEOUT, sock_connect=5)
@@ -555,6 +561,7 @@ def _build_serve_log_params(
     container_name: Optional[str] = None,
     offset: Optional[int] = None,
     limit: int = 1000,
+    source: str = "all",
 ) -> dict:
     """Proxy params for one container's logs; defaults to a full, non-follow read."""
     params = {
@@ -563,6 +570,10 @@ def _build_serve_log_params(
         "model_instance_name": model_instance.name,
         "previous": previous,
     }
+    # Left off for the default so a worker that predates the parameter still
+    # answers the requests it always did.
+    if source != "all":
+        params["source"] = source
     if container_name:
         params["container_name"] = container_name
     if offset is not None:

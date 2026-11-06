@@ -507,6 +507,9 @@ export default {
   'models.table.category': 'カテゴリ',
   'models.instance.currentRun': '今回の実行',
   'models.instance.previousRun': '前回の実行',
+  'models.instance.fullLogs': '完全なログ',
+  'models.instance.fullLogs.tips':
+    'モデルのダウンロードと Worker の起動準備ログ（イメージの取得、起動コマンド）も表示します。既定では推論エンジン自身の出力のみを表示します。',
   'models.instance.startHistory': '実行履歴',
   'models.instance.startHistory.tips':
     '直近のエラーによる再起動前の実行ログを表示します。',
