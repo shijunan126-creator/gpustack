@@ -1,3 +1,5 @@
+> **This fork** (vLLM-Ascend customized GPUStack): build and deployment steps, verified on Ascend 910B, are in [deploy/README.md](deploy/README.md) (Chinese).
+
 <br>
 
 <p align="center">
