@@ -97,37 +97,144 @@ deploy/build-benchmark-runner.sh --build-arg SHAREGPT_URL=https://hf-mirror.com/
 - amd64 和 arm64 用的是同一个 tag,两种架构推到同一个 registry tag 会互相覆盖。
   混合架构部署时用 `--platform` 分别构建,各自 `docker load` 到对应架构的机器上。
 
-## 运行
+## 部署(昇腾 910B 单机,server 与 worker 同机)
 
-Server(数据在命名卷 `gpustack-data`,升级/回滚不丢数据):
+以下步骤已在 192.168.1.110(openEuler 24.03 aarch64、8×910B2、Docker 18.09)上
+从零执行验证过。多机部署时,其他机器只需执行第 4 步(worker),`GPUSTACK_SERVER_URL`
+指向 server 所在机器即可。
+
+### 0. 前提
+
+- 昇腾驱动和固件已装好,`npu-smi info` 能看到全部卡。
+- 已安装 Docker 和 git(openEuler 上用 `dnf install -y git` 安装 git)。
+- 机器能访问 Docker Hub(官方基础镜像)、quay.io(vLLM-Ascend 推理镜像)、
+  华为 SWR(benchmark 基础镜像)和 huggingface.co。访问不到时可以换成镜像源,
+  见下文"基准测试执行端镜像"和第 1 步的 `NPM_REGISTRY`。
+
+下面用到的路径:
+
+| 路径 | 内容 |
+| --- | --- |
+| `/data/gpustack/src` | 源码 |
+| `/data/gpustack/server` | server 数据:数据库、admin 初始密码、worker 注册 token |
+| `/data/gpustack/worker` | worker 数据:模型缓存、日志 |
+
+### 1. 获取代码并构建镜像
+
+```bash
+mkdir -p /data/gpustack && cd /data/gpustack
+git clone -b custom/v2.3 https://github.com/shijunan126-creator/gpustack.git src
+cd src
+deploy/build.sh "" --build-arg NPM_REGISTRY=https://registry.npmmirror.com
+```
+
+镜像名是 `gpustack-custom:v2.3.0-<提交号>`,后面的命令用 `TAG` 变量代替:
+
+```bash
+TAG=gpustack-custom:v2.3.0-$(git rev-parse --short HEAD)
+docker image inspect "$TAG" > /dev/null && echo "$TAG"
+```
+
+### 2. 启动 server
+
+`GPUSTACK_TOKEN` 是 worker 注册用的 token,这里随机生成一个。只跑 server 的容器
+必须带上它:server 用它创建默认集群并写出 token 文件(第 3 步);不带的话不会创建
+默认集群,只能到页面的"添加 Worker"里取 token。
 
 ```bash
 docker run -d --name gpustack --restart unless-stopped \
-  -p 80:80 -v gpustack-data:/var/lib/gpustack \
-  gpustack-custom:<tag>
+  -p 80:80 \
+  -v /data/gpustack/server:/var/lib/gpustack \
+  -e GPUSTACK_TOKEN="$(openssl rand -hex 24)" \
+  "$TAG"
 ```
 
-Worker(与 server 用**同一个镜像**;`<SERVER_URL>`、`<TOKEN>` 在 server 页面的"添加 Worker"里取):
+等它就绪(首次启动要初始化数据库,大约一两分钟):
 
 ```bash
-docker run -d --name gpustack-worker --restart unless-stopped \
-  --runtime nvidia --network host --privileged \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v gpustack-worker-data:/var/lib/gpustack \
-  gpustack-custom:<tag> \
-  --server-url <SERVER_URL> --token <TOKEN> --advertise-address <本机IP>
+until curl -fs http://127.0.0.1/healthz > /dev/null; do sleep 5; done; echo ready
 ```
 
-`--runtime nvidia` 只用于 NVIDIA 机器。**昇腾机器的 worker 参数(设备映射等)尚未用本镜像
-验证过**,按官方文档的昇腾安装说明来,并先在一台机器上试通再铺开。
+### 3. 取 admin 初始密码和 worker 注册 token
+
+```bash
+cat /data/gpustack/server/initial_admin_password   # 用户名 admin,首次登录后要求改密码
+cat /data/gpustack/server/token                    # worker 注册用
+```
+
+### 4. 启动 worker
+
+worker 和 server 用**同一个镜像**。`--network host` 是必须的:推理容器直接监听宿主机端口。
+`/var/run/docker.sock` 用来创建推理容器和 benchmark 容器;`/data:/data` 让页面上可以选择
+宿主机 `/data` 下已有的模型目录。
+
+```bash
+SERVER_URL=http://<本机IP>      # 例如 http://192.168.1.110,不要写 127.0.0.1
+docker run -d --name gpustack-worker --restart unless-stopped \
+  --network host --privileged \
+  $(for d in /dev/davinci[0-9]* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc; do printf -- '--device %s ' "$d"; done) \
+  -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
+  -v /usr/local/Ascend/firmware:/usr/local/Ascend/firmware:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /data/gpustack/worker:/var/lib/gpustack \
+  -v /data:/data \
+  -e GPUSTACK_SERVER_URL="$SERVER_URL" \
+  -e GPUSTACK_TOKEN="$(cat /data/gpustack/server/token)" \
+  "$TAG"
+```
+
+worker 启动后会在后台自动构建 benchmark 执行端镜像 `aisbench-runner:<版本>`,
+首次在 110 上用了约 12 分钟,大部分时间在从华为 SWR 拉基础镜像。构建期间创建的 benchmark
+会保持"排队中",构建完成后自动开始。进度见:
+
+```bash
+tail -f /data/gpustack/worker/log/benchmarks/runner-image-build.log
+```
+
+### 5. 检查
+
+```bash
+docker logs gpustack-worker 2>&1 | grep "registered with worker_id"   # worker 已注册
+docker images | grep aisbench-runner       # runner 镜像构建完成后出现
+```
+
+在浏览器打开 `http://<本机IP>`,用 admin 登录,Worker 列表里应能看到本机(状态 Ready)和全部 NPU。
+部署模型时,"查看日志"默认只显示 vLLM serve 自身的输出;勾选"完整日志"可以看到模型下载
+和拉镜像的过程,部署在推理容器启动前就失败时需要看这个。
+
+### 卸载
+
+会删除模型缓存和数据库,不可恢复:
+
+```bash
+docker rm -f gpustack gpustack-worker
+# 由 GPUStack 创建的推理容器和 benchmark 容器
+docker ps -aq --filter label=runtime.gpustack.ai/workload | xargs -r docker rm -f
+rm -rf /data/gpustack
+```
 
 ## 升级与回滚
 
-升级:构建新 tag → 停掉并改名旧容器 → 用相同参数起新容器。**换容器之前先
-`docker inspect` 对比旧容器的完整 HostConfig 和 Env**,只允许镜像和主机名不同;
-漏掉 `--runtime`、挂载这类参数,模型会表现为"没有可用的后端版本"之类的问题。
+升级:
 
-回滚:停掉新容器,用旧 tag 按同样参数起回来(数据卷是同一个)。
+```bash
+cd /data/gpustack/src && git pull && deploy/build.sh "" --build-arg NPM_REGISTRY=https://registry.npmmirror.com
+TAG=gpustack-custom:v2.3.0-$(git rev-parse --short HEAD)
+docker stop gpustack-worker gpustack
+docker rename gpustack gpustack-old && docker rename gpustack-worker gpustack-worker-old
+```
+
+然后用新的 `TAG` 重新执行第 2 步和第 4 步。数据目录不变,所以模型、用户和配置都会保留。
+第 2 步里新随机生成的 `GPUSTACK_TOKEN` 不会替换已有的 token:集群的 token 存在数据库里,
+server 启动时会把它写回 `/data/gpustack/server/token`,所以第 4 步照常读这个文件即可。
+确认新版本正常后,再 `docker rm gpustack-old gpustack-worker-old`。
+
+回滚:`docker rm -f gpustack gpustack-worker`,再把 `gpustack-old`、`gpustack-worker-old`
+改回原名并 `docker start`。
+
+自己改启动参数时,**换容器之前先用 `docker inspect` 对比新旧容器的完整 HostConfig 和 Env**,
+只允许镜像不同。漏掉设备映射、挂载这类参数,模型会表现为"没有可用的后端版本"
+或"Failed to infer device type"之类的问题。
 
 ## 限制
 

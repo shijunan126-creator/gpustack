@@ -1,3 +1,5 @@
+> **本 fork(vLLM-Ascend 定制版 GPUStack)**:构建和部署步骤见 [deploy/README.md](deploy/README.md),已在昇腾 910B 上验证。
+
 <br>
 
 <p align="center">
