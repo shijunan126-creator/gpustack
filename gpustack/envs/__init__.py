@@ -614,6 +614,22 @@ BENCHMARK_DATASET_SHAREGPT_PATH = os.getenv(
 BENCHMARK_REQUEST_TIMEOUT = int(
     os.getenv("GPUSTACK_BENCHMARK_REQUEST_TIMEOUT", 3600)  # 1 hour
 )  # in seconds
+# The benchmark runner image is published to no registry, so a worker builds it
+# on its own Docker host from the build context shipped in the GPUStack image,
+# when the image is missing and the worker uses the default image name. Turn
+# off where the image is provided another way (docker load, a registry).
+BENCHMARK_RUNNER_AUTO_BUILD = os.getenv(
+    "GPUSTACK_BENCHMARK_RUNNER_AUTO_BUILD", "true"
+).lower() in ["true", "1"]
+BENCHMARK_RUNNER_BUILD_CONTEXT = os.getenv(
+    "GPUSTACK_BENCHMARK_RUNNER_BUILD_CONTEXT",
+    "/usr/local/share/gpustack/benchmark-runner",
+)
+# Overrides for the runner Dockerfile's AISBENCH_IMAGE and SHAREGPT_URL build
+# arguments; empty keeps the Dockerfile's defaults. Point them at a mirror
+# where Huawei SWR or huggingface.co is not reachable.
+BENCHMARK_RUNNER_BASE_IMAGE = os.getenv("GPUSTACK_BENCHMARK_RUNNER_BASE_IMAGE", "")
+BENCHMARK_RUNNER_SHAREGPT_URL = os.getenv("GPUSTACK_BENCHMARK_RUNNER_SHAREGPT_URL", "")
 
 # Usage breakdown configuration
 # Upper bound on the number of buckets a single no-pagination (page=-1)

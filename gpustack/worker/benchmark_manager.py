@@ -28,6 +28,10 @@ from gpustack.schemas.models import ModelInstanceStateEnum
 from gpustack.utils.process import terminate_process_tree, add_signal_handlers
 from gpustack.worker.benchmark import analysis, artifacts
 from gpustack.worker.benchmark.runner import BenchmarkRunner
+from gpustack.worker.benchmark.runner_image import (
+    RunnerImageBuilder,
+    RunnerImageState,
+)
 from gpustack.client import ClientSet
 from gpustack.server.bus import Event, EventType
 from gpustack.worker.schemas.benchmark_runner import (
@@ -58,6 +62,9 @@ BENCHMARK_PARTIAL_SYNC_INTERVAL_SECONDS = 10
 # cache falls back to a full unpaginated GET while the watch is reconnecting,
 # and that one should not fire on every 3-second poll.
 BENCHMARK_TARGET_CHECK_INTERVAL_SECONDS = 15
+# How often a queued benchmark waiting on the runner image build looks again.
+RUNNER_IMAGE_WAIT_POLL_SECONDS = 5
+BENCHMARK_EXITED_MESSAGE = "Benchmark exited or unhealthy."
 # How long the target may stay missing before the run is failed. This is not a
 # detection delay to be minimized: an instance can legitimately leave RUNNING
 # for a while (a restart, a worker heartbeat blip, a reconnecting watch whose
@@ -66,6 +73,16 @@ BENCHMARK_TARGET_CHECK_INTERVAL_SECONDS = 15
 # to sit out those, short enough to beat the load generator's own per-request
 # timeout, which is what the run would otherwise wait on.
 BENCHMARK_TARGET_GONE_GRACE_SECONDS = 300
+
+
+def provisioning_error_path(log_file_path: str) -> str:
+    """Where the provisioning subprocess leaves the error that stopped it.
+
+    The subprocess ends before the state poll notices the workload never came
+    up, and by then all the poll can see is that it is missing; this file is
+    how the reason survives the process.
+    """
+    return f"{log_file_path}.error"
 
 
 def _without_raw_metrics(results: list) -> list:
@@ -215,6 +232,21 @@ class BenchmarkManager:
         os.makedirs(self._benchmark_log_dir, exist_ok=True)
         os.makedirs(self._benchmark_dir, exist_ok=True)
 
+        self._runner_image = RunnerImageBuilder(
+            cfg, build_log_path=f"{self._benchmark_log_dir}/runner-image-build.log"
+        )
+
+    async def prepare_runner_image(self):
+        """Start building the benchmark runner image if this worker lacks it.
+
+        Called once at worker start so the image is usually ready before the
+        first benchmark is; a benchmark that comes earlier waits for the build.
+        """
+        try:
+            await asyncio.to_thread(self._runner_image.ensure)
+        except Exception as e:
+            logger.warning(f"Failed to check the benchmark runner image: {e}")
+
     async def watch_benchmarks_event(self):
         """
         Loop to watch benchmarks' event and handle.
@@ -349,6 +381,8 @@ class BenchmarkManager:
                     )
                     continue
                 try:
+                    if not await self._wait_for_runner_image(benchmark):
+                        continue
                     await self._start_benchmark(benchmark)
                 except Exception as e:
                     logger.error(
@@ -356,6 +390,65 @@ class BenchmarkManager:
                     )
             else:
                 await asyncio.sleep(1)
+
+    async def _wait_for_runner_image(self, benchmark: Benchmark) -> bool:
+        """Hold a benchmark until the runner image it runs in is on this worker.
+
+        The image is built here rather than pulled (see runner_image), so while
+        a build is under way starting the run would only fail on the pull. The
+        run stays QUEUED, saying what it waits for, and fails with the build's
+        own error if the build fails.
+
+        Returns:
+            True when the benchmark can start, False when it was canceled while
+            waiting or the image could not be built.
+        """
+        try:
+            state = await asyncio.to_thread(self._runner_image.ensure)
+            image = await asyncio.to_thread(self._runner_image.target_image)
+        except Exception as e:
+            # Starting anyway lets the run report whatever stops it.
+            logger.warning(f"Failed to check the benchmark runner image: {e}")
+            return True
+        if state != RunnerImageState.BUILDING:
+            return True
+
+        logger.info(
+            f"Benchmark {benchmark.name}(id={benchmark.id}) waits for the "
+            f"benchmark runner image {image} to finish building."
+        )
+        message = (
+            f"Waiting for the benchmark runner image {image} to finish building "
+            "on this worker. It is built once, the first time it is needed."
+        )
+        if not await self._update_benchmark_state(benchmark.id, state_message=message):
+            return False
+
+        while True:
+            if benchmark.id in self._canceled_ids:
+                self._canceled_ids.discard(benchmark.id)
+                logger.info(
+                    f"Skipping start of benchmark {benchmark.name}"
+                    f"(id={benchmark.id}); it was canceled while waiting for "
+                    "the runner image."
+                )
+                return False
+            if self._runner_image.state() != RunnerImageState.BUILDING:
+                break
+            await asyncio.sleep(RUNNER_IMAGE_WAIT_POLL_SECONDS)
+
+        if self._runner_image.state() == RunnerImageState.FAILED:
+            await self._update_benchmark_state(
+                benchmark.id,
+                state=BenchmarkStateEnum.ERROR,
+                state_message=self._truncate_state_message(
+                    f"Failed to build the benchmark runner image {image}: "
+                    f"{self._runner_image.error}"
+                ),
+            )
+            return False
+
+        return await self._update_benchmark_state(benchmark.id, state_message="")
 
     async def _start_benchmark(self, benchmark: Benchmark):
         """
@@ -370,11 +463,12 @@ class BenchmarkManager:
             return
 
         log_file_path = f"{self._benchmark_log_dir}/{benchmark.id}.log"
-        try:
-            if os.path.exists(log_file_path):
-                os.remove(log_file_path)
-        except Exception as e:
-            logger.warning(f"Failed to remove old log file {log_file_path}: {e}")
+        for stale in (log_file_path, provisioning_error_path(log_file_path)):
+            try:
+                if os.path.exists(stale):
+                    os.remove(stale)
+            except Exception as e:
+                logger.warning(f"Failed to remove old log file {stale}: {e}")
 
         try:
             for name in artifacts.list_benchmark_files(
@@ -485,6 +579,15 @@ class BenchmarkManager:
                     logger.exception(
                         f"Error provisioning benchmark {benchmark.name}(id={benchmark.id}): {e}"
                     )
+                    try:
+                        with open(
+                            provisioning_error_path(log_file_path),
+                            "w",
+                            encoding="utf-8",
+                        ) as error_file:
+                            error_file.write(str(e))
+                    except OSError:
+                        pass
                     raise e
 
     async def _update_benchmark_state(self, id: int, **kwargs) -> bool:
@@ -1029,12 +1132,29 @@ class BenchmarkManager:
         """
         patch_dict = {
             "state": BenchmarkStateEnum.ERROR,
-            "state_message": "Benchmark exited or unhealthy.",
+            "state_message": self._failure_message(benchmark),
         }
         self._update_benchmark_state_sync(benchmark.id, **patch_dict)
         self._finalize_partial_analysis(benchmark)
         self._dump_benchmark_logs_to_file(benchmark)
         self._stop_benchmark(benchmark)
+
+    def _failure_message(self, benchmark: Benchmark) -> str:
+        """Why a run failed: the provisioning error if it never started.
+
+        A workload that could not be created -- its image could not be pulled,
+        say -- leaves nothing for the poll to inspect, and "exited or
+        unhealthy" would send the user to the worker's logs for the reason.
+        """
+        path = provisioning_error_path(f"{self._benchmark_log_dir}/{benchmark.id}.log")
+        try:
+            with open(path, encoding="utf-8") as error_file:
+                reason = error_file.read().strip()
+        except OSError:
+            return BENCHMARK_EXITED_MESSAGE
+        if not reason:
+            return BENCHMARK_EXITED_MESSAGE
+        return self._truncate_state_message(f"Failed to start benchmark: {reason}")
 
     def _finalize_partial_analysis(self, benchmark: Benchmark):
         """Re-run the analysis without the `in_progress` tag on a terminal exit.

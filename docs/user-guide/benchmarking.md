@@ -6,8 +6,17 @@ GPUStack can run benchmarks against running model instances. Benchmarks are exec
 
 Every measured point is executed by [AISBench](https://github.com/AISBench/benchmark)
 in the `aisbench-runner` image, which the worker starts for each run. The image
-is built from `aisbench-runner/` with `deploy/build-benchmark-runner.sh` and must
-be present on the worker, or reachable through `--benchmark-image-repo`.
+is published to no registry; the GPUStack image ships its build context, and a
+worker builds it on its own Docker host when it finds it missing: in the
+background at startup, and again before a benchmark if an earlier build failed.
+A benchmark created while the build runs stays queued with a note saying so,
+and fails with the build's error if the build fails. The build output is in
+`<log-dir>/benchmarks/runner-image-build.log` on the worker.
+
+The build pulls the AISBench base image from Huawei SWR and downloads the
+ShareGPT dataset from huggingface.co. Where either is unreachable, point the
+worker at a mirror with `GPUSTACK_BENCHMARK_RUNNER_BASE_IMAGE` and
+`GPUSTACK_BENCHMARK_RUNNER_SHAREGPT_URL`.
 
 A run sends requests with exactly the configured input and output token
 counts (the output is held with `ignore_eos`), at a fixed concurrency or
@@ -18,11 +27,15 @@ Not supported by this engine: multi-turn conversations, and the error-count,
 error-rate and stop-on-saturation limits. A benchmark created before the
 engine changed may still carry them; they are logged and ignored.
 
-Because the image is built locally, `gpustack save-images` does not
-include it (those commands copy images from a registry only). Carry it to every
-worker yourself, or push it to your registry and point `--benchmark-image-repo`
-at it. Note that a configured `--system-default-container-registry` rewrites
-the default image name, so a pushed image has to match the rewritten name.
+Only the default image name is built. A worker given its own image through
+`--benchmark-image-repo`, or started with
+`GPUSTACK_BENCHMARK_RUNNER_AUTO_BUILD=false`, uses the image as configured. For
+a worker that cannot reach the build's sources, build the image elsewhere with
+`deploy/build-benchmark-runner.sh` and carry it over: `gpustack save-images`
+does not include it (those commands copy images from a registry only). A
+configured `--system-default-container-registry` rewrites the default image
+name, and the worker builds under the rewritten name, so a carried image has to
+be tagged with it too.
 
 ## Prerequisites
 
