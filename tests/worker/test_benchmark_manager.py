@@ -2130,6 +2130,8 @@ class TestFinalizePartialAnalysis:
         mgr._update_benchmark_state_sync = lambda _id, **k: order.append(
             f"state:{k.get('state')}"
         )
+        # No provisioning error on record: the run started and then failed.
+        mgr._benchmark_log_dir = "/nonexistent"
         mgr._finalize_partial_analysis = lambda _b: order.append("finalize")
         mgr._dump_benchmark_logs_to_file = lambda _b: None
         mgr._stop_benchmark = lambda _b: order.append("teardown")
@@ -3252,6 +3254,7 @@ class TestADeletedRowDoesNotBlockTheQueue:
         mgr._finalize_partial_analysis = lambda _b: None
         mgr._dump_benchmark_logs_to_file = lambda _b: None
         mgr._update_benchmark_state_sync = lambda _id, **_kw: False
+        mgr._benchmark_log_dir = "/nonexistent"
 
         benchmark = SimpleNamespace(id=255, name="b255", namespace=None)
         mgr._handle_benchmark_failure(benchmark)

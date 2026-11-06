@@ -52,27 +52,50 @@ gunzip -c gpustack-custom.tar.gz | docker load
 - `swr.cn-south-1.myhuaweicloud.com/ascendhub/aisbench_benchmark:v3.1-20260630-master-openeuler24.03-py311`(未验证,用 `--build-arg AISBENCH_IMAGE=...` 指定)
 
 
+**默认由 worker 自动构建,不用手动处理。** GPUStack 镜像里带了这个镜像的构建上下文
+(`/usr/local/share/gpustack/benchmark-runner`),worker 发现本机没有 runner 镜像时,
+会通过挂进来的 `/var/run/docker.sock` 在本机构建:
+
+- worker 启动时在后台构建一次,构建的是本机架构,鲲鹏机器上就是 arm64;
+- 构建期间创建的测试会保持"排队中",并提示正在等待镜像构建,构建完成后自动开始;
+- 构建失败时,测试会失败并显示构建报错;下一次测试会自动重试构建;
+- 构建输出写在 worker 的 `<log-dir>/benchmarks/runner-image-build.log`
+  (容器内默认是 `/var/lib/gpustack/log/benchmarks/runner-image-build.log`)。
+
+构建需要从华为 SWR 拉基础镜像,并从 huggingface.co 下载 ShareGPT 数据集。访问不到时,
+可以给 worker 设环境变量换成镜像源:
+
+```bash
+-e GPUSTACK_BENCHMARK_RUNNER_SHAREGPT_URL=https://hf-mirror.com/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+-e GPUSTACK_BENCHMARK_RUNNER_BASE_IMAGE=<内网 registry>/aisbench_benchmark:<tag>
+```
+
+以下两种情况 worker 不会自动构建,沿用原来的手动方式:
+
+- 用 `--benchmark-image-repo` 指定了自己的镜像;
+- 设了 `GPUSTACK_BENCHMARK_RUNNER_AUTO_BUILD=false`,适用于完全离线的 worker。
+
+手动构建的命令:
+
 ```bash
 deploy/build-benchmark-runner.sh                               # 产出 aisbench-runner:<版本>
 deploy/build-benchmark-runner.sh --platform linux/arm64        # 鲲鹏机器
 deploy/build-benchmark-runner.sh --build-arg SHAREGPT_URL=https://hf-mirror.com/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 ```
 
-这个镜像不在任何公共仓库里,**每台 worker 都要有**:`docker save` / `docker load` 搬过去,
-或推到内网 Registry 后用 worker 的 `--benchmark-image-repo <registry>/aisbench-runner:<版本>` 指过去。
-worker 找不到镜像时,测试会停在拉取镜像失败。
-
+手动构建后需要搬到每台 worker 上:`docker save` / `docker load`,或者推到内网 Registry,
+再用 worker 的 `--benchmark-image-repo <registry>/aisbench-runner:<版本>` 指向它。
 `gpustack save-images` / `copy-images` **不包含这个镜像**:它们只从 registry 拉取
-(`skopeo copy docker://…`),本地构建的镜像列进去会让整次 save 失败。所以离线部署时必须按
-上面两种方式单独搬运。
+(`skopeo copy docker://…`),把本地构建的镜像列进去会导致整次 save 失败。
 
-还有两处容易踩的地方:
+还有两处容易踩坑的地方:
 
 - 配了 `--system-default-container-registry` 时,worker 会把裸名改写成
-  `<registry>/aisbench-runner:<版本>`。此时只 `docker load` 裸名是对不上的:要么按这个名字
-  `docker tag` 后推上去,要么显式设 `--benchmark-image-repo` 指向实际名字。
-- amd64 与 arm64 用的是同一个 tag;把两种架构推到同一个 registry tag 会互相覆盖。
-  混布架构时用 `--platform` 分别构建,各自 `docker load` 到对应架构的机器上。
+  `<registry>/aisbench-runner:<版本>`。自动构建会直接用改写后的名字打 tag;
+  手动搬运时,只 `docker load` 裸名是对不上的,要么按改写后的名字 `docker tag`,
+  要么显式设 `--benchmark-image-repo` 指向实际名字。
+- amd64 和 arm64 用的是同一个 tag,两种架构推到同一个 registry tag 会互相覆盖。
+  混合架构部署时用 `--platform` 分别构建,各自 `docker load` 到对应架构的机器上。
 
 ## 运行
 

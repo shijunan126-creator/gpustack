@@ -330,6 +330,7 @@ class Worker:
         self._create_async_task(self._serve_manager.watch_model_instances_event())
         self._create_async_task(self._serve_manager.watch_model_instances())
         self._create_async_task(self._benchmark_manager.watch_benchmarks_event())
+        self._create_async_task(self._benchmark_manager.prepare_runner_image())
         self._create_async_task(
             self._cache_service_manager.watch_cache_service_instances_event()
         )

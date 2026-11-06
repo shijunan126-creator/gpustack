@@ -57,6 +57,15 @@ COPY static/ ${PKG}/ui/static/
 RUN mkdir -p "${PKG}/ui/static/charts" \
     && cp -a /tmp/charts/. "${PKG}/ui/static/charts/" && rm -rf /tmp/charts
 
+# The benchmark runner's build context. The runner image is published to no
+# registry, so a worker builds it from here on its own Docker host the first
+# time it finds it missing (gpustack/worker/benchmark/runner_image.py); the
+# layout keeps aisbench-runner/Dockerfile's paths relative to the context root.
+ARG RUNNER_CONTEXT=/usr/local/share/gpustack/benchmark-runner
+COPY aisbench-runner/Dockerfile aisbench-runner/aisbench_runner_tls.pth ${RUNNER_CONTEXT}/aisbench-runner/
+COPY aisbench-runner/aisbench_runner/ ${RUNNER_CONTEXT}/aisbench-runner/aisbench_runner/
+RUN printf '%s\n' "${FORK_COMMIT}" > "${RUNNER_CONTEXT}/COMMIT"
+
 # Fail the build rather than the server: compile, resolve every import (lazy
 # ones included), and check the static files the frontend relies on.
 COPY hack/check_imports.py /tmp/check_imports.py
@@ -66,4 +75,6 @@ RUN python -m compileall -q "${PKG}" \
     && test "$(ls ${PKG}/ui/static/catalog_icons | wc -l)" -ge 47 \
     && test -n "$(ls ${PKG}/ui/static/charts)" \
     && test -f "${PKG}/ui/index.html" \
+    && test -f "${RUNNER_CONTEXT}/aisbench-runner/Dockerfile" \
+    && test -f "${RUNNER_CONTEXT}/aisbench-runner/aisbench_runner/cli.py" \
     && python -c "import gpustack; assert gpustack.__version__ != '0.0.0', 'version stamp lost'"
