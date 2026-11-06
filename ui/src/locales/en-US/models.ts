@@ -500,6 +500,9 @@ export default {
   'models.table.category': 'Category',
   'models.instance.currentRun': 'Current Run',
   'models.instance.previousRun': 'Previous Run',
+  'models.instance.fullLogs': 'Full Logs',
+  'models.instance.fullLogs.tips':
+    "Also show the model download and the worker's provisioning log (image pull, launch command). By default only the inference engine's own output is shown.",
   'models.instance.startHistory': 'Run History',
   'models.instance.startHistory.tips':
     'Shows logs from the run before the last error-triggered restart.',

@@ -507,6 +507,9 @@ export default {
   'models.table.category': 'Категория',
   'models.instance.currentRun': 'Текущий запуск',
   'models.instance.previousRun': 'Предыдущий запуск',
+  'models.instance.fullLogs': 'Полные логи',
+  'models.instance.fullLogs.tips':
+    'Также показывать загрузку модели и журнал подготовки на Worker (загрузка образа, команда запуска). По умолчанию отображается только вывод движка инференса.',
   'models.instance.startHistory': 'История запусков',
   'models.instance.startHistory.tips':
     'Показывает логи запуска до последнего перезапуска, вызванного ошибкой.',

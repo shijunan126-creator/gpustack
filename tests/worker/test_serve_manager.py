@@ -12,8 +12,10 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from gpustack.api.exceptions import BadRequestException, NotFoundException
+from gpustack.routes.worker import logs as worker_logs_routes
 from gpustack.routes.worker.logs import (
     combined_log_generator,
+    engine_log_generator,
     get_all_log_files,
     get_serve_log_options,
     get_serve_logs,
@@ -419,6 +421,7 @@ async def _read_range(
     model_instance_id: int,
     model_file_id=None,
     container_name=None,
+    source="all",
     **options,
 ):
     # Every query parameter is passed: called outside FastAPI, an omitted one
@@ -430,6 +433,7 @@ async def _read_range(
         model_instance_name="",
         model_file_id=model_file_id,
         container_name=container_name,
+        source=source,
     )
     chunks = [chunk async for chunk in response.body_iterator]
     body = "".join(c if isinstance(c, str) else c.decode() for c in chunks)
@@ -575,6 +579,113 @@ async def test_combined_log_generator_streams_only_the_named_sidecar(tmp_path: P
     )
 
     assert output == "ray\n"
+
+
+@pytest.mark.asyncio
+async def test_an_engine_only_range_numbers_just_the_engine_output(tmp_path: Path):
+    """The engine view leaves the download and provisioning logs out, so its
+    line numbers count the engine container's lines alone."""
+    serve_dir = tmp_path / "serve"
+    directory = restart_log_dir(serve_dir, "qwen", 1, 0)
+    directory.mkdir(parents=True)
+    (directory / "main.log").write_text("pulling image\n", encoding="utf-8")
+    (directory / "container.log").write_text("c1\nc2\nc3\n", encoding="utf-8")
+    (serve_dir / "model_file_9.download.log").write_text("d1\n", encoding="utf-8")
+
+    whole, headers = await _read_range(
+        tmp_path, 1, 9, source="engine", offset=0, limit=10
+    )
+    page, _ = await _read_range(tmp_path, 1, 9, source="engine", offset=1, limit=1)
+
+    assert whole == "c1\nc2\nc3\n"
+    assert headers["X-Log-Total-Lines"] == "3"
+    assert page == "c2\n"
+
+
+@pytest.mark.asyncio
+async def test_an_engine_only_range_of_a_sidecar_is_the_sidecar(tmp_path: Path):
+    """A sidecar's stream is its own container's output, engine view or not."""
+    serve_dir = tmp_path / "serve"
+    directory = restart_log_dir(serve_dir, "qwen", 1, 0)
+    directory.mkdir(parents=True)
+    (directory / "main.log").write_text("main\n", encoding="utf-8")
+    (directory / "container.log").write_text("engine\n", encoding="utf-8")
+    (directory / "container.ray-head.log").write_text("ray\n", encoding="utf-8")
+
+    body, _ = await _read_range(
+        tmp_path, 1, container_name="ray-head", source="engine", offset=0, limit=10
+    )
+
+    assert body == "ray\n"
+
+
+@pytest.mark.asyncio
+async def test_an_engine_only_read_before_the_engine_starts_is_empty(tmp_path: Path):
+    """While the model downloads or the image pulls there is no engine output
+    yet; an unfollowed engine read is empty rather than the provisioning log or
+    a 404."""
+    serve_dir = tmp_path / "serve"
+    directory = restart_log_dir(serve_dir, "qwen", 1, 0)
+    directory.mkdir(parents=True)
+    (directory / "main.log").write_text("pulling image\n", encoding="utf-8")
+
+    streamed = await _collect(engine_log_generator(serve_dir, 1, LogOptions()))
+    ranged, headers = await _read_range(
+        tmp_path, 1, source="engine", offset=0, limit=10
+    )
+
+    assert streamed == ""
+    assert ranged == ""
+    assert headers["X-Log-Total-Lines"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_a_followed_engine_stream_waits_for_the_engine_to_start(
+    tmp_path: Path, monkeypatch
+):
+    """Opened while the instance is still being set up, the stream says it is
+    waiting, then carries the engine's output from its first line once the
+    container starts writing -- and never the provisioning log."""
+    monkeypatch.setattr(worker_logs_routes, "ENGINE_LOG_POLL_SECONDS", 0.01)
+    serve_dir = tmp_path / "serve"
+    directory = restart_log_dir(serve_dir, "qwen", 1, 0)
+    directory.mkdir(parents=True)
+    (directory / "main.log").write_text("pulling image\n", encoding="utf-8")
+
+    stream = engine_log_generator(serve_dir, 1, LogOptions(follow=True))
+    received = [await asyncio.wait_for(stream.__anext__(), timeout=5)]
+    (directory / "container.log").write_text(
+        "INFO vllm serve starting\n", encoding="utf-8"
+    )
+    try:
+        received.append(await asyncio.wait_for(stream.__anext__(), timeout=5))
+    finally:
+        await stream.aclose()
+
+    assert received == [
+        worker_logs_routes.ENGINE_LOG_WAITING_HINT,
+        "INFO vllm serve starting\n",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_engine_stream_of_the_previous_restart_skips_the_current(
+    tmp_path: Path,
+):
+    """``previous`` reads the engine output of the restart before the current
+    one, and does not wait on it: a finished run gains no more lines."""
+    serve_dir = tmp_path / "serve"
+    for restart, text in [(0, "older-engine\n"), (1, "current-engine\n")]:
+        directory = restart_log_dir(serve_dir, "qwen", 1, restart)
+        directory.mkdir(parents=True)
+        (directory / "main.log").write_text("main\n", encoding="utf-8")
+        (directory / "container.log").write_text(text, encoding="utf-8")
+
+    output = await _collect(
+        engine_log_generator(serve_dir, 1, LogOptions(previous=True))
+    )
+
+    assert output == "older-engine\n"
 
 
 @pytest.mark.asyncio

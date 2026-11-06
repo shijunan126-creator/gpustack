@@ -17,6 +17,8 @@ from gpustack.schemas.models import (
 from gpustack.worker.logs import (
     LogOptions,
     LogOptionsDep,
+    ServeLogSource,
+    default_serve_log_source,
     line_window_generator,
     log_generator,
     plan_line_window,
@@ -54,6 +56,7 @@ async def serve_log_paths(
     model_instance_id: int,
     restart_count: Optional[int],
     container_name: Optional[str] = None,
+    engine_only: bool = False,
 ) -> List[Path]:
     """One restart's logs as a single ordered list of files.
 
@@ -68,12 +71,14 @@ async def serve_log_paths(
         restart_count: The restart to read, None for every one of them.
         container_name: A sidecar's name to read only its logs; "default" or
             None for the main and workload container logs.
+        engine_only: Read only the workload container's logs, without the
+            worker's provisioning log in front of them.
 
     Returns:
         The files, in reading order.
     """
     entries = await asyncio.to_thread(instance_log_files, log_dir, model_instance_id)
-    return stream_log_files(entries, restart_count, container_name)
+    return stream_log_files(entries, restart_count, container_name, engine_only)
 
 
 def restart_entries_from_main_log_files(
@@ -416,6 +421,80 @@ async def combined_log_generator(
         raise NotFoundException(message="Log file not found")
 
 
+# How long a followed engine-only stream waits for the engine container to
+# write its first line. Model downloads and image pulls both come before it, so
+# this is far longer than the container-log wait of the combined stream; the
+# client closing the stream ends the wait sooner.
+ENGINE_LOG_WAIT_SECONDS = 3600
+ENGINE_LOG_POLL_SECONDS = 1.0
+ENGINE_LOG_WAITING_HINT = (
+    "Waiting for the inference engine to start; its output appears here once "
+    "the model files and the engine image are ready.\n"
+)
+
+
+async def _engine_log_files(
+    log_dir: Path, model_instance_id: int, previous: bool
+) -> tuple[Optional[int], List[Path]]:
+    """The restart to read and its engine container's log files, if any yet."""
+    restart_count = await resolve_restart_count(log_dir, model_instance_id, previous)
+    if restart_count is None:
+        # No main log yet means the instance has not been set up on this worker,
+        # and an unfiltered lookup would return every restart's container logs.
+        return None, []
+    files = await get_all_log_files(
+        log_dir, model_instance_id, container=True, restart_count=restart_count
+    )
+    return restart_count, files
+
+
+async def engine_log_generator(
+    log_dir: Path | str,
+    model_instance_id: int,
+    options: LogOptions,
+):
+    """Stream only what the inference engine container printed.
+
+    The worker's own log of setting the instance up (model download, image
+    pull, the generated launch command) is left out. Until the engine writes
+    its first line a followed stream says it is waiting and keeps polling, so a
+    viewer opened while the instance is still starting picks the engine up the
+    moment it begins; an unfollowed read of an instance with no engine output
+    yet is simply empty.
+
+    Args:
+        log_dir: Directory containing serve logs.
+        model_instance_id: Model instance ID.
+        options: Log options (tail, follow, previous).
+    """
+    log_dir = Path(log_dir)
+    restart_count, files = await _engine_log_files(
+        log_dir, model_instance_id, options.previous
+    )
+
+    if not files and options.follow and not options.previous:
+        yield ENGINE_LOG_WAITING_HINT
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + ENGINE_LOG_WAIT_SECONDS
+        while not files and loop.time() < deadline:
+            await asyncio.sleep(ENGINE_LOG_POLL_SECONDS)
+            restart_count, files = await _engine_log_files(
+                log_dir, model_instance_id, False
+            )
+
+    if not files:
+        return
+
+    async for line in historical_log_generator(
+        log_dir,
+        model_instance_id,
+        options,
+        container=True,
+        restart_count=restart_count,
+    ):
+        yield line
+
+
 @router.get("/serveLogOptions/{id}", response_model=ServeLogOptionsResponse)
 async def get_serve_log_options(request: Request, id: int):
     """List restart_count values for which main serve log files exist locally."""
@@ -441,20 +520,36 @@ async def get_serve_logs(
     model_instance_name: str = Query(default=""),
     model_file_id: Optional[int] = Query(default=None),
     container_name: Optional[str] = Query(default=None),
+    source: ServeLogSource = default_serve_log_source,
 ):
     log_dir = request.app.state.config.log_dir
     serve_log_dir = Path(log_dir) / "serve"
+    # A sidecar's stream is its own container's output either way.
+    engine_only = source == "engine" and (
+        not container_name or container_name == "default"
+    )
 
     download_log_path = ""
     # Use model file ID for shared download logs if provided
-    if model_file_id is not None:
+    if model_file_id is not None and not engine_only:
         download_log_path = str(
             serve_log_dir / f"model_file_{model_file_id}.download.log"
         )
 
     if log_options.offset is not None:
         return await serve_log_line_range(
-            serve_log_dir, id, download_log_path, log_options, container_name
+            serve_log_dir,
+            id,
+            download_log_path,
+            log_options,
+            container_name,
+            engine_only=engine_only,
+        )
+
+    if engine_only:
+        return StreamingResponse(
+            engine_log_generator(serve_log_dir, id, log_options),
+            media_type="application/octet-stream",
         )
 
     return StreamingResponse(
@@ -476,6 +571,7 @@ async def serve_log_line_range(
     download_log_path: str,
     options: LogOptions,
     container_name: Optional[str] = None,
+    engine_only: bool = False,
 ) -> StreamingResponse:
     """Serve one page of a restart's log, addressed by line number.
 
@@ -485,6 +581,8 @@ async def serve_log_line_range(
         download_log_path: Path to the download log, empty when there is none.
         options: Log options carrying offset and limit.
         container_name: A sidecar's name, or "default"/None for the workload.
+        engine_only: Number only the workload container's lines, leaving the
+            download and provisioning logs out.
 
     Returns:
         The page as plain text, with the range and the stream's total on
@@ -503,10 +601,22 @@ async def serve_log_line_range(
     restart_count = await resolve_restart_count(
         serve_log_dir, model_instance_id, options.previous
     )
-    paths = await serve_log_paths(
-        serve_log_dir, model_instance_id, restart_count, container_name
-    )
-    if download_log_path and (not container_name or container_name == "default"):
+    if engine_only and restart_count is None:
+        # See _engine_log_files: no main log yet means no engine output yet.
+        paths = []
+    else:
+        paths = await serve_log_paths(
+            serve_log_dir,
+            model_instance_id,
+            restart_count,
+            container_name,
+            engine_only=engine_only,
+        )
+    if (
+        not engine_only
+        and download_log_path
+        and (not container_name or container_name == "default")
+    ):
         download = Path(download_log_path)
         if await asyncio.to_thread(download.exists):
             paths.insert(0, download)

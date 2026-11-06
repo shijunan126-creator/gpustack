@@ -642,6 +642,7 @@ def stream_log_files(
     entries: List[Tuple[Path, ServeLogName]],
     restart_count: Optional[int],
     container_name: Optional[str] = None,
+    engine_only: bool = False,
 ) -> List[Path]:
     """One restart's stream as an ordered file list, out of one walk.
 
@@ -655,12 +656,16 @@ def stream_log_files(
         restart_count: The restart to read, None for every one of them.
         container_name: A sidecar's name to read only its logs; "default" or
             None for the main and workload container logs.
+        engine_only: Leave the main logs out of the workload stream, so it
+            holds only what the inference engine itself printed.
 
     Returns:
         The files, in reading order.
     """
     if container_name and container_name != "default":
         wanted = [(ServeLogKind.SIDECAR, container_name)]
+    elif engine_only:
+        wanted = [(ServeLogKind.CONTAINER, None)]
     else:
         wanted = [(ServeLogKind.MAIN, None), (ServeLogKind.CONTAINER, None)]
 

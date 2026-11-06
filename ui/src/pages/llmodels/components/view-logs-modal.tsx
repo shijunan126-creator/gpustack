@@ -36,6 +36,10 @@ const ViewLogsModal: React.FC<ViewModalProps> = (props) => {
     follow: true
   });
   const [showPrevious, setShowPrevious] = useState(false);
+  // The engine's own output by default; the full view adds the model download
+  // and the worker's provisioning log, which is where a failed start explains
+  // itself.
+  const [showFullLogs, setShowFullLogs] = useState(false);
   const logsViewerRef = React.useRef<any>(null);
   const { countOptions, fetchData, cancelRequest } =
     useQueryModelInstanceRestartCount();
@@ -107,6 +111,7 @@ const ViewLogsModal: React.FC<ViewModalProps> = (props) => {
     requestRef.current?.current?.cancel?.();
     setSelectedContainer(null);
     setShowPrevious(false);
+    setShowFullLogs(false);
     cancelRequest();
   };
 
@@ -170,6 +175,11 @@ const ViewLogsModal: React.FC<ViewModalProps> = (props) => {
     handleOnChange(currentItem);
   };
 
+  const viewerParams = useMemo(
+    () => (showFullLogs ? params : { ...params, source: 'engine' }),
+    [params, showFullLogs]
+  );
+
   const optionRender = (option: any) => {
     const optionData = option?.data || option;
     const [container, worker] = optionData.label.split(':');
@@ -203,6 +213,21 @@ const ViewLogsModal: React.FC<ViewModalProps> = (props) => {
               marginRight: 8
             }}
           >
+            <Checkbox
+              onChange={(e) => setShowFullLogs(e.target.checked)}
+              checked={showFullLogs}
+            >
+              <Tooltip
+                title={intl.formatMessage({
+                  id: 'models.instance.fullLogs.tips'
+                })}
+              >
+                <span style={{ fontWeight: 400 }}>
+                  {intl.formatMessage({ id: 'models.instance.fullLogs' })}
+                </span>
+                <QuestionCircleOutlined style={{ marginLeft: 4 }} />
+              </Tooltip>
+            </Checkbox>
             {hasPreviousContainer && (
               <Checkbox onChange={handleOnChecked} checked={showPrevious}>
                 <Tooltip
@@ -319,7 +344,7 @@ const ViewLogsModal: React.FC<ViewModalProps> = (props) => {
           tail={tail}
           enableScorllLoad={enableScorllLoad}
           isDownloading={isDownloading}
-          params={params}
+          params={viewerParams}
         ></LogsViewer>
       </div>
     </Modal>

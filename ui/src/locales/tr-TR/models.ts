@@ -500,6 +500,9 @@ export default {
   'models.table.category': 'Kategori',
   'models.instance.currentRun': 'Geçerli Çalıştırma',
   'models.instance.previousRun': 'Önceki Çalıştırma',
+  'models.instance.fullLogs': 'Tam Günlükler',
+  'models.instance.fullLogs.tips':
+    'Model indirmeyi ve Worker hazırlık günlüğünü (imaj çekme, başlatma komutu) da gösterir. Varsayılan olarak yalnızca çıkarım motorunun kendi çıktısı gösterilir.',
   'models.instance.startHistory': 'Çalıştırma Geçmişi',
   'models.instance.startHistory.tips':
     'Hata kaynaklı son yeniden başlatmadan önceki çalıştırmanın günlüklerini gösterir.',
