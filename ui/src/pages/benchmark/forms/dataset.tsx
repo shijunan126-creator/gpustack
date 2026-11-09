@@ -81,7 +81,7 @@ const DatasetForm: React.FC = () => {
         config.max_total_seconds ?? AUTO_TUNE_DEFAULTS.max_total_seconds,
       dataset_name: config.dataset_name,
       dataset_input_tokens:
-        presetFormat === 'random' ? (config.dataset_input_tokens ?? null) : null,
+        presetFormat === 'sharegpt' ? null : (config.dataset_input_tokens ?? null),
       dataset_output_tokens: config.dataset_output_tokens ?? null,
       dataset_input_min: config.dataset_input_min ?? null,
       dataset_input_max: config.dataset_input_max ?? null,

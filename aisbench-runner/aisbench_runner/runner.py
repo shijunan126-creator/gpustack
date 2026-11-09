@@ -31,7 +31,9 @@ from aisbench_runner import ramp
 from aisbench_runner.datasets import (
     DATA_FORMAT_QA,
     DATA_FORMAT_SHAREGPT,
+    ComposedSource,
     DatasetError,
+    PrefixBucket,
     QASource,
     RandomSpec,
     Row,
@@ -39,6 +41,7 @@ from aisbench_runner.datasets import (
     TextBuilder,
     detect_data_format,
     ensure_lengths,
+    load_corpus_texts,
     parse_random_spec,
     resolve_data_path,
 )
@@ -121,6 +124,15 @@ class RunOptions:
     data_format: str = "auto"
     # Output length for a QA dataset, whose rows carry no per-row allowance.
     max_out_len: Optional[int] = None
+    # Input length for a QA dataset: when set, the corpus is COMPOSED into
+    # prompts of this length (with the distribution below) instead of being used
+    # one question per request. This is what makes a 32k-context run or a
+    # prefix-cache hit-rate run possible on a corpus of short questions.
+    input_tokens: Optional[int] = None
+    input_stdev: Optional[int] = None
+    input_min: Optional[int] = None
+    input_max: Optional[int] = None
+    prefix_buckets: List[Dict[str, Any]] = field(default_factory=list)
     sharegpt_min_input: Optional[int] = None
     sharegpt_max_input: Optional[int] = None
     sharegpt_output_tokens: Optional[int] = None
@@ -181,6 +193,7 @@ class Benchmark:
         self.random: Optional[RandomSpec] = None
         self.sharegpt: Optional[ShareGPTSource] = None
         self.qa: Optional[QASource] = None
+        self.composed: Optional[ComposedSource] = None
         if self.format == DATA_FORMAT_SHAREGPT:
             self.sharegpt = ShareGPTSource(
                 resolve_data_path(opts.data),
@@ -190,11 +203,33 @@ class Benchmark:
                 output_tokens=opts.sharegpt_output_tokens,
             )
         elif self.format == DATA_FORMAT_QA:
-            self.qa = QASource(
-                resolve_data_path(opts.data),
-                self.builder,
-                output_tokens=opts.max_out_len,
-            )
+            path = resolve_data_path(opts.data)
+            if opts.input_tokens:
+                # A length was asked for, so the corpus is material rather than
+                # a list of ready-made prompts: the run gets prompts of that
+                # length, with the configured shared prefixes.
+                self.composed = ComposedSource(
+                    load_corpus_texts(path),
+                    self.builder,
+                    RandomSpec(
+                        prompt_tokens=opts.input_tokens,
+                        output_tokens=opts.max_out_len or 256,
+                        prompt_tokens_stdev=opts.input_stdev,
+                        prompt_tokens_min=opts.input_min,
+                        prompt_tokens_max=opts.input_max,
+                        prefix_buckets=[
+                            PrefixBucket(**bucket)
+                            for bucket in (opts.prefix_buckets or [])
+                        ],
+                    ),
+                    seed=opts.random_seed or 42,
+                )
+            else:
+                self.qa = QASource(
+                    path,
+                    self.builder,
+                    output_tokens=opts.max_out_len,
+                )
         elif opts.data:
             self.random = parse_random_spec(opts.data)
         else:
@@ -218,6 +253,8 @@ class Benchmark:
         return os.path.join(self.opts.output_dir, f"{self.opts.output_base}{suffix}")
 
     def rows(self, count: int, seed: int) -> List[Row]:
+        if self.composed is not None:
+            return self.composed.take(count)
         if self.sharegpt is not None:
             return self.sharegpt.take(count)
         if self.qa is not None:
@@ -231,6 +268,8 @@ class Benchmark:
         None for a file dataset, whose rows are whatever the file carries and
         whose count is therefore already bounded by the file.
         """
+        if self.composed is not None:
+            return self.composed.tokens_per_row()
         if self.qa is not None:
             return self.qa.tokens_per_row()
         if self.random is None:

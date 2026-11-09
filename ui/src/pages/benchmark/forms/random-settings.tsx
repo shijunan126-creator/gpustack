@@ -488,9 +488,9 @@ const RandomSettingsForm: React.FC<{
                 // Length knobs belong to a synthetic corpus and to a fixed
                 // decode budget; a conversation file has neither.
                 dataset_input_tokens:
-                  picked?.format === 'random'
-                    ? (form.getFieldValue('dataset_input_tokens') ?? 1024)
-                    : null,
+                  picked?.format === 'sharegpt'
+                    ? null
+                    : (form.getFieldValue('dataset_input_tokens') ?? 1024),
                 dataset_output_tokens:
                   picked?.format === 'random'
                     ? (form.getFieldValue('dataset_output_tokens') ?? 256)
@@ -579,32 +579,6 @@ const RandomSettingsForm: React.FC<{
         </>
       )}
       {isQA && !isAccuracy && (
-        <Form.Item<FormData>
-          name="dataset_output_tokens"
-          rules={[
-            {
-              required: true,
-              message: getRuleMessage(
-                'input',
-                'benchmark.table.outputTokenLength'
-              )
-            }
-          ]}
-        >
-          <CInputNumber
-            min={1}
-            disabled={disabled}
-            label={intl.formatMessage({
-              id: 'benchmark.table.outputTokenLength'
-            })}
-            description={intl.formatMessage({
-              id: 'benchmark.qa.outputTokens.tip'
-            })}
-            required
-          ></CInputNumber>
-        </Form.Item>
-      )}
-      {isRandom && (
         <>
           <Form.Item<FormData>
             name="dataset_input_tokens"
@@ -613,7 +587,7 @@ const RandomSettingsForm: React.FC<{
                 required: true,
                 message: getRuleMessage(
                   'input',
-                  'benchmark.table.inputTokenLength'
+                  'benchmark.qa.inputLength'
                 )
               }
             ]}
@@ -621,8 +595,9 @@ const RandomSettingsForm: React.FC<{
             <CInputNumber
               min={1}
               disabled={disabled}
-              label={intl.formatMessage({
-                id: 'benchmark.table.inputTokenLength'
+              label={intl.formatMessage({ id: 'benchmark.qa.inputLength' })}
+              description={intl.formatMessage({
+                id: 'benchmark.qa.inputLength.tip'
               })}
               required
             ></CInputNumber>
@@ -645,14 +620,68 @@ const RandomSettingsForm: React.FC<{
               label={intl.formatMessage({
                 id: 'benchmark.table.outputTokenLength'
               })}
+              description={intl.formatMessage({
+                id: 'benchmark.qa.outputTokens.tip'
+              })}
               required
             ></CInputNumber>
           </Form.Item>
+        </>
+      )}
+      {(isRandom || (isQA && !isAccuracy)) && (
+        <>
+          {isRandom && (
+            <>
+              <Form.Item<FormData>
+                name="dataset_input_tokens"
+                rules={[
+                  {
+                    required: true,
+                    message: getRuleMessage(
+                      'input',
+                      'benchmark.table.inputTokenLength'
+                    )
+                  }
+                ]}
+              >
+                <CInputNumber
+                  min={1}
+                  disabled={disabled}
+                  label={intl.formatMessage({
+                    id: 'benchmark.table.inputTokenLength'
+                  })}
+                  required
+                ></CInputNumber>
+              </Form.Item>
+              <Form.Item<FormData>
+                name="dataset_output_tokens"
+                rules={[
+                  {
+                    required: true,
+                    message: getRuleMessage(
+                      'input',
+                      'benchmark.table.outputTokenLength'
+                    )
+                  }
+                ]}
+              >
+                <CInputNumber
+                  min={1}
+                  disabled={disabled}
+                  label={intl.formatMessage({
+                    id: 'benchmark.table.outputTokenLength'
+                  })}
+                  required
+                ></CInputNumber>
+              </Form.Item>
+            </>
+          )}
           {/* Seed card. Header = the "Random Seed" toggle. On (default): the
               seed is generated per benchmark and each stage uses a different one
               (see the tooltip) — nothing to fill, so both fields are submitted
               hidden rather than relying on an unmounted field. Off: the user pins
               a seed and chooses whether stages differ. */}
+          {isRandom && (
           <div className={styles.sectionCard}>
             <div
               className="section-title"
@@ -751,6 +780,7 @@ const RandomSettingsForm: React.FC<{
               </>
             )}
           </div>
+          )}
           {/* data distribution + shared prefix: each an opt-in card whose title
               carries the "?" help and a header Switch, body revealed only when
               on (mirrors the model form's Scheduled Scaling section). */}

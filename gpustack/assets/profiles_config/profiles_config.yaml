@@ -18,11 +18,11 @@ profiles:
     load_type: fixed_rate # rate axis (open-loop constant)
     auto_tune: true # adaptive ramp; target = throughput saturation (no SLO)
     dataset_name: GSM8K
-    # GSM8K's own questions are the prompts, so the input length is the file's
-    # (~60 tokens) and the two input knobs below only matter if the form is
-    # switched back to Random. The output length still applies: every request is
-    # held to it, so decode load is a knob whatever the corpus.
-    dataset_input_tokens: 1024 # ignored by GSM8K; used when Random is selected
+    # GSM8K's questions are the material, not the prompt: each request's prompt is
+    # composed out of them to this length (and the output is held to its own), so
+    # a corpus of short questions can still drive a 1k — or 128k — context run.
+    # The UI exposes the same two knobs, plus a distribution and a shared prefix.
+    dataset_input_tokens: 1024
     dataset_output_tokens: 256
     # No dataset_seed here on purpose: a fixed base would make every benchmark of
     # this preset send identical prompts, so the second run of a deployment just
@@ -64,7 +64,7 @@ profiles:
     load_type: concurrency # concurrency axis (closed-loop)
     auto_tune: true # adaptive ramp; target = SLO boundary (slo_* set)
     dataset_name: GSM8K
-    dataset_input_tokens: 128 # ignored by GSM8K; used when Random is selected
+    dataset_input_tokens: 128
     dataset_output_tokens: 128
     dataset_seed_increment: true # increment the seed per point (see note above)
     slo_avg_ttft_ms: 500

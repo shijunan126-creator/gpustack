@@ -430,6 +430,9 @@ export default {
     "Bu kümede hizmet verebilen bir LLM'e yönelen rota yok. Bir rota dağıtın ya da bunun yerine bir örnek ölçün.",
   'benchmark.detail.result.basic': 'Temel',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.qa.inputLength': 'Input length (composed)',
+  'benchmark.qa.inputLength.tip':
+    'Prompt length to compose out of the dataset corpus: long-context and prefix-cache runs need it. Leave empty to use one question per request.',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

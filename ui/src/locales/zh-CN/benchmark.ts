@@ -422,6 +422,9 @@ export default {
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
   'benchmark.detail.result.basic': '基础信息',
   // ── 数据集与精度测试 ──────────────────────────────────────────────────────
+  'benchmark.qa.inputLength': '输入 Token 长度（拼接）',
+  'benchmark.qa.inputLength.tip':
+    '按这个长度从数据集语料拼接 prompt；长上下文与前缀缓存压测靠它。留空则每条请求用一道原题。',
   'benchmark.kind': '测试类型',
   'benchmark.kind.perf': '性能测试',
   'benchmark.kind.accuracy': '精度测试',

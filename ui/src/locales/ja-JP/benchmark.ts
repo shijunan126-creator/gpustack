@@ -428,6 +428,9 @@ export default {
   'benchmark.form.target.route.empty':
     'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.qa.inputLength': 'Input length (composed)',
+  'benchmark.qa.inputLength.tip':
+    'Prompt length to compose out of the dataset corpus: long-context and prefix-cache runs need it. Leave empty to use one question per request.',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

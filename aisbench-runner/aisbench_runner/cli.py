@@ -106,6 +106,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Output length for a QA dataset, whose rows carry none of their own.
     run.add_argument("--max-out-len", type=int)
+    # Input length for a QA dataset: compose prompts of this size out of the
+    # corpus instead of using one question per request.
+    run.add_argument("--input-tokens", type=int)
+    run.add_argument("--input-stdev", type=int)
+    run.add_argument("--input-min", type=int)
+    run.add_argument("--input-max", type=int)
+    run.add_argument("--prefix-buckets", type=_json)
     run.add_argument("--sharegpt-min-input-tokens", type=int)
     run.add_argument("--sharegpt-max-input-tokens", type=int)
     run.add_argument("--sharegpt-max-output-tokens", type=int)
@@ -212,6 +219,11 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         data=args.data,
         data_format=args.data_format,
         max_out_len=args.max_out_len,
+        input_tokens=args.input_tokens,
+        input_stdev=args.input_stdev,
+        input_min=args.input_min,
+        input_max=args.input_max,
+        prefix_buckets=list(args.prefix_buckets or []),
         sharegpt_min_input=args.sharegpt_min_input_tokens,
         sharegpt_max_input=args.sharegpt_max_input_tokens,
         sharegpt_output_tokens=args.sharegpt_max_output_tokens,

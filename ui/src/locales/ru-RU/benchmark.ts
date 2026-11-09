@@ -438,6 +438,9 @@ export default {
   'benchmark.form.target.route.empty':
     'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.qa.inputLength': 'Input length (composed)',
+  'benchmark.qa.inputLength.tip':
+    'Prompt length to compose out of the dataset corpus: long-context and prefix-cache runs need it. Leave empty to use one question per request.',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

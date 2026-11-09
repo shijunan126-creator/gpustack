@@ -607,3 +607,165 @@ class QASource:
         prompts = sum(r.prompt_tokens for r in self.rows)
         outputs = sum(r.output_tokens for r in self.rows)
         return max(1, (prompts + outputs) // len(self.rows))
+
+
+# ── composed prompts ─────────────────────────────────────────────────────────
+
+# Tokens inserted between the shared prefix and the rest of a prompt. They are
+# what makes each request differ: without them every request carrying the same
+# prefix would be byte-identical, and a server may deduplicate or merge them —
+# the measurement would then be of the dedup, not of the prefix cache.
+UNIQUE_TOKENS = 3
+
+
+def load_corpus_texts(path: str) -> List[str]:
+    """The prompt texts of a QA dataset, as material to compose prompts from."""
+    return [item.question for item in load_qa_items(path)]
+
+
+def _fit_text(builder: TextBuilder, text: str, target: int) -> str:
+    """Trim or repeat ``text`` until it is about ``target`` tokens.
+
+    Exact equality is not achievable: encode→decode is lossy for rare tokens, so
+    the result lands within a token or two of the target. The measured length is
+    what the run reports, so the small deviation is visible rather than hidden.
+    """
+    if target <= 0:
+        return ""
+    tokenizer = builder.tokenizer
+    ids = tokenizer.encode(text, add_special_tokens=False)
+    if not ids:
+        return ""
+    if len(ids) > target:
+        ids = ids[:target]
+    else:
+        repeats = (target + len(ids) - 1) // len(ids)
+        ids = (ids * repeats)[:target]
+    return tokenizer.decode(ids, skip_special_tokens=True)
+
+
+def _unique_tokens(tokenizer: Any, rng: random.Random, count: int) -> str:
+    """``count`` distinct random tokens, decoded to text."""
+    vocab = len(tokenizer)
+    seen: set = set()
+    parts: List[str] = []
+    guard = 0
+    while len(parts) < count and guard < count * 50:
+        guard += 1
+        token_id = rng.randrange(vocab)
+        if token_id in seen:
+            continue
+        try:
+            text = tokenizer.decode([token_id])
+        except Exception:  # noqa: BLE001 - a broken vocabulary entry is not fatal
+            continue
+        if not text.strip():
+            continue
+        seen.add(token_id)
+        parts.append(text)
+    return "".join(parts)
+
+
+class ComposedSource:
+    """Prompts of a chosen length, assembled out of a corpus.
+
+    A real corpus has whatever lengths it happens to have, so it cannot drive a
+    32k-context run; and a prefix-cache run needs requests that share their head
+    and differ after it. Both are built here from the corpus's own text:
+
+    * the prefix is corpus text repeated to the bucket's prefix length,
+    * ``UNIQUE_TOKENS`` random tokens differ per request,
+    * the rest is corpus text fitted to the remaining length.
+
+    The length distribution reuses the Random dataset's knobs (mean / stdev /
+    min / max), so a run configured for synthetic prompts keeps its shape here.
+    """
+
+    def __init__(
+        self,
+        corpus: List[str],
+        builder: TextBuilder,
+        spec: RandomSpec,
+        seed: int,
+    ):
+        self._corpus = [text for text in corpus if text.strip()]
+        if not self._corpus:
+            raise DatasetError("the dataset carries no prompt text to compose from")
+        self._builder = builder
+        self._spec = spec
+        self._rng = random.Random(seed)
+        self._lengths = integer_sampler(
+            spec.prompt_tokens,
+            spec.prompt_tokens_stdev,
+            spec.prompt_tokens_min,
+            spec.prompt_tokens_max,
+            seed,
+        )
+        self._rows: List[Row] = []
+        # One prefix pool per bucket, built once: the pool is what makes a
+        # controlled share of requests share the same head.
+        self._pools: List[List[str]] = []
+        for bucket in spec.prefix_buckets:
+            pool = []
+            for i in range(max(1, bucket.prefix_count)):
+                source = self._corpus[(i * 7919) % len(self._corpus)]
+                pool.append(_fit_text(builder, source, bucket.prefix_tokens))
+            self._pools.append(pool)
+        self._cursor = 0
+
+    def take(self, count: int) -> List[Row]:
+        while len(self._rows) < count:
+            self._rows.append(self._build(len(self._rows)))
+        return self._rows[:count]
+
+    def _pick_bucket(self) -> Optional[int]:
+        buckets = self._spec.prefix_buckets
+        if not buckets:
+            return None
+        weights = [max(0, b.bucket_weight) for b in buckets]
+        total = sum(weights) or len(buckets)
+        point = self._rng.uniform(0, total)
+        running = 0.0
+        for index, weight in enumerate(weights):
+            running += weight
+            if point <= running:
+                return index
+        return len(buckets) - 1
+
+    def _build(self, index: int) -> Row:
+        target = max(1, next(self._lengths))
+        bucket_index = self._pick_bucket()
+        prefix = ""
+        prefix_len = 0
+        if bucket_index is not None:
+            bucket = self._spec.prefix_buckets[bucket_index]
+            prefix_len = min(
+                bucket.prefix_tokens, max(0, target - UNIQUE_TOKENS)
+            )
+            if prefix_len > 0:
+                pool = self._pools[bucket_index]
+                base = pool[index % len(pool)]
+                prefix = (
+                    base
+                    if prefix_len == bucket.prefix_tokens
+                    else _fit_text(self._builder, base, prefix_len)
+                )
+        unique = ""
+        if prefix:
+            unique = _unique_tokens(
+                self._builder.tokenizer, self._rng, UNIQUE_TOKENS
+            )
+        suffix_len = max(0, target - prefix_len - (UNIQUE_TOKENS if prefix else 0))
+        suffix = ""
+        if suffix_len > 0:
+            source = self._corpus[(index * 37) % len(self._corpus)]
+            suffix = _fit_text(self._builder, source, suffix_len)
+        prompt = prefix + unique + suffix
+        return Row(
+            prompt=prompt,
+            output_tokens=max(1, self._spec.output_tokens),
+            prompt_tokens=self._builder.count(prompt),
+        )
+
+    def tokens_per_row(self) -> int:
+        return max(1, self._spec.prompt_tokens + self._spec.output_tokens)

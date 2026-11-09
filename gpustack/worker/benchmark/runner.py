@@ -770,6 +770,28 @@ class BenchmarkRunner:
                 command_args.extend(
                     ["--max-out-len", str(self._benchmark.dataset_output_tokens)]
                 )
+            # An input length turns the corpus into material to compose prompts
+            # from, instead of one question per request — the only way to drive
+            # a long-context or prefix-cache run on a corpus of short questions.
+            if self._benchmark.dataset_input_tokens is not None:
+                command_args.extend(
+                    ["--input-tokens", str(self._benchmark.dataset_input_tokens)]
+                )
+                for attr, flag in (
+                    ("dataset_input_stdev", "--input-stdev"),
+                    ("dataset_input_min", "--input-min"),
+                    ("dataset_input_max", "--input-max"),
+                ):
+                    value = getattr(self._benchmark, attr, None)
+                    if value is not None:
+                        command_args.extend([flag, str(value)])
+                if self._benchmark.prefix_buckets:
+                    command_args.extend(
+                        [
+                            "--prefix-buckets",
+                            json.dumps(self._benchmark.prefix_buckets),
+                        ]
+                    )
         elif (
             dataset_format == "random"
             and self._benchmark.dataset_input_tokens is not None
