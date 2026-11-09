@@ -1328,8 +1328,12 @@ class CacheServiceManager:
     ) -> Optional[bool]:
         """
         Probe the cache server per the provider's health check declaration.
-        Managed cache servers run with host networking on this worker, so
-        loopback reaches them directly.
+
+        A managed cache server runs with host networking on this worker, but
+        host networking is not a wildcard bind: a server that binds the
+        worker's own address, as MemCache's MetaService does from its config
+        template, is not reachable on loopback. Probe the worker address first
+        and keep loopback as the fallback for a server that binds it.
 
         ``None`` means the probe could not be made rather than that it failed:
         the declaration says which port to reach and how, and without a catalog
@@ -1348,7 +1352,6 @@ class CacheServiceManager:
             if provider
             else CacheProviderHealthCheck()
         )
-        host = "127.0.0.1"
         target = (
             provider.probe_port_name(instance.component)
             if provider
@@ -1358,6 +1361,40 @@ class CacheServiceManager:
         if not port:
             return False
 
+        for host in self._probe_hosts():
+            if self._probe_host(host, port, health_check):
+                return True
+        return False
+
+    def _probe_hosts(self) -> Tuple[str, ...]:
+        """
+        Addresses the cache server of an instance may be listening on.
+
+        The worker address comes first: a server that binds it is reachable
+        there and nowhere else. Loopback stays as the fallback for a server
+        bound to it alone. A worker whose address could not be detected
+        leaves only the fallback.
+        """
+        hosts: List[str] = []
+        for host in (self._worker_ip_getter(), "127.0.0.1"):
+            if host and host not in hosts:
+                hosts.append(host)
+        return tuple(hosts)
+
+    def _probe_host(
+        self, host: str, port: int, health_check: CacheProviderHealthCheck
+    ) -> bool:
+        """
+        Probe one address, and report whether the server answered healthy.
+
+        Args:
+            host: Address the server is expected to listen on.
+            port: Port the provider's health check targets.
+            health_check: The declaration's scheme and path.
+
+        Returns:
+            True when the server is reachable and, for HTTP, answers below 400.
+        """
         if health_check.scheme == "http":
             path = health_check.path or "/"
             if not path.startswith("/"):
