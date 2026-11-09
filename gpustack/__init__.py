@@ -1,4 +1,4 @@
-﻿__version__ = '0.0.0'
+__version__ = '0.0.0'
 __git_commit__ = 'HEAD'
 # The benchmark image this fork runs: benchmark-runner's command line and
 # report files, with every point measured by aisbench. Built from
