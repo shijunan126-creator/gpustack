@@ -436,6 +436,7 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
             prefix_buckets: [],
             turns: null,
             warmup: 1,
+            temperature: 0.01,
             cooldown: null,
             max_errors: null,
             max_error_rate: null,

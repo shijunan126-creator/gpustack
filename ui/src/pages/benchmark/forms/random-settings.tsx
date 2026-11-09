@@ -1465,6 +1465,26 @@ const RandomSettingsForm: React.FC<{
                           style={{ width: '100%' }}
                         ></CInputNumber>
                       </div>
+                      {/* Concurrency axis only: an optional pacing cap on top of
+                          the in-flight count. Empty means "send as fast as the
+                          streams allow", which is the usual baseline. */}
+                      {!isFixedRate && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <CInputNumber
+                            min={0}
+                            step={0.1}
+                            disabled={disabled}
+                            value={item.request_rate}
+                            onChange={(v) =>
+                              handleStageChange(index, { request_rate: v })
+                            }
+                            label={intl.formatMessage({
+                              id: 'benchmark.form.stage.requestRate'
+                            })}
+                            style={{ width: '100%' }}
+                          ></CInputNumber>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1548,6 +1568,19 @@ const RandomSettingsForm: React.FC<{
           ></CInputNumber>
         </Form.Item>
       </Flex>
+      <Form.Item<FormData> name="temperature">
+        <CInputNumber
+          min={0}
+          max={2}
+          step={0.01}
+          disabled={disabled}
+          label={intl.formatMessage({ id: 'benchmark.form.temperature' })}
+          description={intl.formatMessage({
+            id: 'benchmark.form.temperature.tip'
+          })}
+          style={{ width: '100%' }}
+        ></CInputNumber>
+      </Form.Item>
       {/* 🔴 The unit used to be a `field-hint` line of its own under both
           fields. It said one thing ("enter a percentage, 10 means 10%") in a
           sentence phrased for Warmup only, sitting under Cooldown as well —

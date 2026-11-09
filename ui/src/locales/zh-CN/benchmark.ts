@@ -422,6 +422,10 @@ export default {
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
   'benchmark.detail.result.basic': '基础信息',
   // ── 数据集与精度测试 ──────────────────────────────────────────────────────
+  'benchmark.form.temperature': '温度',
+  'benchmark.form.temperature.tip':
+    '被测请求的采样温度。留空则用服务端默认值。',
+  'benchmark.form.stage.requestRate': '限速（req/s）',
   'benchmark.form.profile.baseline.tips':
     '固定负载：8 并发、100 条请求、512 输出 token。作为基线，与 aisbench 网关的默认参数一致，便于横向对比。',
   'benchmark.qa.inputLength': '输入 Token 长度（拼接）',

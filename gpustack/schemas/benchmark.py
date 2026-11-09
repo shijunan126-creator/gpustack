@@ -520,6 +520,10 @@ class BenchmarkBase(SQLModel):
     # Warmup / cooldown (numeric: <1 = percent, >=1 = absolute count/seconds).
     warmup: Optional[float] = Field(default=None)
     cooldown: Optional[float] = Field(default=None)
+    # Sampling temperature for the measured requests. None leaves the server's
+    # default in place; the baseline preset sets 0.01 so runs of different builds
+    # are generated the same way.
+    temperature: Optional[float] = Field(default=None)
     # Stopping constraints.
     max_errors: Optional[int] = Field(default=None)
     max_error_rate: Optional[float] = Field(default=None)

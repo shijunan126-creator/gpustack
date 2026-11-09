@@ -156,6 +156,8 @@ export interface FormData {
   // fraction -- converted in `forms/index.tsx`.
   warmup?: number | null;
   cooldown?: number | null;
+  // Sampling temperature; absent leaves the server's default in place.
+  temperature?: number | null;
   max_errors?: number;
   // Same story as warmup / cooldown above: a whole PERCENT in the form, a
   // fraction in the API column, and nullable so clearing it is explicit.
@@ -198,6 +200,9 @@ export interface StageRow {
   rate: number;
   max_requests?: number | null;
   max_seconds?: number | null;
+  // Concurrency axis only: an optional pacing cap (requests per second) on top
+  // of the in-flight count. Empty means "send as fast as the streams allow".
+  request_rate?: number | null;
 }
 
 // One shared-prefix bucket (guidellm prefix_buckets).

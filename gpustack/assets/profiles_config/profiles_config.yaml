@@ -31,6 +31,7 @@ profiles:
       - rate: 8
         max_requests: 100
     warmup: 1 # trim the first 1% — one request of the 100
+    temperature: 0.01 # the gateway's default; nearly greedy, still not 0
     dataset_seed_increment: true
 
   - name: Max Throughput

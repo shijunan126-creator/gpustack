@@ -133,6 +133,12 @@ class RunOptions:
     input_min: Optional[int] = None
     input_max: Optional[int] = None
     prefix_buckets: List[Dict[str, Any]] = field(default_factory=list)
+    # Sampling temperature for the measured requests. Left None the server's own
+    # default applies; the baseline sets the reference project's 0.01 so runs of
+    # different builds are generated the same way.
+    temperature: Optional[float] = None
+    # Optional pacing cap for a closed-loop single run (requests per second).
+    request_rate_limit: Optional[float] = None
     sharegpt_min_input: Optional[int] = None
     sharegpt_max_input: Optional[int] = None
     sharegpt_output_tokens: Optional[int] = None
@@ -246,6 +252,7 @@ class Benchmark:
             work_root=os.path.join(opts.output_dir, f"{opts.output_base}.aisbench"),
             builder=self.builder,
             stall_timeout=_stall_timeout(opts.request_timeout),
+            temperature=opts.temperature,
             keep_work_dirs=os.environ.get("AISBENCH_RUNNER_KEEP_WORK_DIRS") == "1",
         )
 
@@ -314,13 +321,16 @@ class Benchmark:
             concurrency, request_rate = len(rows), float(strategy.rate or 0.0)
         else:
             concurrency = int(strategy.streams or strategy.max_concurrency or 1)
-            request_rate = 0.0
+            # A closed-loop run can still be paced: with a rate set, aisbench
+            # keeps `streams` requests in flight but sends no faster than it.
+            request_rate = float(strategy.rate or 0.0)
         log(
             f"{name}: {strategy.kind} "
             + (
                 f"{strategy.rate} req/s"
                 if strategy.kind == "constant"
                 else f"{concurrency} streams"
+                + (f" @ {request_rate:g} req/s" if request_rate else "")
             )
             + f", {len(rows)} requests"
             + (f", cap {max_seconds:.0f}s" if max_seconds else "")
@@ -386,9 +396,11 @@ def _load_tokenizer(path: str, trust_remote_code: bool):
     return AutoTokenizer.from_pretrained(path, trust_remote_code=trust_remote_code)
 
 
-def _strategy(axis: str, knob: float) -> Strategy:
+def _strategy(axis: str, knob: float, request_rate: Optional[float] = None) -> Strategy:
     if axis == "concurrency":
-        return Strategy("concurrent", streams=int(knob))
+        # `rate` here is an optional pacing cap on top of the concurrency, not
+        # the knob itself: the knob is how many requests may be in flight.
+        return Strategy("concurrent", streams=int(knob), rate=request_rate)
     return Strategy("constant", rate=float(knob))
 
 
@@ -508,7 +520,7 @@ def run_stages(bench: Benchmark) -> None:
         if bench.progress is not None:
             bench.progress.run_index = i
             bench.progress.run_total = len(opts.stages)
-        strategy = _strategy(opts.axis, knob)
+        strategy = _strategy(opts.axis, knob, stage.get("request_rate"))
         count, by_duration = bench.request_count(
             knob, strategy.kind, stage.get("max_requests"), stage.get("max_seconds")
         )
@@ -556,7 +568,9 @@ def run_single(bench: Benchmark) -> None:
     if opts.rate is None:
         raise ValueError("--rate is required with --profile")
     strategy = (
-        Strategy("concurrent", streams=int(opts.rate))
+        Strategy(
+            "concurrent", streams=int(opts.rate), rate=opts.request_rate_limit
+        )
         if opts.profile == "concurrent"
         else Strategy("constant", rate=float(opts.rate))
     )

@@ -113,6 +113,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--input-min", type=int)
     run.add_argument("--input-max", type=int)
     run.add_argument("--prefix-buckets", type=_json)
+    run.add_argument("--temperature", type=float)
+    # Pacing cap for a closed-loop run (requests per second).
+    run.add_argument("--request-rate", type=float)
     run.add_argument("--sharegpt-min-input-tokens", type=int)
     run.add_argument("--sharegpt-max-input-tokens", type=int)
     run.add_argument("--sharegpt-max-output-tokens", type=int)
@@ -224,6 +227,8 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         input_min=args.input_min,
         input_max=args.input_max,
         prefix_buckets=list(args.prefix_buckets or []),
+        temperature=args.temperature,
+        request_rate_limit=args.request_rate,
         sharegpt_min_input=args.sharegpt_min_input_tokens,
         sharegpt_max_input=args.sharegpt_max_input_tokens,
         sharegpt_output_tokens=args.sharegpt_max_output_tokens,

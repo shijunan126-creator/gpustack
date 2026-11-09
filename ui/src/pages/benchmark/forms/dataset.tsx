@@ -83,6 +83,7 @@ const DatasetForm: React.FC = () => {
       dataset_input_tokens:
         presetFormat === 'sharegpt' ? null : (config.dataset_input_tokens ?? null),
       dataset_output_tokens: config.dataset_output_tokens ?? null,
+      temperature: config.temperature ?? null,
       dataset_input_min: config.dataset_input_min ?? null,
       dataset_input_max: config.dataset_input_max ?? null,
       sharegpt_filter_enabled:

@@ -429,6 +429,10 @@ export default {
     'No route fronts a servable LLM in this cluster. Deploy a route, or measure an instance instead.',
   'benchmark.detail.result.basic': 'Basic',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.form.temperature': 'Temperature',
+  'benchmark.form.temperature.tip':
+    'Sampling temperature for the measured requests. Empty leaves the server default.',
+  'benchmark.form.stage.requestRate': 'Rate cap (req/s)',
   'benchmark.form.profile.baseline.tips':
     'A fixed load: 8 concurrent requests, 100 prompts, 512 output tokens. The reference baseline, matching the aisbench gateway defaults so runs stay comparable.',
   'benchmark.qa.inputLength': 'Input length (composed)',

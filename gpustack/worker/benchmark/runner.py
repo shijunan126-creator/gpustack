@@ -887,6 +887,13 @@ class BenchmarkRunner:
         if b.stop_on_saturation:
             command_args.append("--detect-saturation")
 
+        # Sampling temperature, only when the run states one: left out, the
+        # server's own default applies and a preset that never mentioned it is
+        # not silently rewritten.
+        temperature = getattr(self._benchmark, "temperature", None)
+        if temperature is not None:
+            command_args.extend(["--temperature", f"{temperature}"])
+
         return command_args
 
     def _update_benchmark_state(self, id: int, **kwargs):
