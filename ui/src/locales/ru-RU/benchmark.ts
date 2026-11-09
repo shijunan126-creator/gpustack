@@ -438,6 +438,9 @@ export default {
   'benchmark.form.target.route.empty':
     'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.dataset.format.random': 'synthetic prompts',
+  'benchmark.dataset.format.sharegpt': 'ShareGPT conversations',
+  'benchmark.dataset.format.qa_jsonl': 'question/answer rows',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

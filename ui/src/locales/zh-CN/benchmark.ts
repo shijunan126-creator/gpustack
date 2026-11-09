@@ -422,6 +422,9 @@ export default {
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
   'benchmark.detail.result.basic': '基础信息',
   // ── 数据集与精度测试 ──────────────────────────────────────────────────────
+  'benchmark.dataset.format.random': '合成 prompt',
+  'benchmark.dataset.format.sharegpt': 'ShareGPT 对话',
+  'benchmark.dataset.format.qa_jsonl': '问答数据（每题一行）',
   'benchmark.kind': '测试类型',
   'benchmark.kind.perf': '性能测试',
   'benchmark.kind.accuracy': '精度测试',

@@ -428,6 +428,9 @@ export default {
   'benchmark.form.target.route.empty':
     'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.dataset.format.random': 'synthetic prompts',
+  'benchmark.dataset.format.sharegpt': 'ShareGPT conversations',
+  'benchmark.dataset.format.qa_jsonl': 'question/answer rows',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',
