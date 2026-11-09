@@ -227,6 +227,9 @@ const RandomSettingsForm: React.FC<{
   )?.config;
   const presetAutoTune = presetConfig?.auto_tune;
   const presetLocked = !isCustom && presetAutoTune !== false;
+  // A preset that pins one load ("8 concurrent, 100 prompts") is not a stage
+  // sweep, so its card asks for those numbers instead of showing the stage list.
+  const fixedLoad = !isCustom && presetAutoTune === false;
   const isFixedRate = loadType === LoadTypeValueMap.FixedRate;
   // Named auto-tune presets cannot switch to manual; Custom and fixed-load
   // presets can, so their toggle follows the form field.
@@ -1251,6 +1254,61 @@ const RandomSettingsForm: React.FC<{
         <Switch />
       </Form.Item>
 
+      {fixedLoad ? (
+        <div className={styles.sectionCard}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="title-label">
+              {intl.formatMessage({ id: 'benchmark.form.fixedLoad' })}
+              <Tooltip
+                title={intl.formatMessage({
+                  id: 'benchmark.form.fixedLoad.tip'
+                })}
+              >
+                <QuestionCircleOutlined className="title-help" />
+              </Tooltip>
+            </span>
+          </div>
+          <Flex gap={12}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                required
+                min={1}
+                disabled={disabled}
+                value={(stages || [])[0]?.rate}
+                onChange={(v) => handleStageChange(0, { rate: v })}
+                label={rateLabel}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                value={(stages || [])[0]?.max_requests}
+                onChange={(v) => handleStageChange(0, { max_requests: v })}
+                label={intl.formatMessage({
+                  id: 'benchmark.form.requests'
+                })}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+            {/* Pacing cap: empty sends as fast as the in-flight slots allow. */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                min={0}
+                step={0.1}
+                disabled={disabled}
+                value={(stages || [])[0]?.request_rate}
+                onChange={(v) => handleStageChange(0, { request_rate: v })}
+                label={intl.formatMessage({
+                  id: 'benchmark.form.stage.requestRate'
+                })}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+          </Flex>
+        </div>
+      ) : (
       <div className={styles.sectionCard}>
         <div className="section-title" style={{ marginBottom: 16 }}>
           <span className="title-label">
@@ -1500,6 +1558,7 @@ const RandomSettingsForm: React.FC<{
           </div>
         )}
       </div>
+      )}
       {/* Warmup / Cooldown trim the first / last slice of each stage's requests
           from the measured window — they shape the stage's load profile, so they
           sit with Load, right under the stages. Keep the default Form.Item bottom

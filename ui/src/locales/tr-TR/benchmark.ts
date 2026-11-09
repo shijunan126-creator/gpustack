@@ -430,6 +430,9 @@ export default {
     "Bu kümede hizmet verebilen bir LLM'e yönelen rota yok. Bir rota dağıtın ya da bunun yerine bir örnek ölçün.",
   'benchmark.detail.result.basic': 'Temel',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.form.fixedLoad': 'Fixed load',
+  'benchmark.form.fixedLoad.tip':
+    'One fixed load point: how many requests may be in flight, how many to send, and an optional rate cap. No search.',
   'benchmark.form.temperature': 'Temperature',
   'benchmark.form.temperature.tip':
     'Sampling temperature for the measured requests. Empty leaves the server default.',

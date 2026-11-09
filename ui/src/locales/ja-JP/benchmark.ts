@@ -428,6 +428,9 @@ export default {
   'benchmark.form.target.route.empty':
     'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。',
   // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.form.fixedLoad': 'Fixed load',
+  'benchmark.form.fixedLoad.tip':
+    'One fixed load point: how many requests may be in flight, how many to send, and an optional rate cap. No search.',
   'benchmark.form.temperature': 'Temperature',
   'benchmark.form.temperature.tip':
     'Sampling temperature for the measured requests. Empty leaves the server default.',
