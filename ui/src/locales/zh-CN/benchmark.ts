@@ -420,5 +420,50 @@ export default {
   'benchmark.form.target.route': '路由',
   'benchmark.form.target.route.empty':
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
-  'benchmark.detail.result.basic': '基础信息'
+  'benchmark.detail.result.basic': '基础信息',
+  // ── 数据集与精度测试 ──────────────────────────────────────────────────────
+  'benchmark.form.fixedLoad': '固定负载',
+  'benchmark.form.fixedLoad.tip':
+    '单一负载点：并发数、请求数，以及可选的限速。不做搜索。',
+  'benchmark.form.temperature': '温度',
+  'benchmark.form.temperature.tip':
+    '被测请求的采样温度。留空则用服务端默认值。',
+  'benchmark.form.stage.requestRate': '限速（req/s）',
+  'benchmark.form.profile.baseline.tips':
+    '固定负载：8 并发、100 条请求、512 输出 token。作为基线，与 aisbench 网关的默认参数一致，便于横向对比。',
+  'benchmark.qa.inputLength': '输入 Token 长度（拼接）',
+  'benchmark.qa.inputLength.tip':
+    '按这个长度从数据集语料拼接 prompt；长上下文与前缀缓存压测靠它。留空则每条请求用一道原题。',
+  'benchmark.kind': '测试类型',
+  'benchmark.kind.perf': '性能测试',
+  'benchmark.kind.accuracy': '精度测试',
+  'benchmark.dataset.add': '新增数据集',
+  'benchmark.dataset.file': '数据集文件',
+  'benchmark.dataset.fileRequired': '请先选择数据集文件',
+  'benchmark.dataset.fileHint':
+    '每行一个 JSON，至少包含 question（可含 answer）；或 ShareGPT 格式的 JSON 数组。',
+  'benchmark.dataset.fileDrop': '点击或拖拽 .json / .jsonl 文件到此处',
+  'benchmark.dataset.added': '数据集已添加',
+  'benchmark.dataset.addFailed': '添加数据集失败',
+  'benchmark.dataset.noAnswers': '该数据集没有标准答案，不能用于精度测试。',
+  'benchmark.qa.outputTokens.tip': '每条回答允许生成的最大 token 数。问题来自数据集本身。',
+  'benchmark.accuracy.score': '准确率',
+  'benchmark.accuracy.correctCount': '答对',
+  'benchmark.accuracy.invalid': '未给出答案',
+  'benchmark.accuracy.errored': '请求失败',
+  'benchmark.accuracy.elapsed': '耗时',
+  'benchmark.accuracy.maxSamples': '题目数量',
+  'benchmark.accuracy.maxSamples.tip': '0 表示跑完数据集里的全部题目。',
+  'benchmark.accuracy.concurrency': '并发题数',
+  'benchmark.accuracy.maxOutLen': '回答最大 token',
+  'benchmark.accuracy.maxOutLen.tip': '推理模型会把大部分预算花在思考上。',
+  'benchmark.accuracy.question': '题目',
+  'benchmark.accuracy.answer': '模型答案',
+  'benchmark.accuracy.reference': '标准答案',
+  'benchmark.accuracy.verdict': '判定',
+  'benchmark.accuracy.correct': '正确',
+  'benchmark.accuracy.wrong': '错误',
+  'benchmark.accuracy.latency': '耗时',
+  'benchmark.accuracy.onlyWrong': '只看答错的题',
+  'benchmark.accuracy.showing': '共 {total} 题，显示 {count} 题',
 };

@@ -132,3 +132,72 @@ def test_sharegpt_filters_by_prompt_length(builder, tmp_path):
     assert fixed[0].output_tokens == 16
     with pytest.raises(DatasetError):
         ShareGPTSource(str(path), builder, input_min=100000).take(1)
+
+
+class _WordBuilder:
+    """Counts words, which is all QASource needs from a tokenizer."""
+
+    def count(self, text):
+        return len(text.split())
+
+
+def _qa_file(tmp_path, rows):
+    path = tmp_path / "qa.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+    return path
+
+
+def test_qa_source_uses_the_questions_and_the_configured_output_length(tmp_path):
+    from aisbench_runner.datasets import QASource
+
+    path = _qa_file(
+        tmp_path,
+        [
+            {"question": "how many eggs", "answer": "#### 18"},
+            {"question": "second question"},
+        ],
+    )
+    rows = QASource(str(path), _WordBuilder(), output_tokens=64).take(10)
+    assert [r.prompt for r in rows] == ["how many eggs", "second question"]
+    assert all(r.output_tokens == 64 for r in rows)
+    assert rows[0].prompt_tokens == 3
+
+
+def test_qa_source_falls_back_to_the_reference_length(tmp_path):
+    from aisbench_runner.datasets import QASource
+
+    path = _qa_file(tmp_path, [{"question": "q", "answer": "one two three"}])
+    rows = QASource(str(path), _WordBuilder()).take(1)
+    assert rows[0].output_tokens == 3
+
+
+def test_qa_source_refuses_a_file_with_no_questions(tmp_path):
+    from aisbench_runner.datasets import QASource
+
+    path = _qa_file(tmp_path, [{"text": "not a question"}])
+    with pytest.raises(DatasetError):
+        QASource(str(path), _WordBuilder())
+
+
+@pytest.mark.parametrize(
+    "value,declared,expected",
+    [
+        ("prompt_tokens=8,output_tokens=8", None, "random"),
+        ("builtin:gsm8k", None, "qa_jsonl"),
+        ("builtin:sharegpt", None, "sharegpt"),
+        ("/data/x.jsonl", None, "qa_jsonl"),
+        ("/data/x.json", None, "sharegpt"),
+        ("/data/x.json", "qa_jsonl", "qa_jsonl"),
+    ],
+)
+def test_the_data_format_is_inferred_from_the_value(value, declared, expected):
+    from aisbench_runner.datasets import detect_data_format
+
+    assert detect_data_format(value, declared) == expected
+
+
+def test_an_unknown_builtin_alias_is_refused():
+    from aisbench_runner.datasets import resolve_data_path
+
+    with pytest.raises(DatasetError):
+        resolve_data_path("builtin:does-not-exist")

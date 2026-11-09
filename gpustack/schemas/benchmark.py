@@ -14,6 +14,11 @@ from gpustack.schemas.common import (
     pydantic_column_type,
 )
 from gpustack.mixins import BaseModelMixin
+from gpustack.schemas.benchmark_dataset import (
+    DEFAULT_BENCHMARK_DATASET_NAME,
+    BenchmarkDatasetFormat,
+    BenchmarkDatasetSnapshot,
+)
 from gpustack.schemas.models import (
     ComputedResourceClaim,
     ExtendedKVCacheConfig,
@@ -38,6 +43,26 @@ def generate_dataset_seed() -> int:
     different synthetic prompts instead of replaying each other's prefix cache.
     """
     return random.randint(DATASET_SEED_MIN, DATASET_SEED_MAX)
+
+
+class BenchmarkKindEnum(str, Enum):
+    r"""What a run measures.
+
+    - perf: throughput and latency over a load sweep — the original feature, and
+      still what most runs are.
+    - accuracy: the share of a dataset's questions the model answers correctly.
+      It shares the run lifecycle, the dataset and the report plumbing with a
+      perf run, but its numbers are a score, not a curve, so the two must never
+      be mixed up in a listing. A separate column rather than a flag on top of
+      the perf fields: "load 0 req/s" is not a meaningful accuracy run, and an
+      accuracy score is not a latency.
+    """
+
+    PERF = "perf"
+    ACCURACY = "accuracy"
+
+    def __str__(self):
+        return self.value
 
 
 class BenchmarkLoadTypeEnum(str, Enum):
@@ -347,10 +372,23 @@ class BenchmarkBase(SQLModel):
         default=None,
     )
 
+    # What this run measures. Kept here rather than on the runtime mixin because
+    # it is configuration: a clone carries it, and an accuracy run's load fields
+    # are not merely unused, they are meaningless.
+    kind: BenchmarkKindEnum = Field(
+        default=BenchmarkKindEnum.PERF, sa_type=AutoString
+    )
+
     profile: Optional[str] = Field(default="Custom")
-    dataset_name: Optional[str] = Field(
-        default=None
-    )  # type selector / denormalized name: Random / ShareGPT
+    # The dataset row's name. A dataset is a row (built-in or uploaded) rather
+    # than one of two constants, so this is the reference and the fields below
+    # are the snapshot of what that row said at creation time.
+    dataset_name: Optional[str] = Field(default=DEFAULT_BENCHMARK_DATASET_NAME)
+    dataset_id: Optional[int] = Field(default=None)
+    dataset_format: Optional[BenchmarkDatasetFormat] = Field(
+        default=None, sa_type=AutoString
+    )
+    dataset_sha256: Optional[str] = Field(default=None)
     dataset_input_tokens: Optional[int] = Field(default=None)
     dataset_output_tokens: Optional[int] = Field(default=None)
     # The seed actually used by this run — the single source of truth. Normally
@@ -482,10 +520,25 @@ class BenchmarkBase(SQLModel):
     # Warmup / cooldown (numeric: <1 = percent, >=1 = absolute count/seconds).
     warmup: Optional[float] = Field(default=None)
     cooldown: Optional[float] = Field(default=None)
+    # Sampling temperature for the measured requests. None leaves the server's
+    # default in place; the baseline preset sets 0.01 so runs of different builds
+    # are generated the same way.
+    temperature: Optional[float] = Field(default=None)
     # Stopping constraints.
     max_errors: Optional[int] = Field(default=None)
     max_error_rate: Optional[float] = Field(default=None)
     stop_on_saturation: Optional[bool] = Field(default=None)
+
+    # ── accuracy (kind == accuracy) ──────────────────────────────────────────
+    # How many questions to ask; 0/None asks every one the dataset holds.
+    max_samples: Optional[int] = Field(default=None)
+    # Questions in flight at once. An accuracy run has no ramp: one pass at one
+    # concurrency, because the score does not depend on load and a slow pass is
+    # only a slow pass.
+    accuracy_concurrency: Optional[int] = Field(default=None)
+    # Tokens allowed per answer. Reasoning models spend most of the budget
+    # thinking, so this is generous by default in the route.
+    accuracy_max_out_len: Optional[int] = Field(default=None)
 
     # Server-derived from the target model instance on create (see
     # validate_and_mutate_benchmark_in), so a client-supplied value is overwritten
@@ -519,6 +572,10 @@ class BenchmarkSnapshot(BaseModel):
     instances: Optional[ModelInstanceSnapshots] = None
     workers: Optional[WorkerSnapshots] = None
     gpus: Optional[GPUSnapshots] = None
+    # The corpus this run measured. On the snapshot because a dataset row can be
+    # deleted while its reports stay readable, and because an edited upload
+    # would otherwise relabel a run that used the earlier bytes.
+    dataset: Optional[BenchmarkDatasetSnapshot] = None
     # The deployment generation the run measured, for a model that carries one.
     # Not a scalar column: nothing queries or sorts by it, it is read with the
     # rest of the snapshot when a reader asks what a report was measuring.
@@ -781,6 +838,27 @@ class BenchmarkRuntime(SQLModel):
     validity: Optional[Dict[str, Any]] = Field(sa_type=JSON, default=None)
 
 
+class BenchmarkAccuracySummary(SQLModel):
+    """The conclusion of an accuracy run, written once by the worker.
+
+    Separate from `BenchmarkMetrics` because the two answer different
+    questions: a perf run's metrics are distributions over requests, while
+    these are a count of right answers. Keeping them apart is what stops the
+    list page from showing an empty tiles row for an accuracy run — and the
+    detail page from charting a score as if it were a latency.
+    """
+
+    # Percent of the questions that were answered correctly (0-100).
+    accuracy_score: Optional[float] = Field(default=None)
+    accuracy_total: Optional[int] = Field(default=None)
+    accuracy_correct: Optional[int] = Field(default=None)
+    # Answered, but the response held no number to compare.
+    accuracy_invalid: Optional[int] = Field(default=None)
+    # The request itself failed; counted as wrong, reported separately.
+    accuracy_errored: Optional[int] = Field(default=None)
+    accuracy_elapsed_seconds: Optional[float] = Field(default=None)
+
+
 class BenchmarkWithSnapshots(BenchmarkBase, BenchmarkRuntime):
     snapshot: Optional[BenchmarkSnapshot] = Field(
         default=None,
@@ -794,7 +872,13 @@ class BenchmarkWithSnapshots(BenchmarkBase, BenchmarkRuntime):
     )
 
 
-class Benchmark(BenchmarkWithSnapshots, BenchmarkMetrics, BaseModelMixin, table=True):
+class Benchmark(
+    BenchmarkWithSnapshots,
+    BenchmarkMetrics,
+    BenchmarkAccuracySummary,
+    BaseModelMixin,
+    table=True,
+):
     id: Optional[int] = Field(default=None, primary_key=True)
 
     # Tenant scope. Server-derived from cluster on creation.
@@ -889,6 +973,7 @@ class BenchmarkStateUpdate(SQLModel):
 class BenchmarkFullPublic(
     BenchmarkWithSnapshots,
     BenchmarkMetrics,
+    BenchmarkAccuracySummary,
 ):
     id: int
     # The owning Org. Server-derived from the cluster on create and
@@ -909,6 +994,7 @@ class BenchmarkFullPublic(
 class BenchmarkPublic(
     BenchmarkWithSnapshots,
     BenchmarkMetricsLite,
+    BenchmarkAccuracySummary,
 ):
     id: int
     owner_principal_id: Optional[int] = None
@@ -924,3 +1010,72 @@ class BenchmarkPublic(
 
 
 BenchmarksPublic = PaginatedList[BenchmarkPublic]
+
+
+class BenchmarkAccuracySampleBase(SQLModel):
+    """One question of an accuracy run: what was asked, what was answered.
+
+    The prediction is kept, not only the verdict, because the question a wrong
+    answer raises is "what did it actually say". It is capped on the worker side
+    so a runaway generation cannot turn one row into a megabyte.
+    """
+
+    # Position in the dataset, so the samples order the way the file did.
+    seq: int = Field(default=0)
+    question: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    prediction: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    # The number taken out of the prediction, and the one it was compared with.
+    extracted: Optional[str] = Field(default=None)
+    reference: Optional[str] = Field(default=None)
+    correct: bool = Field(default=False)
+    latency_ms: Optional[float] = Field(default=None)
+    error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+
+class BenchmarkAccuracySample(
+    BenchmarkAccuracySampleBase, BaseModelMixin, table=True
+):
+    __tablename__ = 'benchmark_accuracy_samples'
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    benchmark_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("benchmarks.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+
+class BenchmarkAccuracySamplePublic(BenchmarkAccuracySampleBase):
+    id: int
+    benchmark_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class BenchmarkAccuracySamplesPublic(BaseModel):
+    items: List[BenchmarkAccuracySamplePublic] = []
+    total: int = 0
+    incorrect: int = 0
+
+
+class BenchmarkAccuracyReport(BaseModel):
+    """The worker's upload for one accuracy run.
+
+    Replaces the run's samples wholesale, the way the per-point results upload
+    does: an accuracy run is one pass, so the last write is the whole truth.
+    """
+
+    score: float = 0.0
+    total: int = 0
+    correct: int = 0
+    invalid: int = 0
+    errored: int = 0
+    elapsed_seconds: Optional[float] = None
+    samples: List[BenchmarkAccuracySampleBase] = []

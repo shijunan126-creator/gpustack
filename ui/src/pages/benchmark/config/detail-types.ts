@@ -108,6 +108,18 @@ export interface BenchmarkDetail {
   cooldown?: number;
   profile: string;
   dataset_seed: number;
+  // perf (absent on rows written before accuracy existed) or accuracy.
+  kind?: 'perf' | 'accuracy';
+  dataset_format?: string;
+  max_samples?: number | null;
+  accuracy_concurrency?: number | null;
+  accuracy_max_out_len?: number | null;
+  accuracy_score?: number | null;
+  accuracy_total?: number | null;
+  accuracy_correct?: number | null;
+  accuracy_invalid?: number | null;
+  accuracy_errored?: number | null;
+  accuracy_elapsed_seconds?: number | null;
   raw_metrics: {
     benchmarks: Array<{
       metrics: Record<string, any>;

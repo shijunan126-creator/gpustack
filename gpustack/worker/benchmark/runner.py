@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import sys
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from gpustack.client.generated_clientset import ClientSet
@@ -122,6 +122,36 @@ def _transient_phase_arg(value: float) -> str:
     return json.dumps({"value": int(value), "mode": "requests"})
 
 
+def _dataset_format_name(benchmark: Any, meta: Optional[Dict[str, Any]] = None) -> str:
+    """The dataset format a run reads, from its row or from a legacy name.
+
+    A row created before datasets existed carries only ``dataset_name``; the
+    two old constants keep those rows runnable, and a caller that built no
+    ``--data`` at all falls back to the synthetic generator.
+    """
+    fmt = (meta or {}).get("format") or getattr(benchmark, "dataset_format", None)
+    if fmt is None:
+        name = getattr(benchmark, "dataset_name", None)
+        fmt = "sharegpt" if name == DATASET_SHAREGPT else "random"
+    return str(getattr(fmt, "value", fmt))
+
+
+def _dataset_arg(runner: Any) -> str:
+    """The ``--data`` value: a resolved path, or the image's ShareGPT default.
+
+    ``start`` resolves it from the dataset row; a run that reached the command
+    builder without that (a legacy row, a unit test) still gets the path the
+    old code hard-coded.
+    """
+    path = getattr(runner, "_dataset_path", None)
+    if path:
+        return path
+    bench = runner._benchmark
+    if _dataset_format_name(bench, getattr(runner, "_dataset_meta", None)) == "sharegpt":
+        return BENCHMARK_DATASET_SHAREGPT_PATH
+    return ""
+
+
 class BenchmarkRunner:
     _clientset: ClientSet
     _config: Config
@@ -220,6 +250,8 @@ class BenchmarkRunner:
                 f"{_server_url.rstrip('/')}/v2/benchmarks/{self._benchmark.id}/state"
             )
             self._progress_insecure_skip_tls_verify = resolve_progress_insecure_tls()
+            self._dataset_meta: Dict[str, Any] = {}
+            self._dataset_path: Optional[str] = None
 
         except Exception as e:
             error_message = f"Failed to initialize: {e}"
@@ -254,7 +286,13 @@ class BenchmarkRunner:
         ca_file = self._progress_ca_file(inference_https=inference_https)
         if inference_https and ca_file is not None:
             env["SSL_CERT_FILE"] = ca_file.path
-        command_args = self._build_command_args(with_ca_cert=ca_file is not None)
+        # Before the command line: both shapes name the dataset by its path in
+        # the container, and an upload's bytes have to be on disk first.
+        self._load_dataset()
+        if self._is_accuracy():
+            command_args = self._build_accuracy_args(with_ca_cert=ca_file is not None)
+        else:
+            command_args = self._build_command_args(with_ca_cert=ca_file is not None)
         self._create_workload(
             deployment_metadata=deployment_metadata,
             command=["benchmark-runner"],
@@ -262,6 +300,130 @@ class BenchmarkRunner:
             env=env,
             files=[ca_file] if ca_file is not None else None,
         )
+
+    def _is_accuracy(self) -> bool:
+        kind = getattr(self._benchmark, "kind", None)
+        return str(getattr(kind, "value", kind)) == "accuracy"
+
+    def _load_dataset(self) -> None:
+        """Resolve this run's prompts into something the container can read.
+
+        A built-in dataset is named by an alias the runner image resolves
+        (``builtin:gsm8k``); an upload's bytes live on the server, so the worker
+        writes them into the benchmark directory — which the container already
+        mounts — and reuses the file on later runs of the same dataset.
+        """
+        dataset_id = getattr(self._benchmark, "dataset_id", None)
+        if dataset_id is None:
+            # Rows that predate datasets still carry one of the two old names.
+            name = getattr(self._benchmark, "dataset_name", None)
+            if name == DATASET_SHAREGPT:
+                self._dataset_meta = {
+                    "format": "sharegpt",
+                    "path": "builtin:sharegpt",
+                }
+                self._dataset_path = self._builtin_path("builtin:sharegpt")
+            else:
+                self._dataset_meta = {"format": "random", "path": None}
+            return
+
+        client = self._clientset.http_client.get_httpx_client()
+        resp = client.get(f"/benchmark-datasets/{dataset_id}")
+        if resp.status_code != 200:
+            raise ValueError(
+                f"dataset {dataset_id} is no longer available "
+                f"({resp.status_code}); recreate the benchmark with another dataset"
+            )
+        self._dataset_meta = resp.json() or {}
+
+        if _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None)) == "random":
+            return
+        path = self._dataset_meta.get("path")
+        if path:
+            self._dataset_path = self._builtin_path(path)
+            return
+        self._dataset_path = self._download_dataset(dataset_id)
+
+    @staticmethod
+    def _builtin_path(alias: str) -> str:
+        """A built-in alias, or the operator's override for one of them."""
+        if alias == "builtin:sharegpt" and BENCHMARK_DATASET_SHAREGPT_PATH:
+            return BENCHMARK_DATASET_SHAREGPT_PATH
+        return alias
+
+    def _download_dataset(self, dataset_id: int) -> str:
+        """The uploaded dataset as a file the container can read, cached by size."""
+        directory = os.path.join(self._benchmark_dir, "_datasets")
+        os.makedirs(directory, exist_ok=True)
+        sha = (self._dataset_meta.get("sha256") or "")[:12]
+        name = f"{dataset_id}-{sha}" if sha else f"{dataset_id}"
+        path = os.path.join(directory, f"{name}.jsonl")
+        size = self._dataset_meta.get("size_bytes")
+        if os.path.exists(path) and (size is None or os.path.getsize(path) == size):
+            return path
+
+        client = self._clientset.http_client.get_httpx_client()
+        resp = client.get(f"/benchmark-datasets/{dataset_id}/content")
+        if resp.status_code != 200:
+            raise ValueError(
+                f"dataset {dataset_id} content is unavailable ({resp.status_code})"
+            )
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(resp.text)
+        os.replace(tmp, path)
+        return path
+
+    def _build_accuracy_args(self, with_ca_cert: bool = False) -> List[str]:
+        b = self._benchmark
+        route_mode = (
+            getattr(b, "target_mode", None) == BenchmarkTargetModeEnum.ROUTE
+        )
+        if route_mode and not self._route_name:
+            raise Exception(
+                f"Benchmark {b.name}(id={b.id}) is in route mode but its "
+                "snapshot carries no route name; refusing to measure one "
+                "member and report it as the deployment"
+            )
+        target = self._route_target() if route_mode else self._model_endpoint
+        served_name = self._route_name if route_mode else b.model_name
+        backend_kwargs: Dict[str, Any] = {"timeout": BENCHMARK_REQUEST_TIMEOUT}
+        if route_mode:
+            backend_kwargs["api_key"] = self._api_key
+            backend_kwargs["verify"] = not self._progress_insecure_skip_tls_verify
+
+        args = [
+            "benchmark",
+            "accuracy",
+            "--target",
+            target,
+            *(["--model", served_name] if served_name else []),
+            "--data",
+            _dataset_arg(self),
+            "--data-format",
+            _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None)),
+            "--output-dir",
+            self._benchmark_dir,
+            "--outputs",
+            f"{b.id}",
+            "--max-samples",
+            f"{b.max_samples or 0}",
+            "--concurrency",
+            f"{b.accuracy_concurrency or 16}",
+            "--max-out-len",
+            f"{b.accuracy_max_out_len or 2048}",
+            "--progress-url",
+            self._api_url,
+            "--progress-auth",
+            self._api_key,
+            "--backend-kwargs",
+            json.dumps(backend_kwargs),
+        ]
+        if with_ca_cert and self._progress_is_https:
+            args.extend(["--progress-ca-cert", PROGRESS_CA_BUNDLE_PATH])
+        if self._progress_insecure_skip_tls_verify and self._progress_is_https:
+            args.append("--progress-insecure-skip-tls-verify")
+        return args
 
     @property
     def _progress_is_https(self) -> bool:
@@ -584,9 +746,11 @@ class BenchmarkRunner:
                 ]
             )
 
-        if self._benchmark.dataset_name == DATASET_SHAREGPT:
-            data = BENCHMARK_DATASET_SHAREGPT_PATH
-            command_args.extend(["--data", data])
+        dataset_format = _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None))
+        if dataset_format == "sharegpt":
+            command_args.extend(
+                ["--data", _dataset_arg(self), "--data-format", "sharegpt"]
+            )
             for attr, flag in (
                 ("dataset_input_min", "--sharegpt-min-input-tokens"),
                 ("dataset_input_max", "--sharegpt-max-input-tokens"),
@@ -595,8 +759,41 @@ class BenchmarkRunner:
                 value = getattr(self._benchmark, attr, None)
                 if value is not None:
                     command_args.extend([flag, str(value)])
+        elif dataset_format == "qa_jsonl":
+            command_args.extend(
+                ["--data", _dataset_arg(self), "--data-format", "qa_jsonl"]
+            )
+            # A QA file carries no per-row output allowance, so the run's own
+            # value decides how long each answer may be; left unset the runner
+            # falls back to the reference answer's length.
+            if self._benchmark.dataset_output_tokens is not None:
+                command_args.extend(
+                    ["--max-out-len", str(self._benchmark.dataset_output_tokens)]
+                )
+            # An input length turns the corpus into material to compose prompts
+            # from, instead of one question per request — the only way to drive
+            # a long-context or prefix-cache run on a corpus of short questions.
+            if self._benchmark.dataset_input_tokens is not None:
+                command_args.extend(
+                    ["--input-tokens", str(self._benchmark.dataset_input_tokens)]
+                )
+                for attr, flag in (
+                    ("dataset_input_stdev", "--input-stdev"),
+                    ("dataset_input_min", "--input-min"),
+                    ("dataset_input_max", "--input-max"),
+                ):
+                    value = getattr(self._benchmark, attr, None)
+                    if value is not None:
+                        command_args.extend([flag, str(value)])
+                if self._benchmark.prefix_buckets:
+                    command_args.extend(
+                        [
+                            "--prefix-buckets",
+                            json.dumps(self._benchmark.prefix_buckets),
+                        ]
+                    )
         elif (
-            self._benchmark.dataset_name == DATASET_RANDOM
+            dataset_format == "random"
             and self._benchmark.dataset_input_tokens is not None
             and self._benchmark.dataset_output_tokens is not None
         ):
@@ -689,6 +886,13 @@ class BenchmarkRunner:
                 )
         if b.stop_on_saturation:
             command_args.append("--detect-saturation")
+
+        # Sampling temperature, only when the run states one: left out, the
+        # server's own default applies and a preset that never mentioned it is
+        # not silently rewritten.
+        temperature = getattr(self._benchmark, "temperature", None)
+        if temperature is not None:
+            command_args.extend(["--temperature", f"{temperature}"])
 
         return command_args
 

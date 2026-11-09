@@ -9,6 +9,31 @@
 # search) which auto-detects the answer. The latency-SLO scenario is just
 # load_type=concurrency + auto_tune + slo_avg_ttft_ms / slo_avg_tpot_ms.
 profiles:
+  - name: Baseline
+    # The reference numbers are the aisbench gateway's own defaults: 8 concurrent
+    # requests, 100 prompts, 512 output tokens, one warmup request. Keeping them
+    # identical is what makes a run here comparable with one from that tool.
+    description: >
+      One fixed load: 8 concurrent requests, 100 prompts, 512 output tokens.
+      The reference baseline, so runs of different builds stay comparable.
+    load_type: concurrency # closed-loop: 8 requests in flight
+    auto_tune: false # one measured point, not a search
+    dataset_name: GSM8K
+    # Prompts are composed out of GSM8K to this length (the corpus is material,
+    # not a fixed list of ~60-token questions).
+    dataset_input_tokens: 1024
+    dataset_output_tokens: 512
+    # The stage's knob is the concurrency on this axis; requests are sent as fast
+    # as the 8 in-flight slots allow, which is the gateway's request_rate = 0.
+    request_rate: 8
+    total_requests: 100
+    stages:
+      - rate: 8
+        max_requests: 100
+    warmup: 1 # trim the first 1% — one request of the 100
+    temperature: 0.01 # the gateway's default; nearly greedy, still not 0
+    dataset_seed_increment: true
+
   - name: Max Throughput
     # Kept in sync with the UI blurb (benchmark.form.profile.maxThroughput.tips):
     # this is the API-facing text and the fallback when a client has no i18n for
@@ -17,9 +42,13 @@ profiles:
       Finds peak throughput. The usual baseline for comparing GPUs and models.
     load_type: fixed_rate # rate axis (open-loop constant)
     auto_tune: true # adaptive ramp; target = throughput saturation (no SLO)
-    dataset_name: Random
-    dataset_input_tokens: 1024 # vLLM Random default https://github.com/vllm-project/vllm/blob/17b17c068453e6dc6af79240bb94857ae175cc51/vllm/benchmarks/datasets.py#L457
-    dataset_output_tokens: 128
+    dataset_name: GSM8K
+    # GSM8K's questions are the material, not the prompt: each request's prompt is
+    # composed out of them to this length (and the output is held to its own), so
+    # a corpus of short questions can still drive a 1k — or 128k — context run.
+    # The UI exposes the same two knobs, plus a distribution and a shared prefix.
+    dataset_input_tokens: 1024
+    dataset_output_tokens: 256
     # No dataset_seed here on purpose: a fixed base would make every benchmark of
     # this preset send identical prompts, so the second run of a deployment just
     # replays the first run's prefix cache. The seed is generated per benchmark
@@ -59,7 +88,7 @@ profiles:
       planning.
     load_type: concurrency # concurrency axis (closed-loop)
     auto_tune: true # adaptive ramp; target = SLO boundary (slo_* set)
-    dataset_name: Random
+    dataset_name: GSM8K
     dataset_input_tokens: 128
     dataset_output_tokens: 128
     dataset_seed_increment: true # increment the seed per point (see note above)

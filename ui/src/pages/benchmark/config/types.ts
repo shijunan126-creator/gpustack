@@ -76,6 +76,17 @@ export interface FormData {
   model_id: number;
   model_name: string;
   model_instance_name: string;
+  // perf (default) or accuracy. Absent on rows written before accuracy existed.
+  kind?: BenchmarkKind;
+  // The dataset row this run measures, chosen by name; the server freezes its
+  // format and hash onto the row.
+  dataset_id?: number;
+  dataset_format?: string;
+  // accuracy only: how many questions, how many in flight, and how long an
+  // answer may be.
+  max_samples?: number | null;
+  accuracy_concurrency?: number | null;
+  accuracy_max_out_len?: number | null;
   // What the load is aimed at: one instance (an engine) or the deployment's
   // route. Absent on rows written before the field existed, which measured an
   // instance.
@@ -145,6 +156,8 @@ export interface FormData {
   // fraction -- converted in `forms/index.tsx`.
   warmup?: number | null;
   cooldown?: number | null;
+  // Sampling temperature; absent leaves the server's default in place.
+  temperature?: number | null;
   max_errors?: number;
   // Same story as warmup / cooldown above: a whole PERCENT in the form, a
   // fraction in the API column, and nullable so clearing it is explicit.
@@ -187,6 +200,9 @@ export interface StageRow {
   rate: number;
   max_requests?: number | null;
   max_seconds?: number | null;
+  // Concurrency axis only: an optional pacing cap (requests per second) on top
+  // of the in-flight count. Empty means "send as fast as the streams allow".
+  request_rate?: number | null;
 }
 
 // One shared-prefix bucket (guidellm prefix_buckets).
@@ -259,6 +275,13 @@ export interface BenchmarkResultItem extends BenchmarkMetricsLite {
 // server picked to represent it, which is what the table's metric columns read.
 export interface BenchmarkListItem extends FormData, BenchmarkMetricsLite {
   id: number;
+  // Accuracy conclusion (kind === 'accuracy'); null on a performance run.
+  accuracy_score?: number | null;
+  accuracy_total?: number | null;
+  accuracy_correct?: number | null;
+  accuracy_invalid?: number | null;
+  accuracy_errored?: number | null;
+  accuracy_elapsed_seconds?: number | null;
   snapshot?: Snapshot | null;
   // Inherited from the parent cluster's owner_principal_id on the
   // wire so per-row tenant filtering works without joining.
@@ -311,4 +334,55 @@ export interface BenchmarkFilterValues {
   profile: string;
   target_mode?: string;
   load_type?: string;
+}
+
+// What a run measures: throughput over a load sweep, or answer accuracy.
+export type BenchmarkKind = 'perf' | 'accuracy';
+
+// A dataset row from GET /benchmark-datasets, with the fields the form needs to
+// decide which controls apply: `random` has no file, `qa_jsonl` can be scored.
+export type BenchmarkDatasetOption = Global.BaseOption<
+  string,
+  {
+    format: string;
+    has_answers: boolean;
+    sample_count: number | null;
+    description?: string;
+  }
+>;
+
+export interface BenchmarkDatasetItem {
+  id: number;
+  name: string;
+  description?: string | null;
+  format: string;
+  source: string;
+  path?: string | null;
+  sample_count?: number | null;
+  answer_count?: number | null;
+  has_answers: boolean;
+  size_bytes?: number | null;
+  sha256?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// One question of an accuracy run.
+export interface AccuracySampleItem {
+  id: number;
+  benchmark_id: number;
+  seq: number;
+  question: string | null;
+  prediction: string | null;
+  extracted: string | null;
+  reference: string | null;
+  correct: boolean;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export interface AccuracySamplesResponse {
+  items: AccuracySampleItem[];
+  total: number;
+  incorrect: number;
 }

@@ -125,3 +125,12 @@ def ramp_facts_path(benchmark_dir: str, benchmark_id: int) -> str:
     partial sync the search has not ended yet.
     """
     return f"{benchmark_dir}/{benchmark_id}__ramp.json"
+
+
+def accuracy_report_path(benchmark_dir: str, benchmark_id: int) -> str:
+    """The one report an accuracy run writes, final or partial.
+
+    Rewritten as questions are answered, so its presence proves the run got at
+    least one verdict; the file itself says whether it is still ``partial``.
+    """
+    return f"{benchmark_dir}/{benchmark_id}__accuracy.json"

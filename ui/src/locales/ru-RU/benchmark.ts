@@ -436,5 +436,54 @@ export default {
   'benchmark.detail.targetMode.route': 'Маршрут (развёртывание) · {route}',
   'benchmark.form.target.route': 'Маршрут',
   'benchmark.form.target.route.empty':
-    'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.'
+    'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.',
+  // ── datasets & accuracy ────────────────────────────────────────────────,
+  'benchmark.form.fixedLoad': 'Fixed load',
+  'benchmark.form.fixedLoad.tip':
+    'One fixed load point: how many requests may be in flight, how many to send, and an optional rate cap. No search.',
+  'benchmark.form.temperature': 'Temperature',
+  'benchmark.form.temperature.tip':
+    'Sampling temperature for the measured requests. Empty leaves the server default.',
+  'benchmark.form.stage.requestRate': 'Rate cap (req/s)',
+  'benchmark.form.profile.baseline.tips':
+    'A fixed load: 8 concurrent requests, 100 prompts, 512 output tokens. The reference baseline, matching the aisbench gateway defaults so runs stay comparable.',
+  'benchmark.qa.inputLength': 'Input length (composed)',
+  'benchmark.qa.inputLength.tip':
+    'Prompt length to compose out of the dataset corpus: long-context and prefix-cache runs need it. Leave empty to use one question per request.',
+  'benchmark.kind': 'Benchmark type',
+  'benchmark.kind.perf': 'Performance',
+  'benchmark.kind.accuracy': 'Accuracy',
+  'benchmark.dataset.add': 'Add dataset',
+  'benchmark.dataset.file': 'Dataset file',
+  'benchmark.dataset.fileRequired': 'Choose a dataset file first',
+  'benchmark.dataset.fileHint':
+    'One JSON object per line with a "question" (and optionally an "answer"), or a JSON array of ShareGPT conversations.',
+  'benchmark.dataset.fileDrop': 'Click or drag a .json / .jsonl file here',
+  'benchmark.dataset.added': 'Dataset added',
+  'benchmark.dataset.addFailed': 'Failed to add the dataset',
+  'benchmark.dataset.noAnswers':
+    'This dataset has no reference answers, so it cannot be used for an accuracy run.',
+  'benchmark.qa.outputTokens.tip':
+    'How many tokens each answer may generate. The prompts come from the dataset.',
+  'benchmark.accuracy.score': 'Score',
+  'benchmark.accuracy.correctCount': 'Correct',
+  'benchmark.accuracy.invalid': 'No answer',
+  'benchmark.accuracy.errored': 'Errors',
+  'benchmark.accuracy.elapsed': 'Elapsed',
+  'benchmark.accuracy.maxSamples': 'Questions',
+  'benchmark.accuracy.maxSamples.tip':
+    '0 asks every question the dataset holds.',
+  'benchmark.accuracy.concurrency': 'Questions in flight',
+  'benchmark.accuracy.maxOutLen': 'Max answer tokens',
+  'benchmark.accuracy.maxOutLen.tip':
+    'Reasoning models spend most of this budget thinking.',
+  'benchmark.accuracy.question': 'Question',
+  'benchmark.accuracy.answer': 'Answer',
+  'benchmark.accuracy.reference': 'Reference',
+  'benchmark.accuracy.verdict': 'Verdict',
+  'benchmark.accuracy.correct': 'Correct',
+  'benchmark.accuracy.wrong': 'Wrong',
+  'benchmark.accuracy.latency': 'Latency',
+  'benchmark.accuracy.onlyWrong': 'Only wrong answers',
+  'benchmark.accuracy.showing': 'Showing {count} of {total}',
 };

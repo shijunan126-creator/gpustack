@@ -32,6 +32,7 @@ export const BenchmarkStatus: Record<string, StatusType> = {
 };
 
 export const ProfileValueMap = {
+  Baseline: 'Baseline',
   MaxThroughput: 'Max Throughput',
   LatencySLO: 'Meet Latency SLO',
   Custom: 'Custom'
@@ -65,6 +66,10 @@ export const ProfileLabelMap = {
 // resolved to '' and the selector fell back to the yaml `description` — i.e. the
 // blurb was English in all five languages.
 export const profileOptions = [
+  {
+    tips: 'benchmark.form.profile.baseline.tips',
+    value: ProfileValueMap.Baseline
+  },
   {
     tips: 'benchmark.form.profile.maxThroughput.tips',
     value: ProfileValueMap.MaxThroughput
@@ -276,20 +281,55 @@ export const STOP_REASON_LABEL: Record<string, string> = {
 };
 
 export const DatasetValueMap = {
+  GSM8K: 'GSM8K',
   ShareGPT: 'ShareGPT',
   Random: 'Random'
 };
 
+// The corpus a new benchmark measures unless the user picks another one. GSM8K
+// is the baseline the R&D workflow compares against, and the only built-in with
+// reference answers, so it serves accuracy runs too.
+export const DEFAULT_DATASET_NAME = DatasetValueMap.GSM8K;
+
+export const KindValueMap = {
+  Perf: 'perf',
+  Accuracy: 'accuracy'
+} as const;
+
+export const kindOptions = [
+  { label: 'benchmark.kind.perf', value: KindValueMap.Perf },
+  { label: 'benchmark.kind.accuracy', value: KindValueMap.Accuracy }
+];
+
+// Fallback list, used until the API answers. The real list comes from
+// GET /benchmark-datasets, which includes uploaded corpora.
 export const datasetList = [
   {
-    name: 'ShareGPT',
-    label: 'ShareGPT',
-    value: DatasetValueMap.ShareGPT
+    name: DatasetValueMap.GSM8K,
+    label: DatasetValueMap.GSM8K,
+    value: DatasetValueMap.GSM8K,
+    format: 'qa_jsonl',
+    has_answers: true,
+    sample_count: 1319,
+    description: ''
   },
   {
-    name: 'Random',
-    label: 'Random',
-    value: DatasetValueMap.Random
+    name: DatasetValueMap.ShareGPT,
+    label: DatasetValueMap.ShareGPT,
+    value: DatasetValueMap.ShareGPT,
+    format: 'sharegpt',
+    has_answers: false,
+    sample_count: null,
+    description: ''
+  },
+  {
+    name: DatasetValueMap.Random,
+    label: DatasetValueMap.Random,
+    value: DatasetValueMap.Random,
+    format: 'random',
+    has_answers: false,
+    sample_count: null,
+    description: ''
   }
 ];
 

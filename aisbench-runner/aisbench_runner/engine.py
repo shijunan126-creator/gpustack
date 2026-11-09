@@ -147,6 +147,7 @@ def build_config(
     concurrency: int,
     request_rate: float,
     max_out_len: int,
+    temperature: Optional[float] = None,
 ) -> str:
     """Source of a self-contained aisbench config for one point.
 
@@ -189,7 +190,14 @@ def build_config(
         "retry": 1,
         "api_key": target.api_key or "",
         "trust_remote_code": target.trust_remote_code,
-        "generation_kwargs": {"ignore_eos": True},
+        # `ignore_eos` holds every answer to the requested length; the
+        # temperature is only stated when the run configures one, so the server's
+        # own default is not overridden behind the operator's back.
+        "generation_kwargs": (
+            {"ignore_eos": True}
+            if temperature is None
+            else {"ignore_eos": True, "temperature": float(temperature)}
+        ),
         "batch_size": max(1, min(MAX_BATCH_SIZE, concurrency)),
         "request_rate": request_rate,
         **connection_fields(target.url),
@@ -222,6 +230,7 @@ class Engine:
         builder: TextBuilder,
         stall_timeout: float = 900.0,
         keep_work_dirs: bool = False,
+        temperature: Optional[float] = None,
         echo: Callable[[str], None] = print,
     ):
         self.target = target
@@ -229,6 +238,7 @@ class Engine:
         self.builder = builder
         self.stall_timeout = stall_timeout
         self.keep_work_dirs = keep_work_dirs
+        self.temperature = temperature
         self.echo = echo
 
     def run(
@@ -263,6 +273,7 @@ class Engine:
                     concurrency=concurrency,
                     request_rate=float(request_rate),
                     max_out_len=max(r.output_tokens for r in rows),
+                    temperature=self.temperature,
                 )
             )
         try:

@@ -1,6 +1,7 @@
 import { PageAction } from '@/config';
 import {
   ControlOutlined,
+  PlusOutlined,
   QuestionCircleOutlined,
   ReloadOutlined,
   ThunderboltOutlined
@@ -15,6 +16,7 @@ import {
 } from '@gpustack/core-ui';
 import { useIntl } from '@umijs/max';
 import {
+  Alert,
   Button,
   Checkbox,
   Flex,
@@ -26,12 +28,13 @@ import {
 } from 'antd';
 import { createStyles } from 'antd-style';
 import React, { useState } from 'react';
+import AddDatasetModal from '../components/add-dataset-modal';
 import DistributionChart from '../components/distribution-chart';
 import {
   AUTO_TUNE_DEFAULTS,
   DATASET_SEED_MAX,
   DATASET_SEED_MIN,
-  DatasetValueMap,
+  KindValueMap,
   LoadTypeValueMap,
   SLO_AGGS,
   SLO_METRICS,
@@ -45,7 +48,7 @@ import {
   sloTargetKey
 } from '../config';
 import { useFormContext } from '../config/form-context';
-import { FormData } from '../config/types';
+import { BenchmarkDatasetOption, FormData } from '../config/types';
 import { optionalPositiveIntegerRule } from './sharegpt-token-validation';
 
 const useStyles = createStyles(({ token, css }) => ({
@@ -182,18 +185,30 @@ const useStyles = createStyles(({ token, css }) => ({
 // need the same mapping.
 
 const RandomSettingsForm: React.FC<{
-  datasetList: Global.BaseOption<number | string>[];
+  datasetList: BenchmarkDatasetOption[];
 }> = (props) => {
   const { datasetList } = props;
   const { styles } = useStyles();
   const intl = useIntl();
   const { action, currentData, profilesOptions, groupKeys, onGroupChange } =
     useFormContext();
+  const { onDatasetAdded } = useFormContext();
   const form = Form.useFormInstance();
   const profile = Form.useWatch('profile', form);
   const loadType = Form.useWatch('load_type', form);
   const datasetName = Form.useWatch('dataset_name', form);
+  const kind = Form.useWatch('kind', form);
+  const isAccuracy = kind === KindValueMap.Accuracy;
   const { getRuleMessage } = useAppUtils();
+
+  // Which controls apply is a property of the dataset ROW, not of its name: an
+  // uploaded question/answer file behaves like GSM8K, an uploaded conversation
+  // file like ShareGPT.
+  const datasetOption = (datasetList as BenchmarkDatasetOption[])?.find(
+    (item) => item.value === datasetName
+  );
+  const datasetFormat = datasetOption?.format;
+  const [datasetModalOpen, setDatasetModalOpen] = useState(false);
 
   const disabled = action === PageAction.EDIT;
 
@@ -203,20 +218,31 @@ const RandomSettingsForm: React.FC<{
   // lets you change them.
   const autoTune = Form.useWatch('auto_tune', form);
   const isCustom = profile === 'Custom';
-  const presetLocked = !isCustom;
+  // A preset's own shape decides whether the load section is a search or a
+  // single fixed point. The auto-tune presets stay locked (their ramp IS the
+  // answer), while a fixed-load preset such as Baseline opens in manual mode
+  // with its stage editable — it asks for one concurrency, not a range.
+  const presetConfig = (profilesOptions as any[])?.find(
+    (item) => item.value === profile
+  )?.config;
+  const presetAutoTune = presetConfig?.auto_tune;
+  const presetLocked = !isCustom && presetAutoTune !== false;
+  // A preset that pins one load ("8 concurrent, 100 prompts") is not a stage
+  // sweep, so its card asks for those numbers instead of showing the stage list.
+  const fixedLoad = !isCustom && presetAutoTune === false;
   const isFixedRate = loadType === LoadTypeValueMap.FixedRate;
-  // Named presets are ALWAYS auto-tune (the ramp is the whole point); only Custom
-  // can switch to manual stages. Derive from that so the section renders correctly
-  // even if the auto_tune field value lags/is missing.
-  const effectiveAutoTune = isCustom ? !!autoTune : true;
+  // Named auto-tune presets cannot switch to manual; Custom and fixed-load
+  // presets can, so their toggle follows the form field.
+  const effectiveAutoTune = presetLocked ? true : !!autoTune;
   // SLO is gated by TARGET, not by axis: setting a threshold switches the delivered
   // answer from "peak throughput" to "max load meeting the SLO", so it is available
   // on BOTH axes (asking for req/s under a TTFT budget is the more common capacity
   // question) and hidden only for a preset whose answer IS the peak. See
   // profileAllowsSlo; keep in sync with the nav's copy in forms/index.tsx.
-  const showSLO = profileAllowsSlo(profile, profilesOptions as any[]);
-  const isRandom = datasetName === DatasetValueMap.Random;
-  const isShareGPT = datasetName === DatasetValueMap.ShareGPT;
+  const showSLO = !isAccuracy && profileAllowsSlo(profile, profilesOptions as any[]);
+  const isRandom = datasetFormat === 'random';
+  const isShareGPT = datasetFormat === 'sharegpt';
+  const isQA = datasetFormat === 'qa_jsonl';
   const shareGPTTokenRule = optionalPositiveIntegerRule(
     intl.formatMessage({ id: 'benchmark.form.sharegpt.positiveInteger' })
   );
@@ -262,7 +288,7 @@ const RandomSettingsForm: React.FC<{
   // can't see the still-unmounted distribution fields, so seed from currentData.
   const [distToggle, setDistToggle] = useState(
     () =>
-      currentData?.dataset_name === DatasetValueMap.Random &&
+      currentData?.dataset_format === 'random' &&
       hasVal(
         currentData?.dataset_input_stdev,
         currentData?.dataset_input_min,
@@ -451,46 +477,118 @@ const RandomSettingsForm: React.FC<{
   // ---- Group 1: Dataset (what data to send) ----
   const datasetContent = (
     <>
-      <Form.Item<FormData>
-        name="dataset_name"
-        rules={[
-          {
-            required: true,
-            message: getRuleMessage('select', 'benchmark.table.dataset')
-          }
-        ]}
-      >
-        <SealSelect
-          disabled={disabled}
-          onChange={(value) => {
-            form.setFieldsValue({
-              dataset_input_tokens:
-                value === DatasetValueMap.ShareGPT
-                  ? null
-                  : (form.getFieldValue('dataset_input_tokens') ?? 1024),
-              dataset_output_tokens:
-                value === DatasetValueMap.ShareGPT
-                  ? null
-                  : (form.getFieldValue('dataset_output_tokens') ?? 128),
-              dataset_input_min: null,
-              dataset_input_max: null,
-              sharegpt_filter_enabled: false,
-              dataset_input_stdev: null,
-              dataset_output_stdev: null,
-              dataset_output_min: null,
-              dataset_output_max: null
-            });
-          }}
-          options={datasetList?.map((item) => ({
-            ...item,
-            label: item.label,
-            value: item.label
-          }))}
-          label={intl.formatMessage({ id: 'benchmark.table.dataset' })}
-          required
-        ></SealSelect>
-      </Form.Item>
-      {isRandom && (
+      <Flex align="flex-end" gap={8} style={{ marginBottom: 12 }}>
+        <Form.Item<FormData>
+          name="dataset_name"
+          style={{ flex: 1, marginBottom: 0 }}
+          rules={[
+            {
+              required: true,
+              message: getRuleMessage('select', 'benchmark.table.dataset')
+            }
+          ]}
+        >
+          <SealSelect
+            disabled={disabled}
+            onChange={(value) => {
+              const picked = (datasetList as BenchmarkDatasetOption[])?.find(
+                (item) => item.value === value
+              );
+              form.setFieldsValue({
+                // Length knobs belong to a synthetic corpus and to a fixed
+                // decode budget; a conversation file has neither.
+                dataset_input_tokens:
+                  picked?.format === 'sharegpt'
+                    ? null
+                    : (form.getFieldValue('dataset_input_tokens') ?? 1024),
+                dataset_output_tokens:
+                  picked?.format === 'random'
+                    ? (form.getFieldValue('dataset_output_tokens') ?? 256)
+                    : picked?.format === 'qa_jsonl'
+                      ? (form.getFieldValue('dataset_output_tokens') ?? 256)
+                      : null,
+                dataset_input_min: null,
+                dataset_input_max: null,
+                sharegpt_filter_enabled: false,
+                dataset_input_stdev: null,
+                dataset_output_stdev: null,
+                dataset_output_min: null,
+                dataset_output_max: null
+              });
+            }}
+            options={datasetList}
+            label={intl.formatMessage({ id: 'benchmark.table.dataset' })}
+            required
+          ></SealSelect>
+        </Form.Item>
+        <Button
+          icon={<PlusOutlined />}
+          disabled={action === PageAction.EDIT}
+          onClick={() => setDatasetModalOpen(true)}
+          style={{ height: 48, flex: 'none' }}
+        >
+          {intl.formatMessage({ id: 'benchmark.dataset.add' })}
+        </Button>
+      </Flex>
+      {isAccuracy && datasetOption && !datasetOption.has_answers && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={intl.formatMessage({ id: 'benchmark.dataset.noAnswers' })}
+        />
+      )}
+      {isAccuracy && (
+        <>
+          <Flex gap={12}>
+            <Form.Item<FormData>
+              name="max_samples"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={0}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({ id: 'benchmark.accuracy.maxSamples' })}
+                description={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxSamples.tip'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+            <Form.Item<FormData>
+              name="accuracy_concurrency"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({
+                  id: 'benchmark.accuracy.concurrency'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+            <Form.Item<FormData>
+              name="accuracy_max_out_len"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxOutLen'
+                })}
+                description={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxOutLen.tip'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+          </Flex>
+          <div style={{ height: 16 }} />
+        </>
+      )}
+      {isQA && !isAccuracy && (
         <>
           <Form.Item<FormData>
             name="dataset_input_tokens"
@@ -499,7 +597,7 @@ const RandomSettingsForm: React.FC<{
                 required: true,
                 message: getRuleMessage(
                   'input',
-                  'benchmark.table.inputTokenLength'
+                  'benchmark.qa.inputLength'
                 )
               }
             ]}
@@ -507,8 +605,9 @@ const RandomSettingsForm: React.FC<{
             <CInputNumber
               min={1}
               disabled={disabled}
-              label={intl.formatMessage({
-                id: 'benchmark.table.inputTokenLength'
+              label={intl.formatMessage({ id: 'benchmark.qa.inputLength' })}
+              description={intl.formatMessage({
+                id: 'benchmark.qa.inputLength.tip'
               })}
               required
             ></CInputNumber>
@@ -531,14 +630,68 @@ const RandomSettingsForm: React.FC<{
               label={intl.formatMessage({
                 id: 'benchmark.table.outputTokenLength'
               })}
+              description={intl.formatMessage({
+                id: 'benchmark.qa.outputTokens.tip'
+              })}
               required
             ></CInputNumber>
           </Form.Item>
+        </>
+      )}
+      {(isRandom || (isQA && !isAccuracy)) && (
+        <>
+          {isRandom && (
+            <>
+              <Form.Item<FormData>
+                name="dataset_input_tokens"
+                rules={[
+                  {
+                    required: true,
+                    message: getRuleMessage(
+                      'input',
+                      'benchmark.table.inputTokenLength'
+                    )
+                  }
+                ]}
+              >
+                <CInputNumber
+                  min={1}
+                  disabled={disabled}
+                  label={intl.formatMessage({
+                    id: 'benchmark.table.inputTokenLength'
+                  })}
+                  required
+                ></CInputNumber>
+              </Form.Item>
+              <Form.Item<FormData>
+                name="dataset_output_tokens"
+                rules={[
+                  {
+                    required: true,
+                    message: getRuleMessage(
+                      'input',
+                      'benchmark.table.outputTokenLength'
+                    )
+                  }
+                ]}
+              >
+                <CInputNumber
+                  min={1}
+                  disabled={disabled}
+                  label={intl.formatMessage({
+                    id: 'benchmark.table.outputTokenLength'
+                  })}
+                  required
+                ></CInputNumber>
+              </Form.Item>
+            </>
+          )}
           {/* Seed card. Header = the "Random Seed" toggle. On (default): the
               seed is generated per benchmark and each stage uses a different one
               (see the tooltip) — nothing to fill, so both fields are submitted
               hidden rather than relying on an unmounted field. Off: the user pins
               a seed and chooses whether stages differ. */}
+          {isRandom && (
           <div className={styles.sectionCard}>
             <div
               className="section-title"
@@ -637,6 +790,7 @@ const RandomSettingsForm: React.FC<{
               </>
             )}
           </div>
+          )}
           {/* data distribution + shared prefix: each an opt-in card whose title
               carries the "?" help and a header Switch, body revealed only when
               on (mirrors the model form's Scheduled Scaling section). */}
@@ -1100,6 +1254,61 @@ const RandomSettingsForm: React.FC<{
         <Switch />
       </Form.Item>
 
+      {fixedLoad ? (
+        <div className={styles.sectionCard}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="title-label">
+              {intl.formatMessage({ id: 'benchmark.form.fixedLoad' })}
+              <Tooltip
+                title={intl.formatMessage({
+                  id: 'benchmark.form.fixedLoad.tip'
+                })}
+              >
+                <QuestionCircleOutlined className="title-help" />
+              </Tooltip>
+            </span>
+          </div>
+          <Flex gap={12}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                required
+                min={1}
+                disabled={disabled}
+                value={(stages || [])[0]?.rate}
+                onChange={(v) => handleStageChange(0, { rate: v })}
+                label={rateLabel}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                value={(stages || [])[0]?.max_requests}
+                onChange={(v) => handleStageChange(0, { max_requests: v })}
+                label={intl.formatMessage({
+                  id: 'benchmark.form.requests'
+                })}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+            {/* Pacing cap: empty sends as fast as the in-flight slots allow. */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <CInputNumber
+                min={0}
+                step={0.1}
+                disabled={disabled}
+                value={(stages || [])[0]?.request_rate}
+                onChange={(v) => handleStageChange(0, { request_rate: v })}
+                label={intl.formatMessage({
+                  id: 'benchmark.form.stage.requestRate'
+                })}
+                style={{ width: '100%' }}
+              ></CInputNumber>
+            </div>
+          </Flex>
+        </div>
+      ) : (
       <div className={styles.sectionCard}>
         <div className="section-title" style={{ marginBottom: 16 }}>
           <span className="title-label">
@@ -1321,6 +1530,26 @@ const RandomSettingsForm: React.FC<{
                           style={{ width: '100%' }}
                         ></CInputNumber>
                       </div>
+                      {/* Concurrency axis only: an optional pacing cap on top of
+                          the in-flight count. Empty means "send as fast as the
+                          streams allow", which is the usual baseline. */}
+                      {!isFixedRate && (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <CInputNumber
+                            min={0}
+                            step={0.1}
+                            disabled={disabled}
+                            value={item.request_rate}
+                            onChange={(v) =>
+                              handleStageChange(index, { request_rate: v })
+                            }
+                            label={intl.formatMessage({
+                              id: 'benchmark.form.stage.requestRate'
+                            })}
+                            style={{ width: '100%' }}
+                          ></CInputNumber>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1329,6 +1558,7 @@ const RandomSettingsForm: React.FC<{
           </div>
         )}
       </div>
+      )}
       {/* Warmup / Cooldown trim the first / last slice of each stage's requests
           from the measured window — they shape the stage's load profile, so they
           sit with Load, right under the stages. Keep the default Form.Item bottom
@@ -1404,6 +1634,19 @@ const RandomSettingsForm: React.FC<{
           ></CInputNumber>
         </Form.Item>
       </Flex>
+      <Form.Item<FormData> name="temperature">
+        <CInputNumber
+          min={0}
+          max={2}
+          step={0.01}
+          disabled={disabled}
+          label={intl.formatMessage({ id: 'benchmark.form.temperature' })}
+          description={intl.formatMessage({
+            id: 'benchmark.form.temperature.tip'
+          })}
+          style={{ width: '100%' }}
+        ></CInputNumber>
+      </Form.Item>
       {/* 🔴 The unit used to be a `field-hint` line of its own under both
           fields. It said one thing ("enter a percentage, 10 means 10%") in a
           sentence phrased for Warmup only, sitting under Cooldown as well —
@@ -1543,35 +1786,52 @@ const RandomSettingsForm: React.FC<{
     <span data-field={field}>{intl.formatMessage({ id })}</span>
   );
   return (
-    <CollapsePanel
-      activeKey={groupKeys}
-      accordion={false}
-      onChange={onGroupChange}
-      items={[
-        {
-          key: 'dataset',
-          label: groupLabel('dataset', 'benchmark.form.group.dataset'),
-          forceRender: true,
-          children: datasetContent
-        },
-        ...(showSLO
-          ? [
-              {
-                key: 'slo',
-                label: groupLabel('slo', 'benchmark.form.group.slo'),
-                forceRender: true,
-                children: sloContent
-              }
-            ]
-          : []),
-        {
-          key: 'load',
-          label: groupLabel('load', 'benchmark.form.group.load'),
-          forceRender: true,
-          children: loadContent
-        }
-      ]}
-    ></CollapsePanel>
+    <>
+      <CollapsePanel
+        activeKey={groupKeys}
+        accordion={false}
+        onChange={onGroupChange}
+        items={[
+          {
+            key: 'dataset',
+            label: groupLabel('dataset', 'benchmark.form.group.dataset'),
+            forceRender: true,
+            children: datasetContent
+          },
+          ...(showSLO
+            ? [
+                {
+                  key: 'slo',
+                  label: groupLabel('slo', 'benchmark.form.group.slo'),
+                  forceRender: true,
+                  children: sloContent
+                }
+              ]
+            : []),
+          // An accuracy run has no load sweep: the questions are asked once at
+          // one concurrency, so the whole Load group (stages, bounds, warmup)
+          // does not apply and is hidden rather than disabled.
+          ...(isAccuracy
+            ? []
+            : [
+                {
+                  key: 'load',
+                  label: groupLabel('load', 'benchmark.form.group.load'),
+                  forceRender: true,
+                  children: loadContent
+                }
+              ])
+        ]}
+      ></CollapsePanel>
+      <AddDatasetModal
+        open={datasetModalOpen}
+        onCancel={() => setDatasetModalOpen(false)}
+        onOk={() => {
+          setDatasetModalOpen(false);
+          onDatasetAdded?.();
+        }}
+      />
+    </>
   );
 };
 

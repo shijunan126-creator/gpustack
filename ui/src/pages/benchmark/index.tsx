@@ -23,7 +23,6 @@ import LeftActions from './components/left-actions';
 import RightActions from './components/right-actions';
 import ViewLogsModal from './components/view-logs-modal';
 import {
-  datasetList,
   genBenchmarkName,
   sloFieldsFromTargets,
   type SloTarget
@@ -35,6 +34,7 @@ import useColumnSettings from './hooks/use-column-settings';
 import useCreateBenchmark from './hooks/use-create-benchmark';
 import useViewLogs from './hooks/use-view-logs';
 import { useExportBenchmark } from './services/use-export-benchmark';
+import useQueryDatasets from './services/use-query-datasets';
 import useQueryProfiles from './services/use-query-profiles';
 import useStopBenchmark from './services/use-stop-benchmark';
 
@@ -75,6 +75,7 @@ const Benchmark: React.FC = () => {
     clusterList
   } = useQueryClusterList();
   const { benchmarkTargetInstance } = useBenchmarkTargetInstance();
+  const { options: datasetOptions, fetchDatasets } = useQueryDatasets();
   const { cloneSource, clearCloneSource } = useCloneBenchmark();
   const {
     profilesOptions,
@@ -88,6 +89,7 @@ const Benchmark: React.FC = () => {
   });
   useEffect(() => {
     fetchProfilesData();
+    fetchDatasets();
     fetchClusterList({ page: -1 }).then(() => {
       // Clone raised from the detail page, which has no drawer of its own: the
       // row travelled here in an atom. Cleared on open so coming back to the
@@ -310,7 +312,8 @@ const Benchmark: React.FC = () => {
         title={openBenchmarkModalStatus.title}
         currentData={openBenchmarkModalStatus.currentData}
         profilesOptions={profilesOptions}
-        datasetList={datasetList}
+        datasetList={datasetOptions}
+        onDatasetAdded={fetchDatasets}
         onCancel={handleModalCancel}
         onOk={handleModalOk}
       ></AddBenchmarkModal>

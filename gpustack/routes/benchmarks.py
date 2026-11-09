@@ -25,6 +25,7 @@ from gpustack.api.tenant import (
     TenantContext,
     assert_cluster_visible,
     assert_resource_visible,
+    bypass_tenant_filter,
     tenant_list_conditions,
 )
 from gpustack.mixins.active_record import fuzzy_like
@@ -62,8 +63,13 @@ from gpustack.schemas.benchmark import (
     DATASET_SHAREGPT,
     SLO_THRESHOLDS,
     Benchmark,
+    BenchmarkAccuracyReport,
+    BenchmarkAccuracySample,
+    BenchmarkAccuracySamplePublic,
+    BenchmarkAccuracySamplesPublic,
     BenchmarkCreate,
     BenchmarkFullPublic,
+    BenchmarkKindEnum,
     BenchmarkListParams,
     BenchmarkLoadTypeEnum,
     BenchmarkMetrics,
@@ -77,6 +83,12 @@ from gpustack.schemas.benchmark import (
     BenchmarkPublic,
     BenchmarksPublic,
     generate_dataset_seed,
+)
+from gpustack.schemas.benchmark_dataset import (
+    BenchmarkDataset,
+    BenchmarkDatasetFormat,
+    BenchmarkDatasetSnapshot,
+    BenchmarkDatasetSource,
 )
 
 from gpustack.server.services import (
@@ -101,6 +113,10 @@ MAX_EXPORT_RECORDS = 20
 # above any real curve — it exists so a malformed upload is rejected at the
 # boundary instead of turning into an unbounded write.
 MAX_BENCHMARK_RESULT_POINTS = 500
+# Per-question rows an accuracy run may upload. A dataset is capped at a few
+# thousand questions by its file size, so this is a boundary check rather than
+# a budget: it stops a malformed upload from turning into an unbounded write.
+MAX_BENCHMARK_ACCURACY_SAMPLES = 20000
 BENCHMARK_EXPORT_FIELD_ORDER = [
     "name",
     "model_name",
@@ -991,6 +1007,85 @@ async def _resolve_benchmark_gateway_url(
     return gateway_url
 
 
+async def _resolve_dataset(
+    session: SessionDep, ctx: TenantContext, name: Optional[str]
+) -> BenchmarkDataset:
+    """The dataset row a benchmark names, if this caller may measure it.
+
+    Built-ins have no owner and are visible to everyone; an upload is visible
+    to its Org. 400 rather than 404 keeps this consistent with the rest of the
+    create-time field validation — the caller is naming a field, not following
+    a link.
+    """
+    if not name:
+        raise BadRequestException(message="Field dataset_name must be specified")
+    dataset = await BenchmarkDataset.one_by_field(session, "name", name)
+    visible = dataset is not None and (
+        dataset.source == BenchmarkDatasetSource.BUILTIN
+        or dataset.owner_principal_id is None
+        or bypass_tenant_filter(ctx)
+        or (
+            ctx.current_principal_id is not None
+            and dataset.owner_principal_id == ctx.current_principal_id
+        )
+    )
+    if not visible:
+        raise BadRequestException(message=f"Dataset '{name}' not found")
+    return dataset
+
+
+def _validate_accuracy_config(
+    benchmark_in: BenchmarkCreate, dataset: BenchmarkDataset
+) -> None:
+    if not dataset.has_answers:
+        raise BadRequestException(
+            message=(
+                f"Dataset '{dataset.name}' carries no reference answers, so it "
+                "cannot be used for an accuracy run. Upload a question/answer "
+                "dataset (one JSON object per line) to measure accuracy."
+            )
+        )
+    if benchmark_in.auto_tune or benchmark_in.stages:
+        raise BadRequestException(
+            message=(
+                "An accuracy run is a single pass over the questions; "
+                "auto_tune and stages do not apply."
+            )
+        )
+    if benchmark_in.max_samples is not None and benchmark_in.max_samples < 0:
+        raise BadRequestException(
+            message="Field max_samples must not be negative (0 measures every question)"
+        )
+    for field, value in (
+        ("accuracy_concurrency", benchmark_in.accuracy_concurrency),
+        ("accuracy_max_out_len", benchmark_in.accuracy_max_out_len),
+    ):
+        if value is not None and value < 1:
+            raise BadRequestException(
+                message=f"Field {field} must be greater than 0"
+            )
+
+
+def _apply_accuracy_defaults(mutated: Benchmark) -> None:
+    """Fill the load-shaped fields an accuracy run does not use.
+
+    The columns are shared with a perf run, which has no "nothing to load"
+    representation: leaving them None would make a listing render a rate of
+    zero or a missing concurrency. One pass at one concurrency is the truthful
+    shape, and the score is what the run is read for.
+    """
+    mutated.auto_tune = False
+    mutated.stages = None
+    mutated.load_type = BenchmarkLoadTypeEnum.CONCURRENCY
+    mutated.request_rate = max(1, mutated.request_rate or 1)
+    if mutated.accuracy_concurrency is None:
+        mutated.accuracy_concurrency = 16
+    if mutated.accuracy_max_out_len is None:
+        mutated.accuracy_max_out_len = 2048
+    if mutated.max_samples is None:
+        mutated.max_samples = 0
+
+
 async def validate_and_mutate_benchmark_in(  # noqa: C901
     session: SessionDep,
     benchmark_in: BenchmarkCreate,
@@ -1029,24 +1124,23 @@ async def validate_and_mutate_benchmark_in(  # noqa: C901
     # value is a request rather than the answer.
     mutated.model_instance_name = instance.name
 
-    if benchmark_in.dataset_name is None:
-        raise BadRequestException(message="Field dataset_name must be specified")
+    dataset = await _resolve_dataset(session, ctx, benchmark_in.dataset_name)
+    mutated.dataset_id = dataset.id
+    mutated.dataset_name = dataset.name
+    mutated.dataset_format = dataset.format
+    mutated.dataset_sha256 = dataset.sha256
 
-    if benchmark_in.dataset_name not in [
-        DATASET_RANDOM,
-        DATASET_SHAREGPT,
-    ]:
-        raise BadRequestException(
-            message=f"Dataset '{benchmark_in.dataset_name}' is not supported. Supported datasets are '{DATASET_RANDOM}' and '{DATASET_SHAREGPT}'."
-        )
-
-    if benchmark_in.dataset_name == DATASET_RANDOM and (
+    if dataset.format == BenchmarkDatasetFormat.RANDOM and (
         benchmark_in.dataset_input_tokens is None
         or benchmark_in.dataset_output_tokens is None
     ):
         raise BadRequestException(
-            message="Fields dataset_input_tokens and dataset_output_tokens must be specified for 'Random' dataset"
+            message="Fields dataset_input_tokens and dataset_output_tokens must be specified for the Random dataset"
         )
+
+    if mutated.kind == BenchmarkKindEnum.ACCURACY:
+        _validate_accuracy_config(benchmark_in, dataset)
+        _apply_accuracy_defaults(mutated)
 
     # dataset_seed is the seed the run actually uses, so make it concrete here
     # (only the Random dataset generates from it): a client that states just the
@@ -1054,7 +1148,7 @@ async def validate_and_mutate_benchmark_in(  # noqa: C901
     # seed is always honored. Without this the run falls back to the benchmark
     # runner's fixed default and replays the previous run's prompts — and the
     # prefix cache they left behind.
-    if mutated.dataset_name == DATASET_RANDOM:
+    if dataset.format == BenchmarkDatasetFormat.RANDOM:
         if mutated.dataset_seed is None:
             mutated.dataset_seed = generate_dataset_seed()
             mutated.dataset_seed_random = True
@@ -1085,6 +1179,17 @@ async def validate_and_mutate_benchmark_in(  # noqa: C901
         session, instance, model, route_name=route_name
     )
     snapshot.gateway_url = gateway_url
+    # What the run measures, frozen with the rest of the snapshot: the dataset
+    # row may be deleted or edited after this, and a report has to be able to
+    # say which corpus and which bytes produced it.
+    snapshot.dataset = BenchmarkDatasetSnapshot(
+        id=dataset.id,
+        name=dataset.name,
+        format=dataset.format,
+        sha256=dataset.sha256,
+        sample_count=dataset.sample_count,
+        has_answers=dataset.has_answers,
+    )
     mutated.snapshot = snapshot
     mutated.gpu_summary, mutated.gpu_vendor_summary = summary_gpu_snapshots(
         snapshot.gpus
@@ -1436,6 +1541,100 @@ def _result_to_public(row: BenchmarkResult, include_raw: bool) -> BenchmarkResul
     }
     data["raw_metrics"] = row.raw_metrics if include_raw else None
     return BenchmarkResultPublic.model_validate(data)
+
+
+@router.post(
+    "/{id}/accuracy",
+    response_model=BenchmarkPublic,
+)
+async def update_benchmark_accuracy(
+    session: SessionDep,
+    ctx: TenantContextDep,
+    id: int,
+    report: BenchmarkAccuracyReport,
+):
+    """Replace an accuracy run's per-question verdicts and its score.
+
+    The same replace-wholesale contract as the per-point results: an accuracy
+    run is one pass, so the last upload is the whole truth and a retried upload
+    cannot double-count.
+    """
+    benchmark = await Benchmark.one_by_id(session, id)
+    assert_resource_visible(ctx, benchmark, not_found_message="Benchmark not found")
+    if benchmark.kind != BenchmarkKindEnum.ACCURACY:
+        raise BadRequestException(
+            message=f"Benchmark {id} is a performance run, not an accuracy run"
+        )
+    if len(report.samples) > MAX_BENCHMARK_ACCURACY_SAMPLES:
+        raise BadRequestException(
+            message=(
+                "An accuracy run cannot have more than "
+                f"{MAX_BENCHMARK_ACCURACY_SAMPLES} samples "
+                f"(got {len(report.samples)})."
+            )
+        )
+    try:
+        existing = await BenchmarkAccuracySample.all_by_field(
+            session, "benchmark_id", id
+        )
+        for row in existing:
+            await row.delete(session, auto_commit=False)
+        for data in report.samples:
+            await BenchmarkAccuracySample.create(
+                session,
+                source={**data.model_dump(), "benchmark_id": id},
+                auto_commit=False,
+            )
+        benchmark.accuracy_score = report.score
+        benchmark.accuracy_total = report.total
+        benchmark.accuracy_correct = report.correct
+        benchmark.accuracy_invalid = report.invalid
+        benchmark.accuracy_errored = report.errored
+        benchmark.accuracy_elapsed_seconds = report.elapsed_seconds
+        await benchmark.save(session, auto_commit=False)
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        raise InternalServerErrorException(
+            message=f"Failed to update benchmark accuracy: {e}"
+        )
+
+    return benchmark
+
+
+@router.get(
+    "/{id}/accuracy",
+    response_model=BenchmarkAccuracySamplesPublic,
+)
+async def get_benchmark_accuracy(
+    session: SessionDep,
+    ctx: TenantContextDep,
+    id: int,
+    only_incorrect: bool = Query(
+        False, description="Return only the questions answered wrongly"
+    ),
+    limit: int = Query(200, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+):
+    """The run's questions and verdicts, wrong ones first-class.
+
+    Paged at the boundary: the detail page shows a window, and a 20,000-row
+    upload must not be shipped in one response.
+    """
+    benchmark = await Benchmark.one_by_id(session, id)
+    assert_resource_visible(ctx, benchmark, not_found_message="Benchmark not found")
+    rows = await BenchmarkAccuracySample.all_by_fields(
+        session, fields={"benchmark_id": id}
+    )
+    rows.sort(key=lambda r: r.seq)
+    incorrect = [r for r in rows if not r.correct]
+    selected = incorrect if only_incorrect else rows
+    page = selected[offset : offset + limit]
+    return BenchmarkAccuracySamplesPublic(
+        items=[BenchmarkAccuracySamplePublic.model_validate(r) for r in page],
+        total=len(rows),
+        incorrect=len(incorrect),
+    )
 
 
 @router.delete(

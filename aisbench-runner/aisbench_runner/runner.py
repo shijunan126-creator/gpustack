@@ -29,13 +29,21 @@ from typing import Any, Dict, List, Optional
 
 from aisbench_runner import ramp
 from aisbench_runner.datasets import (
+    DATA_FORMAT_QA,
+    DATA_FORMAT_SHAREGPT,
+    ComposedSource,
     DatasetError,
+    PrefixBucket,
+    QASource,
     RandomSpec,
     Row,
     ShareGPTSource,
     TextBuilder,
+    detect_data_format,
     ensure_lengths,
+    load_corpus_texts,
     parse_random_spec,
+    resolve_data_path,
 )
 from aisbench_runner.engine import STOP_MAX_REQUESTS, Engine, PointRun, Target
 from aisbench_runner.progress import ServerProgress
@@ -110,6 +118,27 @@ class RunOptions:
     profile: str = "concurrent"
     rate: Optional[float] = None
     data: Optional[str] = None
+    # `random`, `sharegpt`, `qa_jsonl`, or `auto` to infer it from the value.
+    # GPUStack passes the format its dataset row records, so a `.json` corpus of
+    # conversations and a renamed `.jsonl` are both read as what they are.
+    data_format: str = "auto"
+    # Output length for a QA dataset, whose rows carry no per-row allowance.
+    max_out_len: Optional[int] = None
+    # Input length for a QA dataset: when set, the corpus is COMPOSED into
+    # prompts of this length (with the distribution below) instead of being used
+    # one question per request. This is what makes a 32k-context run or a
+    # prefix-cache hit-rate run possible on a corpus of short questions.
+    input_tokens: Optional[int] = None
+    input_stdev: Optional[int] = None
+    input_min: Optional[int] = None
+    input_max: Optional[int] = None
+    prefix_buckets: List[Dict[str, Any]] = field(default_factory=list)
+    # Sampling temperature for the measured requests. Left None the server's own
+    # default applies; the baseline sets the reference project's 0.01 so runs of
+    # different builds are generated the same way.
+    temperature: Optional[float] = None
+    # Optional pacing cap for a closed-loop single run (requests per second).
+    request_rate_limit: Optional[float] = None
     sharegpt_min_input: Optional[int] = None
     sharegpt_max_input: Optional[int] = None
     sharegpt_output_tokens: Optional[int] = None
@@ -166,16 +195,47 @@ class Benchmark:
         )
         tokenizer = _load_tokenizer(opts.processor, opts.trust_remote_code)
         self.builder = TextBuilder(tokenizer)
+        self.format = detect_data_format(opts.data or "", opts.data_format)
         self.random: Optional[RandomSpec] = None
         self.sharegpt: Optional[ShareGPTSource] = None
-        if opts.data and os.path.isfile(opts.data):
+        self.qa: Optional[QASource] = None
+        self.composed: Optional[ComposedSource] = None
+        if self.format == DATA_FORMAT_SHAREGPT:
             self.sharegpt = ShareGPTSource(
-                opts.data,
+                resolve_data_path(opts.data),
                 self.builder,
                 input_min=opts.sharegpt_min_input,
                 input_max=opts.sharegpt_max_input,
                 output_tokens=opts.sharegpt_output_tokens,
             )
+        elif self.format == DATA_FORMAT_QA:
+            path = resolve_data_path(opts.data)
+            if opts.input_tokens:
+                # A length was asked for, so the corpus is material rather than
+                # a list of ready-made prompts: the run gets prompts of that
+                # length, with the configured shared prefixes.
+                self.composed = ComposedSource(
+                    load_corpus_texts(path),
+                    self.builder,
+                    RandomSpec(
+                        prompt_tokens=opts.input_tokens,
+                        output_tokens=opts.max_out_len or 256,
+                        prompt_tokens_stdev=opts.input_stdev,
+                        prompt_tokens_min=opts.input_min,
+                        prompt_tokens_max=opts.input_max,
+                        prefix_buckets=[
+                            PrefixBucket(**bucket)
+                            for bucket in (opts.prefix_buckets or [])
+                        ],
+                    ),
+                    seed=opts.random_seed or 42,
+                )
+            else:
+                self.qa = QASource(
+                    path,
+                    self.builder,
+                    output_tokens=opts.max_out_len,
+                )
         elif opts.data:
             self.random = parse_random_spec(opts.data)
         else:
@@ -192,6 +252,7 @@ class Benchmark:
             work_root=os.path.join(opts.output_dir, f"{opts.output_base}.aisbench"),
             builder=self.builder,
             stall_timeout=_stall_timeout(opts.request_timeout),
+            temperature=opts.temperature,
             keep_work_dirs=os.environ.get("AISBENCH_RUNNER_KEEP_WORK_DIRS") == "1",
         )
 
@@ -199,8 +260,12 @@ class Benchmark:
         return os.path.join(self.opts.output_dir, f"{self.opts.output_base}{suffix}")
 
     def rows(self, count: int, seed: int) -> List[Row]:
+        if self.composed is not None:
+            return self.composed.take(count)
         if self.sharegpt is not None:
             return self.sharegpt.take(count)
+        if self.qa is not None:
+            return self.qa.take(count)
         assert self.random is not None
         return ensure_lengths(self.random, self.builder, count, seed)
 
@@ -210,6 +275,10 @@ class Benchmark:
         None for a file dataset, whose rows are whatever the file carries and
         whose count is therefore already bounded by the file.
         """
+        if self.composed is not None:
+            return self.composed.tokens_per_row()
+        if self.qa is not None:
+            return self.qa.tokens_per_row()
         if self.random is None:
             return None
         prefix = max((b.prefix_tokens for b in self.random.prefix_buckets), default=0)
@@ -252,13 +321,16 @@ class Benchmark:
             concurrency, request_rate = len(rows), float(strategy.rate or 0.0)
         else:
             concurrency = int(strategy.streams or strategy.max_concurrency or 1)
-            request_rate = 0.0
+            # A closed-loop run can still be paced: with a rate set, aisbench
+            # keeps `streams` requests in flight but sends no faster than it.
+            request_rate = float(strategy.rate or 0.0)
         log(
             f"{name}: {strategy.kind} "
             + (
                 f"{strategy.rate} req/s"
                 if strategy.kind == "constant"
                 else f"{concurrency} streams"
+                + (f" @ {request_rate:g} req/s" if request_rate else "")
             )
             + f", {len(rows)} requests"
             + (f", cap {max_seconds:.0f}s" if max_seconds else "")
@@ -324,9 +396,11 @@ def _load_tokenizer(path: str, trust_remote_code: bool):
     return AutoTokenizer.from_pretrained(path, trust_remote_code=trust_remote_code)
 
 
-def _strategy(axis: str, knob: float) -> Strategy:
+def _strategy(axis: str, knob: float, request_rate: Optional[float] = None) -> Strategy:
     if axis == "concurrency":
-        return Strategy("concurrent", streams=int(knob))
+        # `rate` here is an optional pacing cap on top of the concurrency, not
+        # the knob itself: the knob is how many requests may be in flight.
+        return Strategy("concurrent", streams=int(knob), rate=request_rate)
     return Strategy("constant", rate=float(knob))
 
 
@@ -446,7 +520,7 @@ def run_stages(bench: Benchmark) -> None:
         if bench.progress is not None:
             bench.progress.run_index = i
             bench.progress.run_total = len(opts.stages)
-        strategy = _strategy(opts.axis, knob)
+        strategy = _strategy(opts.axis, knob, stage.get("request_rate"))
         count, by_duration = bench.request_count(
             knob, strategy.kind, stage.get("max_requests"), stage.get("max_seconds")
         )
@@ -494,7 +568,9 @@ def run_single(bench: Benchmark) -> None:
     if opts.rate is None:
         raise ValueError("--rate is required with --profile")
     strategy = (
-        Strategy("concurrent", streams=int(opts.rate))
+        Strategy(
+            "concurrent", streams=int(opts.rate), rate=opts.request_rate_limit
+        )
         if opts.profile == "concurrent"
         else Strategy("constant", rate=float(opts.rate))
     )
