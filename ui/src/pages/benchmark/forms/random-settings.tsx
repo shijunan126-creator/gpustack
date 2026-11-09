@@ -523,10 +523,6 @@ const RandomSettingsForm: React.FC<{
       {datasetOption && (
         <div className="field-hint" style={{ marginTop: -4 }}>
           {[
-            intl.formatMessage({
-              id: `benchmark.dataset.format.${datasetOption.format}`,
-              defaultMessage: datasetOption.format
-            }),
             datasetOption.sample_count != null
               ? intl.formatMessage(
                   { id: 'benchmark.dataset.samples' },
