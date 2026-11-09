@@ -265,7 +265,10 @@ def build_report(
         "correct": correct,
         "total": total,
         "answered": answered,
-        "invalid": total - answered,
+        # Answered without a number. Counted apart from the requests that never
+        # got an answer at all, which `errored` reports: the two are different
+        # failures and the UI shows them as such.
+        "invalid": max(0, total - answered - errored),
         "errored": errored,
         "elapsed_seconds": round(elapsed_seconds, 2),
         "partial": partial,

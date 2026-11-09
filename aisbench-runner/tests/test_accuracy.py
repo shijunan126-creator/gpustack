@@ -69,7 +69,8 @@ def test_the_report_counts_errors_and_missing_answers_separately():
     report = accuracy.build_report(options, results, 12.5)
     assert report["total"] == 4
     assert report["correct"] == 1
-    assert report["invalid"] == 2
+    # One answered without a number; the failed request is counted separately.
+    assert report["invalid"] == 1
     assert report["errored"] == 1
     assert report["score"] == 25.0
     assert report["partial"] is False
