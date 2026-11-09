@@ -520,23 +520,6 @@ const RandomSettingsForm: React.FC<{
           {intl.formatMessage({ id: 'benchmark.dataset.add' })}
         </Button>
       </Flex>
-      {datasetOption && (
-        <div className="field-hint" style={{ marginTop: -4 }}>
-          {[
-            datasetOption.sample_count != null
-              ? intl.formatMessage(
-                  { id: 'benchmark.dataset.samples' },
-                  { count: datasetOption.sample_count }
-                )
-              : null,
-            datasetOption.has_answers
-              ? intl.formatMessage({ id: 'benchmark.dataset.hasAnswers' })
-              : null
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-      )}
       {isAccuracy && datasetOption && !datasetOption.has_answers && (
         <Alert
           type="warning"

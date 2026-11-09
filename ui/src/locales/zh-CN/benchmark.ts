@@ -422,9 +422,6 @@ export default {
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
   'benchmark.detail.result.basic': '基础信息',
   // ── 数据集与精度测试 ──────────────────────────────────────────────────────
-  'benchmark.dataset.format.random': '合成 prompt',
-  'benchmark.dataset.format.sharegpt': 'ShareGPT 对话',
-  'benchmark.dataset.format.qa_jsonl': '问答数据（每题一行）',
   'benchmark.kind': '测试类型',
   'benchmark.kind.perf': '性能测试',
   'benchmark.kind.accuracy': '精度测试',
@@ -436,8 +433,6 @@ export default {
   'benchmark.dataset.fileDrop': '点击或拖拽 .json / .jsonl 文件到此处',
   'benchmark.dataset.added': '数据集已添加',
   'benchmark.dataset.addFailed': '添加数据集失败',
-  'benchmark.dataset.samples': '{count} 条',
-  'benchmark.dataset.hasAnswers': '含标准答案',
   'benchmark.dataset.noAnswers': '该数据集没有标准答案，不能用于精度测试。',
   'benchmark.qa.outputTokens.tip': '每条回答允许生成的最大 token 数。问题来自数据集本身。',
   'benchmark.accuracy.score': '准确率',

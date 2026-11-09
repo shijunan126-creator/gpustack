@@ -428,9 +428,6 @@ export default {
   'benchmark.form.target.route.empty':
     'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。',
   // ── datasets & accuracy ────────────────────────────────────────────────,
-  'benchmark.dataset.format.random': 'synthetic prompts',
-  'benchmark.dataset.format.sharegpt': 'ShareGPT conversations',
-  'benchmark.dataset.format.qa_jsonl': 'question/answer rows',
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',
@@ -442,8 +439,6 @@ export default {
   'benchmark.dataset.fileDrop': 'Click or drag a .json / .jsonl file here',
   'benchmark.dataset.added': 'Dataset added',
   'benchmark.dataset.addFailed': 'Failed to add the dataset',
-  'benchmark.dataset.samples': '{count} rows',
-  'benchmark.dataset.hasAnswers': 'has answers',
   'benchmark.dataset.noAnswers':
     'This dataset has no reference answers, so it cannot be used for an accuracy run.',
   'benchmark.qa.outputTokens.tip':
