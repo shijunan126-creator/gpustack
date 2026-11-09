@@ -99,6 +99,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--rate", type=float)
 
     run.add_argument("--data")
+    run.add_argument(
+        "--data-format",
+        choices=["auto", "random", "sharegpt", "qa_jsonl"],
+        default="auto",
+    )
+    # Output length for a QA dataset, whose rows carry none of their own.
+    run.add_argument("--max-out-len", type=int)
     run.add_argument("--sharegpt-min-input-tokens", type=int)
     run.add_argument("--sharegpt-max-input-tokens", type=int)
     run.add_argument("--sharegpt-max-output-tokens", type=int)
@@ -125,6 +132,27 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--progress-auth")
     run.add_argument("--progress-ca-cert")
     run.add_argument("--progress-insecure-skip-tls-verify", action="store_true")
+
+    accuracy = bench.add_parser("accuracy")
+    accuracy.add_argument("--target", required=True)
+    accuracy.add_argument("--model")
+    accuracy.add_argument("--data", required=True)
+    accuracy.add_argument(
+        "--data-format",
+        choices=["auto", "random", "sharegpt", "qa_jsonl"],
+        default="auto",
+    )
+    accuracy.add_argument("--output-dir", required=True)
+    accuracy.add_argument("--outputs", default="accuracy")
+    accuracy.add_argument("--max-samples", type=int)
+    accuracy.add_argument("--concurrency", type=int, default=16)
+    accuracy.add_argument("--max-out-len", type=int, default=2048)
+    accuracy.add_argument("--request-timeout", type=float)
+    accuracy.add_argument("--backend-kwargs", "--backend-args", type=_json)
+    accuracy.add_argument("--progress-url")
+    accuracy.add_argument("--progress-auth")
+    accuracy.add_argument("--progress-ca-cert")
+    accuracy.add_argument("--progress-insecure-skip-tls-verify", action="store_true")
     return parser
 
 
@@ -182,6 +210,8 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
         profile=args.profile or "concurrent",
         rate=args.rate,
         data=args.data,
+        data_format=args.data_format,
+        max_out_len=args.max_out_len,
         sharegpt_min_input=args.sharegpt_min_input_tokens,
         sharegpt_max_input=args.sharegpt_max_input_tokens,
         sharegpt_output_tokens=args.sharegpt_max_output_tokens,
@@ -201,8 +231,43 @@ def options_from_args(args: argparse.Namespace) -> RunOptions:
     )
 
 
+def accuracy_options_from_args(args: argparse.Namespace) -> "AccuracyOptions":
+    from aisbench_runner.accuracy import AccuracyOptions
+    from aisbench_runner.progress import ServerProgress
+
+    backend = dict(args.backend_kwargs or {})
+    progress = (
+        ServerProgress(
+            args.progress_url,
+            args.progress_auth,
+            ca_cert=args.progress_ca_cert,
+            insecure_skip_tls_verify=args.progress_insecure_skip_tls_verify,
+        )
+        if args.progress_url
+        else None
+    )
+    return AccuracyOptions(
+        target=args.target,
+        data=args.data,
+        output_dir=args.output_dir,
+        output_base=args.outputs,
+        model=args.model,
+        api_key=str(backend.get("api_key") or ""),
+        verify_tls=bool(backend.get("verify", True)),
+        request_timeout=_timeout(backend.get("timeout")) or args.request_timeout,
+        max_samples=args.max_samples,
+        concurrency=args.concurrency or 16,
+        max_out_len=args.max_out_len or 2048,
+        progress=progress,
+    )
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if getattr(args, "command", None) == "accuracy":
+        from aisbench_runner.accuracy import run_accuracy
+
+        return run_accuracy(accuracy_options_from_args(args))
     return run_benchmark(options_from_args(args))
 
 

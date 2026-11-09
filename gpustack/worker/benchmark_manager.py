@@ -1,4 +1,5 @@
 import asyncio
+import json
 import multiprocessing
 import setproctitle
 import os
@@ -921,6 +922,7 @@ class BenchmarkManager:
             artifacts.curve_outcome_path(d, benchmark.id),
             artifacts.ramp_facts_path(d, benchmark.id),
             artifacts.single_report_path(d, benchmark.id),
+            artifacts.accuracy_report_path(d, benchmark.id),
         ):
             try:
                 if os.path.exists(path):
@@ -1084,7 +1086,10 @@ class BenchmarkManager:
 
         sync_failure = None
         try:
-            self._sync_benchmark_metrics(benchmark)
+            if self._is_accuracy(benchmark):
+                self._sync_accuracy(benchmark)
+            else:
+                self._sync_benchmark_metrics(benchmark)
         except Exception as e:
             logger.error(
                 "Failed to sync results for "
@@ -1187,6 +1192,19 @@ class BenchmarkManager:
         record either way. The `SINGLE` gate above stays: a single-point run never
         partial-syncs by design, and its terminal path is the completion handler.
         """
+        if self._is_accuracy(benchmark):
+            # An accuracy run's partial report is its score over the questions
+            # answered so far. It is worth keeping on a failed or stopped run,
+            # and there is no provisional flag to clear — the upload replaces
+            # the samples wholesale either way.
+            try:
+                self._sync_accuracy(benchmark, attempts=1)
+            except Exception as e:
+                logger.warning(
+                    "Could not finalize the partial accuracy report of benchmark "
+                    f"{benchmark.name}(id={benchmark.id}): {e}"
+                )
+            return
         if benchmark_load_mode(benchmark) is BenchmarkLoadModeEnum.SINGLE:
             # Never partially synced, so there is no provisional flag to clear.
             return
@@ -1378,6 +1396,76 @@ class BenchmarkManager:
                 "Skipping saturation probe of benchmark "
                 f"{benchmark.name}(id={benchmark.id}): {e}"
             )
+
+    @staticmethod
+    def _is_accuracy(benchmark) -> bool:
+        kind = getattr(benchmark, "kind", None)
+        return str(getattr(kind, "value", kind)) == "accuracy"
+
+    def _read_accuracy_report(self, benchmark) -> Optional[dict]:
+        path = artifacts.accuracy_report_path(self._benchmark_dir, benchmark.id)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(
+                "Could not read the accuracy report of benchmark "
+                f"{benchmark.name}(id={benchmark.id}): {e}"
+            )
+            return None
+
+    def _sync_accuracy(self, benchmark, attempts: int = 3):
+        """Upload an accuracy run's verdicts and score.
+
+        The report is written by the container and rewritten as questions are
+        answered, so the same method serves the terminal sync and the best-effort
+        one on a failed or stopped run; the server replaces the whole sample set
+        either way, which is what makes a retry harmless.
+        """
+        report = self._read_accuracy_report(benchmark)
+        if report is None:
+            raise RuntimeError(
+                "the run produced no accuracy report; see the benchmark log for "
+                "the reason the container stopped"
+            )
+        samples = []
+        for item in report.get("samples") or []:
+            samples.append(
+                {
+                    "seq": int(item.get("index") or 0),
+                    "question": (item.get("question") or "")[:8192],
+                    "prediction": (item.get("prediction") or "")[:8192],
+                    "extracted": item.get("extracted"),
+                    "reference": item.get("reference"),
+                    "correct": bool(item.get("correct")),
+                    "latency_ms": item.get("latency_ms"),
+                    "error": (item.get("error") or "")[:500],
+                }
+            )
+        payload = {
+            "score": report.get("score") or 0.0,
+            "total": report.get("total") or 0,
+            "correct": report.get("correct") or 0,
+            "invalid": report.get("invalid") or 0,
+            "errored": report.get("errored") or 0,
+            "elapsed_seconds": report.get("elapsed_seconds"),
+            "samples": samples,
+        }
+        label = f"{benchmark.name}(id={benchmark.id})"
+
+        def _post():
+            client = self._clientset.http_client.get_httpx_client()
+            raise_if_response_error(
+                client.post(f"/benchmarks/{benchmark.id}/accuracy", json=payload)
+            )
+
+        self._retry_sync(_post, what=f"accuracy report for {label}", attempts=attempts)
+        logger.info(
+            f"Accuracy of {label}: {payload['correct']}/{payload['total']} correct "
+            f"({payload['score']}%)"
+        )
 
     def _sync_benchmark_metrics(self, benchmark):  # noqa: C901
         """Synchronize a finished benchmark's metrics and per-point results.

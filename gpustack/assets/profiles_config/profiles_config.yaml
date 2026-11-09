@@ -17,9 +17,13 @@ profiles:
       Finds peak throughput. The usual baseline for comparing GPUs and models.
     load_type: fixed_rate # rate axis (open-loop constant)
     auto_tune: true # adaptive ramp; target = throughput saturation (no SLO)
-    dataset_name: Random
-    dataset_input_tokens: 1024 # vLLM Random default https://github.com/vllm-project/vllm/blob/17b17c068453e6dc6af79240bb94857ae175cc51/vllm/benchmarks/datasets.py#L457
-    dataset_output_tokens: 128
+    dataset_name: GSM8K
+    # GSM8K's own questions are the prompts, so the input length is the file's
+    # (~60 tokens) and the two input knobs below only matter if the form is
+    # switched back to Random. The output length still applies: every request is
+    # held to it, so decode load is a knob whatever the corpus.
+    dataset_input_tokens: 1024 # ignored by GSM8K; used when Random is selected
+    dataset_output_tokens: 256
     # No dataset_seed here on purpose: a fixed base would make every benchmark of
     # this preset send identical prompts, so the second run of a deployment just
     # replays the first run's prefix cache. The seed is generated per benchmark
@@ -59,8 +63,8 @@ profiles:
       planning.
     load_type: concurrency # concurrency axis (closed-loop)
     auto_tune: true # adaptive ramp; target = SLO boundary (slo_* set)
-    dataset_name: Random
-    dataset_input_tokens: 128
+    dataset_name: GSM8K
+    dataset_input_tokens: 128 # ignored by GSM8K; used when Random is selected
     dataset_output_tokens: 128
     dataset_seed_increment: true # increment the seed per point (see note above)
     slo_avg_ttft_ms: 500

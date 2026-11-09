@@ -48,6 +48,7 @@ from gpustack.routes import (
     cluster_topology,
     token,
     benchmarks,
+    benchmark_datasets,
     benchmark_profiles,
     rerank,
     model_routes,
@@ -213,6 +214,12 @@ model_routers = [
         "router": benchmarks.router,
         "prefix": "/benchmarks",
         "tags": ["Benchmarks"],
+        "dependencies": _org_owner_only,
+    },
+    {
+        "router": benchmark_datasets.router,
+        "prefix": "/benchmark-datasets",
+        "tags": ["Benchmark Datasets"],
         "dependencies": _org_owner_only,
     },
     {

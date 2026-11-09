@@ -29,13 +29,18 @@ from typing import Any, Dict, List, Optional
 
 from aisbench_runner import ramp
 from aisbench_runner.datasets import (
+    DATA_FORMAT_QA,
+    DATA_FORMAT_SHAREGPT,
     DatasetError,
+    QASource,
     RandomSpec,
     Row,
     ShareGPTSource,
     TextBuilder,
+    detect_data_format,
     ensure_lengths,
     parse_random_spec,
+    resolve_data_path,
 )
 from aisbench_runner.engine import STOP_MAX_REQUESTS, Engine, PointRun, Target
 from aisbench_runner.progress import ServerProgress
@@ -110,6 +115,12 @@ class RunOptions:
     profile: str = "concurrent"
     rate: Optional[float] = None
     data: Optional[str] = None
+    # `random`, `sharegpt`, `qa_jsonl`, or `auto` to infer it from the value.
+    # GPUStack passes the format its dataset row records, so a `.json` corpus of
+    # conversations and a renamed `.jsonl` are both read as what they are.
+    data_format: str = "auto"
+    # Output length for a QA dataset, whose rows carry no per-row allowance.
+    max_out_len: Optional[int] = None
     sharegpt_min_input: Optional[int] = None
     sharegpt_max_input: Optional[int] = None
     sharegpt_output_tokens: Optional[int] = None
@@ -166,15 +177,23 @@ class Benchmark:
         )
         tokenizer = _load_tokenizer(opts.processor, opts.trust_remote_code)
         self.builder = TextBuilder(tokenizer)
+        self.format = detect_data_format(opts.data or "", opts.data_format)
         self.random: Optional[RandomSpec] = None
         self.sharegpt: Optional[ShareGPTSource] = None
-        if opts.data and os.path.isfile(opts.data):
+        self.qa: Optional[QASource] = None
+        if self.format == DATA_FORMAT_SHAREGPT:
             self.sharegpt = ShareGPTSource(
-                opts.data,
+                resolve_data_path(opts.data),
                 self.builder,
                 input_min=opts.sharegpt_min_input,
                 input_max=opts.sharegpt_max_input,
                 output_tokens=opts.sharegpt_output_tokens,
+            )
+        elif self.format == DATA_FORMAT_QA:
+            self.qa = QASource(
+                resolve_data_path(opts.data),
+                self.builder,
+                output_tokens=opts.max_out_len,
             )
         elif opts.data:
             self.random = parse_random_spec(opts.data)
@@ -201,6 +220,8 @@ class Benchmark:
     def rows(self, count: int, seed: int) -> List[Row]:
         if self.sharegpt is not None:
             return self.sharegpt.take(count)
+        if self.qa is not None:
+            return self.qa.take(count)
         assert self.random is not None
         return ensure_lengths(self.random, self.builder, count, seed)
 
@@ -210,6 +231,8 @@ class Benchmark:
         None for a file dataset, whose rows are whatever the file carries and
         whose count is therefore already bounded by the file.
         """
+        if self.qa is not None:
+            return self.qa.tokens_per_row()
         if self.random is None:
             return None
         prefix = max((b.prefix_tokens for b in self.random.prefix_buckets), default=0)

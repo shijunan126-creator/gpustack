@@ -6,16 +6,19 @@ aisbench honours a per-row ``max_out_len`` over the model's, and with
 ``ignore_eos`` that fixes each request's output length, so a point measures
 exactly the context the benchmark asked for.
 
-Two sources:
+Three sources:
 
-* **Random** — GPUStack's ``--data prompt_tokens=...,output_tokens=...``. The
+* **Random** 鈥?GPUStack's ``--data prompt_tokens=...,output_tokens=...``. The
   lengths are drawn the way guidellm draws them (``IntegerRangeSampler``:
   constant, uniform between min and max, or a clipped Gaussian when a standard
   deviation is given), and ``prefix_buckets`` prepend shared prefixes the same
   way, so a benchmark configured for guidellm means the same thing here.
-* **ShareGPT** — the first human/assistant turn of each conversation, filtered
+* **ShareGPT** 鈥?the first human/assistant turn of each conversation, filtered
   by prompt length; the output length is the reference answer's unless a
   fixed maximum is configured.
+* **QA JSONL** 鈥?one ``{"question": ..., "answer": ...}`` object per line, the
+  shape GSM8K ships in. A performance run uses the questions as prompts; an
+  accuracy run compares the model's answer with the reference one.
 
 Random prompt text is built from the tokenizer's own vocabulary: whole-word
 tokens that encode back to themselves, joined with spaces, so a prompt of N
@@ -315,7 +318,7 @@ def ensure_lengths(
     return rows
 
 
-# ── ShareGPT ─────────────────────────────────────────────────────────────────
+# 鈹€鈹€ ShareGPT 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 
 def _first_turn(sample: Dict[str, Any]) -> Optional[tuple]:
@@ -405,3 +408,202 @@ def write_rows(path: str, rows: Sequence[Row]) -> None:
         for row in rows:
             f.write(row.to_json())
             f.write("\n")
+
+
+# ── QA JSONL ─────────────────────────────────────────────────────────────────
+
+# A built-in dataset is named, not pathed: ``builtin:gsm8k`` is the copy that
+# ships inside this package, ``builtin:sharegpt`` the data the runner image
+# already carries. Naming them keeps a benchmark row portable across images and
+# hosts, where an absolute path would not be.
+BUILTIN_PREFIX = "builtin:"
+
+GSM8K_BUILTIN = "gsm8k"
+SHAREGPT_BUILTIN = "sharegpt"
+
+_SHAREGPT_DEFAULT_PATH = (
+    "/workspace/benchmark-runner/sharegpt_data/"
+    "ShareGPT_V3_unfiltered_cleaned_split.json"
+)
+
+DATA_FORMAT_RANDOM = "random"
+DATA_FORMAT_SHAREGPT = "sharegpt"
+DATA_FORMAT_QA = "qa_jsonl"
+
+# A QA JSONL row may spell its two fields any of these ways; GSM8K uses the
+# first of each.
+_QUESTION_FIELDS = ("question", "prompt", "input")
+_ANSWER_FIELDS = ("answer", "reference", "output")
+
+
+def builtin_gsm8k_path() -> str:
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "data", "gsm8k.jsonl"
+    )
+
+
+def resolve_data_path(value: str) -> str:
+    """The file a ``--data`` value names, resolving the built-in aliases."""
+    text = (value or "").strip()
+    if not text.startswith(BUILTIN_PREFIX):
+        return text
+    name = text[len(BUILTIN_PREFIX) :].strip().lower()
+    if name == GSM8K_BUILTIN:
+        path = builtin_gsm8k_path()
+        if not os.path.exists(path):
+            raise DatasetError(
+                "the built-in GSM8K dataset is missing from this runner image "
+                f"({path}); rebuild aisbench-runner"
+            )
+        return path
+    if name == SHAREGPT_BUILTIN:
+        directory = os.environ.get(
+            "BENCHMARK_SHAREGPT_DIR", os.path.dirname(_SHAREGPT_DEFAULT_PATH)
+        )
+        return os.path.join(directory, os.path.basename(_SHAREGPT_DEFAULT_PATH))
+    raise DatasetError(f"unknown built-in dataset '{text}'")
+
+
+def detect_data_format(value: str, declared: Optional[str] = None) -> str:
+    """Which family a ``--data`` value belongs to.
+
+    A declared format wins; the fallbacks exist so hand-written command lines
+    (and rows that predate the format column) keep working.
+    """
+    if declared and declared != "auto":
+        return declared
+    text = (value or "").strip()
+    if text.startswith(BUILTIN_PREFIX):
+        name = text[len(BUILTIN_PREFIX) :].strip().lower()
+        if name == SHAREGPT_BUILTIN:
+            return DATA_FORMAT_SHAREGPT
+        return DATA_FORMAT_QA
+    if text.startswith("{") or "prompt_tokens=" in text:
+        return DATA_FORMAT_RANDOM
+    return DATA_FORMAT_QA if text.endswith(".jsonl") else DATA_FORMAT_SHAREGPT
+
+
+def _first_field(sample: Dict[str, Any], names: Sequence[str]) -> Optional[str]:
+    for name in names:
+        value = sample.get(name)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+@dataclass
+class QAItem:
+    """One question and the reference answer it should produce."""
+
+    question: str
+    answer: str
+
+
+def load_qa_items(path: str, limit: Optional[int] = None) -> List[QAItem]:
+    """Every question of a QA JSONL file that also carries a reference answer.
+
+    Rows without an answer cannot be scored, so they are left out rather than
+    counted wrong: a mixed file still measures its answerable part.
+    """
+    if not os.path.exists(path):
+        raise DatasetError(f"dataset not found at {path}")
+    items: List[QAItem] = []
+    with open(path, "r", encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                sample = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(sample, dict):
+                continue
+            question = _first_field(sample, _QUESTION_FIELDS)
+            answer = _first_field(sample, _ANSWER_FIELDS)
+            if question is None or answer is None:
+                continue
+            items.append(QAItem(question=question, answer=answer))
+            if limit is not None and len(items) >= limit:
+                break
+    if not items:
+        raise DatasetError(
+            f"no question/answer pairs in {path}; an accuracy run needs both "
+            "fields on every row"
+        )
+    return items
+
+
+class QASource:
+    """QA JSONL requests in file order, the shape GSM8K ships in.
+
+    The rows are the questions; a performance run only needs those. The file is
+    read once per run, which is also when its lengths are first needed.
+    """
+
+    def __init__(
+        self,
+        path: str,
+        builder: TextBuilder,
+        output_tokens: Optional[int] = None,
+        input_min: Optional[int] = None,
+        input_max: Optional[int] = None,
+    ):
+        if not os.path.exists(path):
+            raise DatasetError(f"dataset not found at {path}")
+        self._builder = builder
+        self._output_tokens = output_tokens
+        self._input_min = input_min
+        self._input_max = input_max
+        self.rows: List[Row] = []
+        self._load(path)
+
+    def _load(self, path: str) -> None:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    sample = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(sample, dict):
+                    continue
+                question = _first_field(sample, _QUESTION_FIELDS)
+                if question is None:
+                    continue
+                prompt_tokens = self._builder.count(question)
+                if self._input_min is not None and prompt_tokens < self._input_min:
+                    continue
+                if self._input_max is not None and prompt_tokens > self._input_max:
+                    continue
+                answer = _first_field(sample, _ANSWER_FIELDS)
+                if self._output_tokens is not None:
+                    output_tokens = self._output_tokens
+                elif answer is not None:
+                    output_tokens = self._builder.count(answer)
+                else:
+                    output_tokens = 256
+                self.rows.append(
+                    Row(
+                        prompt=question,
+                        output_tokens=min(MAX_OUT_LEN, max(1, output_tokens)),
+                        prompt_tokens=prompt_tokens,
+                    )
+                )
+        if not self.rows:
+            raise DatasetError(
+                f"no usable questions in {path} within the configured prompt "
+                "length range"
+            )
+
+    def take(self, count: int) -> List[Row]:
+        """The first ``count`` questions, or every one the file holds."""
+        return self.rows[:count]
+
+    def tokens_per_row(self) -> int:
+        """Average prompt+output tokens of one row, for the dataset budget."""
+        prompts = sum(r.prompt_tokens for r in self.rows)
+        outputs = sum(r.output_tokens for r in self.rows)
+        return max(1, (prompts + outputs) // len(self.rows))
