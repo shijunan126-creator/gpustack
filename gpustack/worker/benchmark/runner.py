@@ -122,6 +122,36 @@ def _transient_phase_arg(value: float) -> str:
     return json.dumps({"value": int(value), "mode": "requests"})
 
 
+def _dataset_format_name(benchmark: Any, meta: Optional[Dict[str, Any]] = None) -> str:
+    """The dataset format a run reads, from its row or from a legacy name.
+
+    A row created before datasets existed carries only ``dataset_name``; the
+    two old constants keep those rows runnable, and a caller that built no
+    ``--data`` at all falls back to the synthetic generator.
+    """
+    fmt = (meta or {}).get("format") or getattr(benchmark, "dataset_format", None)
+    if fmt is None:
+        name = getattr(benchmark, "dataset_name", None)
+        fmt = "sharegpt" if name == DATASET_SHAREGPT else "random"
+    return str(getattr(fmt, "value", fmt))
+
+
+def _dataset_arg(runner: Any) -> str:
+    """The ``--data`` value: a resolved path, or the image's ShareGPT default.
+
+    ``start`` resolves it from the dataset row; a run that reached the command
+    builder without that (a legacy row, a unit test) still gets the path the
+    old code hard-coded.
+    """
+    path = getattr(runner, "_dataset_path", None)
+    if path:
+        return path
+    bench = runner._benchmark
+    if _dataset_format_name(bench, getattr(runner, "_dataset_meta", None)) == "sharegpt":
+        return BENCHMARK_DATASET_SHAREGPT_PATH
+    return ""
+
+
 class BenchmarkRunner:
     _clientset: ClientSet
     _config: Config
@@ -275,20 +305,6 @@ class BenchmarkRunner:
         kind = getattr(self._benchmark, "kind", None)
         return str(getattr(kind, "value", kind)) == "accuracy"
 
-    def _dataset_format(self) -> str:
-        """The format this run reads, from the dataset row or a legacy name.
-
-        A row created before datasets existed carries only ``dataset_name``, and
-        a unit test builds the runner without either; both fall back to the two
-        old constants rather than failing to build a command line.
-        """
-        meta = getattr(self, "_dataset_meta", None) or {}
-        fmt = meta.get("format") or getattr(self._benchmark, "dataset_format", None)
-        if fmt is None:
-            name = getattr(self._benchmark, "dataset_name", None)
-            fmt = "sharegpt" if name == DATASET_SHAREGPT else "random"
-        return str(getattr(fmt, "value", fmt))
-
     def _load_dataset(self) -> None:
         """Resolve this run's prompts into something the container can read.
 
@@ -320,7 +336,7 @@ class BenchmarkRunner:
             )
         self._dataset_meta = resp.json() or {}
 
-        if self._dataset_format() == "random":
+        if _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None)) == "random":
             return
         path = self._dataset_meta.get("path")
         if path:
@@ -358,20 +374,6 @@ class BenchmarkRunner:
         os.replace(tmp, path)
         return path
 
-    def _dataset_arg(self) -> str:
-        """The ``--data`` value: a path, or the image's ShareGPT default.
-
-        ``start`` resolves it from the dataset row; a caller that reached the
-        command builder without that (a legacy row, a unit test) still gets the
-        path the old code hard-coded.
-        """
-        path = getattr(self, "_dataset_path", None)
-        if path:
-            return path
-        if self._dataset_format() == "sharegpt":
-            return BENCHMARK_DATASET_SHAREGPT_PATH
-        return ""
-
     def _build_accuracy_args(self, with_ca_cert: bool = False) -> List[str]:
         b = self._benchmark
         route_mode = (
@@ -397,9 +399,9 @@ class BenchmarkRunner:
             target,
             *(["--model", served_name] if served_name else []),
             "--data",
-            self._dataset_arg(),
+            _dataset_arg(self),
             "--data-format",
-            self._dataset_format(),
+            _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None)),
             "--output-dir",
             self._benchmark_dir,
             "--outputs",
@@ -744,10 +746,10 @@ class BenchmarkRunner:
                 ]
             )
 
-        dataset_format = self._dataset_format()
+        dataset_format = _dataset_format_name(self._benchmark, getattr(self, "_dataset_meta", None))
         if dataset_format == "sharegpt":
             command_args.extend(
-                ["--data", self._dataset_arg(), "--data-format", "sharegpt"]
+                ["--data", _dataset_arg(self), "--data-format", "sharegpt"]
             )
             for attr, flag in (
                 ("dataset_input_min", "--sharegpt-min-input-tokens"),
@@ -759,7 +761,7 @@ class BenchmarkRunner:
                     command_args.extend([flag, str(value)])
         elif dataset_format == "qa_jsonl":
             command_args.extend(
-                ["--data", self._dataset_arg(), "--data-format", "qa_jsonl"]
+                ["--data", _dataset_arg(self), "--data-format", "qa_jsonl"]
             )
             # A QA file carries no per-row output allowance, so the run's own
             # value decides how long each answer may be; left unset the runner
