@@ -38,6 +38,13 @@ const DatasetForm: React.FC = () => {
     (o) => o.value === selectedProfile
   );
   const isCustomProfile = selectedProfile === 'Custom';
+  // Which strategy badge applies: Custom, an auto-tune preset, or none at all
+  // for a preset that pins one load (its description already says so).
+  const strategyTagId = isCustomProfile
+    ? 'backend.custom'
+    : (selectedOption as any)?.config?.auto_tune === false
+      ? null
+      : 'benchmark.form.autoTune';
   const profileDesc = !selectedOption
     ? ''
     : isCustomProfile
@@ -148,7 +155,9 @@ const DatasetForm: React.FC = () => {
       </Form.Item>
 
       {/* Strategy tag + description for the picked profile — mirrors the design's
-          blurb under the selector so the user knows what the preset does. */}
+          blurb under the selector so the user knows what the preset does. A
+          fixed-load preset gets no tag: "Auto-tune" would be wrong there, and a
+          tag that only repeats the numbers in the description says nothing. */}
       {selectedOption && (
         <div
           style={{
@@ -158,15 +167,15 @@ const DatasetForm: React.FC = () => {
             marginBottom: 20
           }}
         >
-          <Tag
-            color={isCustomProfile ? 'green' : 'blue'}
-            variant="filled"
-            style={{ marginInlineEnd: 0, borderRadius: 4 }}
-          >
-            {isCustomProfile
-              ? intl.formatMessage({ id: 'backend.custom' })
-              : intl.formatMessage({ id: 'benchmark.form.autoTune' })}
-          </Tag>
+          {strategyTagId && (
+            <Tag
+              color={isCustomProfile ? 'green' : 'blue'}
+              variant="filled"
+              style={{ marginInlineEnd: 0, borderRadius: 4 }}
+            >
+              {intl.formatMessage({ id: strategyTagId })}
+            </Tag>
+          )}
           {profileDesc && (
             <div
               style={{
