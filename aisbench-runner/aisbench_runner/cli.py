@@ -255,7 +255,7 @@ def accuracy_options_from_args(args: argparse.Namespace) -> "AccuracyOptions":
         api_key=str(backend.get("api_key") or ""),
         verify_tls=bool(backend.get("verify", True)),
         request_timeout=_timeout(backend.get("timeout")) or args.request_timeout,
-        max_samples=args.max_samples,
+        max_samples=args.max_samples or None,
         concurrency=args.concurrency or 16,
         max_out_len=args.max_out_len or 2048,
         progress=progress,
