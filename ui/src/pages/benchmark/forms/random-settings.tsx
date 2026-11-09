@@ -218,12 +218,19 @@ const RandomSettingsForm: React.FC<{
   // lets you change them.
   const autoTune = Form.useWatch('auto_tune', form);
   const isCustom = profile === 'Custom';
-  const presetLocked = !isCustom;
+  // A preset's own shape decides whether the load section is a search or a
+  // single fixed point. The auto-tune presets stay locked (their ramp IS the
+  // answer), while a fixed-load preset such as Baseline opens in manual mode
+  // with its stage editable — it asks for one concurrency, not a range.
+  const presetConfig = (profilesOptions as any[])?.find(
+    (item) => item.value === profile
+  )?.config;
+  const presetAutoTune = presetConfig?.auto_tune;
+  const presetLocked = !isCustom && presetAutoTune !== false;
   const isFixedRate = loadType === LoadTypeValueMap.FixedRate;
-  // Named presets are ALWAYS auto-tune (the ramp is the whole point); only Custom
-  // can switch to manual stages. Derive from that so the section renders correctly
-  // even if the auto_tune field value lags/is missing.
-  const effectiveAutoTune = isCustom ? !!autoTune : true;
+  // Named auto-tune presets cannot switch to manual; Custom and fixed-load
+  // presets can, so their toggle follows the form field.
+  const effectiveAutoTune = presetLocked ? true : !!autoTune;
   // SLO is gated by TARGET, not by axis: setting a threshold switches the delivered
   // answer from "peak throughput" to "max load meeting the SLO", so it is available
   // on BOTH axes (asking for req/s under a TTFT budget is the more common capacity
