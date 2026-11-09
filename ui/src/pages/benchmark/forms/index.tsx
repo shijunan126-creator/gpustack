@@ -411,31 +411,31 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
           onFinishFailed={handleFinishFailed}
           scrollToFirstError={false}
           initialValues={{
-            // Default to the Max Throughput preset: adaptive auto-tune on the
-            // rate axis (ramps request rate to the throughput peak).
+            // The default preset is Baseline: one fixed load (8 concurrent
+            // requests, 100 prompts, 512 output tokens) rather than a search.
             kind: KindValueMap.Perf,
             dataset_name: DEFAULT_DATASET_NAME,
-            dataset_output_tokens: 256,
+            dataset_output_tokens: 512,
             sharegpt_filter_enabled: false,
             dataset_input_tokens: 1024,
-            profile: 'Max Throughput',
+            profile: 'Baseline',
             // An engine measurement, which is what every run was before the
             // choice existed. `route` is opt-in because it puts the server's
             // proxy in the path.
             target_mode: TargetModeValueMap.Instance,
-            load_type: 'fixed_rate',
-            auto_tune: true,
+            load_type: 'concurrency',
+            auto_tune: false,
             lower_bound: AUTO_TUNE_DEFAULTS.lower_bound,
             upper_bound: AUTO_TUNE_DEFAULTS.upper_bound,
             max_points: AUTO_TUNE_DEFAULTS.max_points,
             max_total_seconds: AUTO_TUNE_DEFAULTS.max_total_seconds,
-            request_rate: -1,
-            stages: [],
-            total_requests: null,
+            request_rate: 8,
+            stages: [{ rate: 8, max_requests: 100 }],
+            total_requests: 100,
             max_seconds: null,
             prefix_buckets: [],
             turns: null,
-            warmup: null,
+            warmup: 1,
             cooldown: null,
             max_errors: null,
             max_error_rate: null,

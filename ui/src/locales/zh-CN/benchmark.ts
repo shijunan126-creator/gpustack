@@ -422,6 +422,8 @@ export default {
     '该集群下没有指向可服务 LLM 的路由。先部署一条路由，或改用实例形态。',
   'benchmark.detail.result.basic': '基础信息',
   // ── 数据集与精度测试 ──────────────────────────────────────────────────────
+  'benchmark.form.profile.baseline.tips':
+    '固定负载：8 并发、100 条请求、512 输出 token。作为基线，与 aisbench 网关的默认参数一致，便于横向对比。',
   'benchmark.qa.inputLength': '输入 Token 长度（拼接）',
   'benchmark.qa.inputLength.tip':
     '按这个长度从数据集语料拼接 prompt；长上下文与前缀缓存压测靠它。留空则每条请求用一道原题。',

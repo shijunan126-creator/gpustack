@@ -9,6 +9,30 @@
 # search) which auto-detects the answer. The latency-SLO scenario is just
 # load_type=concurrency + auto_tune + slo_avg_ttft_ms / slo_avg_tpot_ms.
 profiles:
+  - name: Baseline
+    # The reference numbers are the aisbench gateway's own defaults: 8 concurrent
+    # requests, 100 prompts, 512 output tokens, one warmup request. Keeping them
+    # identical is what makes a run here comparable with one from that tool.
+    description: >
+      One fixed load: 8 concurrent requests, 100 prompts, 512 output tokens.
+      The reference baseline, so runs of different builds stay comparable.
+    load_type: concurrency # closed-loop: 8 requests in flight
+    auto_tune: false # one measured point, not a search
+    dataset_name: GSM8K
+    # Prompts are composed out of GSM8K to this length (the corpus is material,
+    # not a fixed list of ~60-token questions).
+    dataset_input_tokens: 1024
+    dataset_output_tokens: 512
+    # The stage's knob is the concurrency on this axis; requests are sent as fast
+    # as the 8 in-flight slots allow, which is the gateway's request_rate = 0.
+    request_rate: 8
+    total_requests: 100
+    stages:
+      - rate: 8
+        max_requests: 100
+    warmup: 1 # trim the first 1% — one request of the 100
+    dataset_seed_increment: true
+
   - name: Max Throughput
     # Kept in sync with the UI blurb (benchmark.form.profile.maxThroughput.tips):
     # this is the API-facing text and the fallback when a client has no i18n for

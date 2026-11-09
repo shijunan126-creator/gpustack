@@ -32,6 +32,7 @@ export const BenchmarkStatus: Record<string, StatusType> = {
 };
 
 export const ProfileValueMap = {
+  Baseline: 'Baseline',
   MaxThroughput: 'Max Throughput',
   LatencySLO: 'Meet Latency SLO',
   Custom: 'Custom'
@@ -65,6 +66,10 @@ export const ProfileLabelMap = {
 // resolved to '' and the selector fell back to the yaml `description` — i.e. the
 // blurb was English in all five languages.
 export const profileOptions = [
+  {
+    tips: 'benchmark.form.profile.baseline.tips',
+    value: ProfileValueMap.Baseline
+  },
   {
     tips: 'benchmark.form.profile.maxThroughput.tips',
     value: ProfileValueMap.MaxThroughput
