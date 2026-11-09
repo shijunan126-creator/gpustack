@@ -14,15 +14,21 @@ import {
 import {
   AUTO_TUNE_DEFAULTS,
   benchmarkValidationGroups,
+  DEFAULT_DATASET_NAME,
   DatasetValueMap,
   genBenchmarkName,
   genDatasetSeed,
+  KindValueMap,
   profileAllowsSlo,
   sloTargetsFromFields,
   TargetModeValueMap
 } from '../config';
 import FormContext from '../config/form-context';
-import { FormData, BenchmarkListItem as ListItem } from '../config/types';
+import {
+  BenchmarkDatasetOption,
+  FormData,
+  BenchmarkListItem as ListItem
+} from '../config/types';
 import Basic from './basic';
 import DatasetForm from './dataset';
 
@@ -40,7 +46,8 @@ interface ProviderFormProps {
   currentData?: ListItem; // Used when action is EDIT
   open?: boolean;
   clusterList?: Global.BaseOption<number>[];
-  datasetList: Global.BaseOption<number | string>[];
+  datasetList: BenchmarkDatasetOption[];
+  onDatasetAdded?: () => void;
   profilesOptions: Global.BaseOption<string>[];
   onFinish: (values: FormData) => Promise<void>;
   onFinishFailed?: (errorInfo: any) => void;
@@ -89,12 +96,17 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
     open,
     clusterList,
     profilesOptions,
-    datasetList
+    datasetList,
+    onDatasetAdded
   } = props;
   const intl = useIntl();
   const { styles } = useStyles();
   const [form] = Form.useForm();
   const profile = Form.useWatch('profile', form);
+  // Accuracy runs have no load sweep and no SLO, so their sections disappear
+  // with the same derivation the controls use (see random-settings).
+  const kind = Form.useWatch('kind', form);
+  const isAccuracy = kind === KindValueMap.Accuracy;
   const { getScrollElementScrollableHeight } = useWrapperContext();
   const [activeKey, setActiveKey] = useState<string[]>(['name']);
   const [selectedTarget, setSelectedTarget] = useState('name');
@@ -118,7 +130,7 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
   // hidden only for a preset whose answer IS the throughput peak (see
   // profileAllowsSlo). Must stay in sync with random-settings' own gate, or the nav
   // grows an anchor that scrolls to nothing.
-  const showSLO = profileAllowsSlo(profile, profilesOptions as any[]);
+  const showSLO = !isAccuracy && profileAllowsSlo(profile, profilesOptions as any[]);
   const visibleTarget =
     !showSLO && selectedTarget === 'slo' ? 'dataset' : selectedTarget;
   if (visibleTarget !== selectedTarget) {
@@ -147,12 +159,16 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
           }
         ]
       : []),
-    {
-      value: 'load',
-      label: intl.formatMessage({ id: 'benchmark.form.group.load' }),
-      icon: <IconFont type="icon-speed" />,
-      field: 'load'
-    }
+    ...(isAccuracy
+      ? []
+      : [
+          {
+            value: 'load',
+            label: intl.formatMessage({ id: 'benchmark.form.group.load' }),
+            icon: <IconFont type="icon-speed" />,
+            field: 'load'
+          }
+        ])
   ];
 
   const handleGroupChange = (keys: string | string[]) => {
@@ -252,13 +268,10 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
       }
       return;
     }
-    // Defensive normalization of the dataset TYPE selector. `dataset_name` must
-    // be one of the type values (Random / ShareGPT); older rows holding an
-    // unknown value fall back to Random.
-    const validTypes = [DatasetValueMap.Random, DatasetValueMap.ShareGPT];
-    const datasetName = validTypes.includes(currentData.dataset_name)
-      ? currentData.dataset_name
-      : DatasetValueMap.Random;
+    // Dataset names are open-ended now (the list comes from the API), so the
+    // stored name is carried through as-is; only a row with no name at all falls
+    // back to the default corpus.
+    const datasetName = currentData.dataset_name || DEFAULT_DATASET_NAME;
     seededCounts.current = {
       ...(isLegacyCount(currentData.warmup)
         ? { warmup: currentData.warmup }
@@ -356,6 +369,7 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
           clusterList: clusterList,
           profilesOptions: profilesOptions,
           datasetList: datasetList,
+          onDatasetAdded,
           currentData,
           applyAutoName,
           groupKeys,
@@ -399,10 +413,11 @@ const ProviderForm: React.FC<ProviderFormProps> = forwardRef((props, ref) => {
           initialValues={{
             // Default to the Max Throughput preset: adaptive auto-tune on the
             // rate axis (ramps request rate to the throughput peak).
-            dataset_name: 'Random',
+            kind: KindValueMap.Perf,
+            dataset_name: DEFAULT_DATASET_NAME,
+            dataset_output_tokens: 256,
             sharegpt_filter_enabled: false,
             dataset_input_tokens: 1024,
-            dataset_output_tokens: 128,
             profile: 'Max Throughput',
             // An engine measurement, which is what every run was before the
             // choice existed. `route` is opt-in because it puts the server's

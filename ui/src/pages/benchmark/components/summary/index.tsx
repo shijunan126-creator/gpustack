@@ -5,6 +5,7 @@ import { queryBenchmarkResults } from '../../apis';
 import { loadAxisLabelId } from '../../config';
 import { useDetailContext } from '../../config/detail-context';
 import { BenchmarkResultItem } from '../../config/types';
+import AccuracySummary from './accuracy';
 import BestPoints from './best-points';
 import ConfigSummary from './config-summary';
 import { buildProbePoints, buildStagePoints } from './metrics';
@@ -130,6 +131,17 @@ const Summary: React.FC = () => {
       </>
     );
   }, [isMulti, points, probes, selected]);
+
+  // An accuracy run has no curve, no stages and no latency conclusion: its
+  // report is a score and the questions behind it.
+  if (detailData?.kind === 'accuracy') {
+    return (
+      <div className={styles.container}>
+        <ConfigSummary />
+        <AccuracySummary />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>

@@ -1,7 +1,11 @@
 import { PageActionType } from '@/config/types';
 import { FormDrawer, useSubmitLock } from '@gpustack/core-ui';
 import React, { useRef } from 'react';
-import { FormData, BenchmarkListItem as ListItem } from '../config/types';
+import {
+  BenchmarkDatasetOption,
+  FormData,
+  BenchmarkListItem as ListItem
+} from '../config/types';
 
 import BenchmarkForm from '../forms';
 
@@ -12,7 +16,8 @@ type AddModalProps = {
   currentData?: ListItem; // Used when action is EDIT
   clusterList?: Global.BaseOption<number>[];
   profilesOptions?: Global.BaseOption<string>[];
-  datasetList?: Global.BaseOption<number | string>[];
+  datasetList?: BenchmarkDatasetOption[];
+  onDatasetAdded?: () => void;
   onOk: (values: FormData) => void;
   onCancel: () => void;
 };
@@ -24,6 +29,7 @@ const AddBenchmark: React.FC<AddModalProps> = ({
   clusterList,
   profilesOptions = [],
   datasetList = [],
+  onDatasetAdded,
   onOk,
   onCancel
 }) => {
@@ -60,6 +66,7 @@ const AddBenchmark: React.FC<AddModalProps> = ({
         clusterList={clusterList}
         profilesOptions={profilesOptions}
         datasetList={datasetList}
+        onDatasetAdded={onDatasetAdded}
         onFinish={handleOk}
         onFinishFailed={release}
       />

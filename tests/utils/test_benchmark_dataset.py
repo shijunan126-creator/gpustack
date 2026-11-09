@@ -62,7 +62,7 @@ def test_a_broken_line_names_the_line_and_the_field():
 
 def test_a_declared_format_is_checked_not_trusted():
     content = _jsonl([{"question": "q", "answer": "#### 1"}])
-    with pytest.raises(DatasetContentError, match="jsonl"):
+    with pytest.raises(DatasetContentError, match="JSON array"):
         inspect_dataset(content, BenchmarkDatasetFormat.SHAREGPT)
 
 

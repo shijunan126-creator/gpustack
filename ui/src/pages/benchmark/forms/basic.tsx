@@ -9,8 +9,9 @@ import {
   useAppUtils
 } from '@gpustack/core-ui';
 import { useIntl } from '@umijs/max';
-import { Form } from 'antd';
+import { Form, Segmented } from 'antd';
 import React, { useEffect, useMemo } from 'react';
+import { KindValueMap, kindOptions } from '../config';
 import { useFormContext } from '../config/form-context';
 import { FormData } from '../config/types';
 import ModelInstanceForm from './model-instance';
@@ -121,6 +122,34 @@ const BasicForm: React.FC = () => {
           label={intl.formatMessage({ id: 'common.table.name' })}
           required
         ></CInput.Input>
+      </Form.Item>
+      {/* What the run measures. Above the cluster/model on purpose: it changes
+          which sections exist at all (an accuracy run has no load sweep), and a
+          choice made after the model would leave the form showing sections it
+          is about to remove. */}
+      <Form.Item<FormData>
+        label={intl.formatMessage({ id: 'benchmark.kind' })}
+        name="kind"
+        style={{ marginBottom: 20 }}
+      >
+        <Segmented
+          disabled={action === PageAction.EDIT}
+          options={kindOptions.map((o) => ({
+            label: intl.formatMessage({ id: o.label }),
+            value: o.value
+          }))}
+          onChange={(value) => {
+            if (value === KindValueMap.Accuracy) {
+              form.setFieldsValue({
+                max_samples: form.getFieldValue('max_samples') ?? 0,
+                accuracy_concurrency:
+                  form.getFieldValue('accuracy_concurrency') ?? 16,
+                accuracy_max_out_len:
+                  form.getFieldValue('accuracy_max_out_len') ?? 2048
+              });
+            }
+          }}
+        />
       </Form.Item>
       <PluginExtraFields
         name="CreateOrgScopeField"

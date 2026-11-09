@@ -5,13 +5,18 @@ import { Form, Select, Tag } from 'antd';
 import React from 'react';
 import {
   AUTO_TUNE_DEFAULTS,
-  DatasetValueMap,
+  KindValueMap,
   genDatasetSeed,
   sloFieldsFromTargets,
   sloTargetsFromFields
 } from '../config';
 import { useFormContext } from '../config/form-context';
-import { FormData, ProfileOption, StageRow } from '../config/types';
+import {
+  BenchmarkDatasetOption,
+  FormData,
+  ProfileOption,
+  StageRow
+} from '../config/types';
 import RandomSettingsForm from './random-settings';
 
 // The Preset (profile) is the single top-level selector. Picking one auto-fills
@@ -60,7 +65,13 @@ const DatasetForm: React.FC = () => {
     // cache-skew this feature exists to avoid. It only serves as a fallback when
     // nothing is pinned yet.
     const seedRandom = form.getFieldValue('dataset_seed_random') !== false;
+    // The preset names a dataset; which controls that dataset needs is a
+    // property of its row, so look it up rather than comparing names.
+    const presetFormat = (datasetList as BenchmarkDatasetOption[])?.find(
+      (item) => item.value === config.dataset_name
+    )?.format;
     form.setFieldsValue({
+      kind: KindValueMap.Perf,
       load_type: config.load_type ?? 'fixed_rate',
       auto_tune: autoTune,
       lower_bound: config.lower_bound ?? AUTO_TUNE_DEFAULTS.lower_bound,
@@ -70,14 +81,12 @@ const DatasetForm: React.FC = () => {
         config.max_total_seconds ?? AUTO_TUNE_DEFAULTS.max_total_seconds,
       dataset_name: config.dataset_name,
       dataset_input_tokens:
-        config.dataset_name === DatasetValueMap.ShareGPT
-          ? null
-          : (config.dataset_input_tokens ?? null),
+        presetFormat === 'random' ? (config.dataset_input_tokens ?? null) : null,
       dataset_output_tokens: config.dataset_output_tokens ?? null,
       dataset_input_min: config.dataset_input_min ?? null,
       dataset_input_max: config.dataset_input_max ?? null,
       sharegpt_filter_enabled:
-        config.dataset_name === DatasetValueMap.ShareGPT &&
+        presetFormat === 'sharegpt' &&
         [
           config.dataset_input_min,
           config.dataset_input_max,

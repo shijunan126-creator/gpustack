@@ -43,6 +43,17 @@ const useBenchmarkColumns = (params: {
         )
       },
       ...pluginRendered,
+      // One column serves both kinds of run: an accuracy run puts its score
+      // here, a performance run shows "-" rather than a misleading 0.
+      {
+        title: intl.formatMessage({ id: 'benchmark.accuracy.score' }),
+        dataIndex: 'accuracy_score',
+        width: 100,
+        render: (value: number, record: ListItem) =>
+          record.kind === 'accuracy'
+            ? `${(value ?? 0).toFixed(2)}%`
+            : '-'
+      },
       ...columns,
       {
         title: (

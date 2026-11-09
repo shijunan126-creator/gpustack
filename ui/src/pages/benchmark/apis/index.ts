@@ -1,6 +1,8 @@
 import { request } from '@umijs/max';
 import { CancelToken } from 'axios';
 import {
+  AccuracySamplesResponse,
+  BenchmarkDatasetItem,
   BenchmarkListItem,
   BenchmarkResultItem,
   FormData,
@@ -8,6 +10,7 @@ import {
 } from '../config/types';
 
 export const BENCHMARKS_API = '/benchmarks';
+export const BENCHMARK_DATASETS_API = '/benchmark-datasets';
 export const PROFILES_CONFIG_API = '/benchmark-profiles/default-config';
 export const EXPORT_BENCHMARK_LIST = '/benchmarks/export';
 
@@ -121,5 +124,54 @@ export async function stopBenchmark(params: {
   return request(`${BENCHMARKS_API}/${params.id}/state`, {
     method: 'PATCH',
     data: params.data
+  });
+}
+
+// ── datasets ────────────────────────────────────────────────────────────────
+
+export async function queryBenchmarkDatasets(options?: {
+  token?: CancelToken;
+}) {
+  return request<{ items: BenchmarkDatasetItem[] }>(
+    `${BENCHMARK_DATASETS_API}`,
+    {
+      method: 'GET',
+      cancelToken: options?.token
+    }
+  );
+}
+
+export async function createBenchmarkDataset(params: {
+  data: { name: string; description?: string; content: string };
+}) {
+  return request<BenchmarkDatasetItem>(`${BENCHMARK_DATASETS_API}`, {
+    method: 'POST',
+    data: params.data
+  });
+}
+
+export async function deleteBenchmarkDataset(id: number) {
+  return request(`${BENCHMARK_DATASETS_API}/${id}`, {
+    method: 'DELETE'
+  });
+}
+
+// ── accuracy ────────────────────────────────────────────────────────────────
+
+export async function queryBenchmarkAccuracy(
+  id: number,
+  params?: {
+    only_incorrect?: boolean;
+    limit?: number;
+    offset?: number;
+  },
+  options?: {
+    token?: CancelToken;
+  }
+) {
+  return request<AccuracySamplesResponse>(`${BENCHMARKS_API}/${id}/accuracy`, {
+    method: 'GET',
+    params,
+    cancelToken: options?.token
   });
 }

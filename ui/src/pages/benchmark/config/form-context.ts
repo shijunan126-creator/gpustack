@@ -1,6 +1,6 @@
 import { PageActionType } from '@/config/types';
 import { createContext, useContext } from 'react';
-import { BenchmarkListItem } from './types';
+import { BenchmarkDatasetOption, BenchmarkListItem } from './types';
 
 interface FormContextProps {
   action: PageActionType;
@@ -8,7 +8,9 @@ interface FormContextProps {
   clusterList?: Global.BaseOption<number>[];
   modelList?: Global.BaseOption<number>[];
   profilesOptions: Global.BaseOption<string>[];
-  datasetList: Global.BaseOption<number | string>[];
+  datasetList: BenchmarkDatasetOption[];
+  // Reload the dataset list after one was uploaded from inside this form.
+  onDatasetAdded?: () => void;
   // Source row for EDIT / CLONE prefill; used to initialize disclosure toggles
   // (data distribution / shared prefix) from the config being cloned.
   currentData?: BenchmarkListItem;

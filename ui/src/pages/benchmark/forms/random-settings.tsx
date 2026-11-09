@@ -1,6 +1,7 @@
 import { PageAction } from '@/config';
 import {
   ControlOutlined,
+  PlusOutlined,
   QuestionCircleOutlined,
   ReloadOutlined,
   ThunderboltOutlined
@@ -15,6 +16,7 @@ import {
 } from '@gpustack/core-ui';
 import { useIntl } from '@umijs/max';
 import {
+  Alert,
   Button,
   Checkbox,
   Flex,
@@ -26,12 +28,13 @@ import {
 } from 'antd';
 import { createStyles } from 'antd-style';
 import React, { useState } from 'react';
+import AddDatasetModal from '../components/add-dataset-modal';
 import DistributionChart from '../components/distribution-chart';
 import {
   AUTO_TUNE_DEFAULTS,
   DATASET_SEED_MAX,
   DATASET_SEED_MIN,
-  DatasetValueMap,
+  KindValueMap,
   LoadTypeValueMap,
   SLO_AGGS,
   SLO_METRICS,
@@ -45,7 +48,7 @@ import {
   sloTargetKey
 } from '../config';
 import { useFormContext } from '../config/form-context';
-import { FormData } from '../config/types';
+import { BenchmarkDatasetOption, FormData } from '../config/types';
 import { optionalPositiveIntegerRule } from './sharegpt-token-validation';
 
 const useStyles = createStyles(({ token, css }) => ({
@@ -182,18 +185,30 @@ const useStyles = createStyles(({ token, css }) => ({
 // need the same mapping.
 
 const RandomSettingsForm: React.FC<{
-  datasetList: Global.BaseOption<number | string>[];
+  datasetList: BenchmarkDatasetOption[];
 }> = (props) => {
   const { datasetList } = props;
   const { styles } = useStyles();
   const intl = useIntl();
   const { action, currentData, profilesOptions, groupKeys, onGroupChange } =
     useFormContext();
+  const { onDatasetAdded } = useFormContext();
   const form = Form.useFormInstance();
   const profile = Form.useWatch('profile', form);
   const loadType = Form.useWatch('load_type', form);
   const datasetName = Form.useWatch('dataset_name', form);
+  const kind = Form.useWatch('kind', form);
+  const isAccuracy = kind === KindValueMap.Accuracy;
   const { getRuleMessage } = useAppUtils();
+
+  // Which controls apply is a property of the dataset ROW, not of its name: an
+  // uploaded question/answer file behaves like GSM8K, an uploaded conversation
+  // file like ShareGPT.
+  const datasetOption = (datasetList as BenchmarkDatasetOption[])?.find(
+    (item) => item.value === datasetName
+  );
+  const datasetFormat = datasetOption?.format;
+  const [datasetModalOpen, setDatasetModalOpen] = useState(false);
 
   const disabled = action === PageAction.EDIT;
 
@@ -214,9 +229,10 @@ const RandomSettingsForm: React.FC<{
   // on BOTH axes (asking for req/s under a TTFT budget is the more common capacity
   // question) and hidden only for a preset whose answer IS the peak. See
   // profileAllowsSlo; keep in sync with the nav's copy in forms/index.tsx.
-  const showSLO = profileAllowsSlo(profile, profilesOptions as any[]);
-  const isRandom = datasetName === DatasetValueMap.Random;
-  const isShareGPT = datasetName === DatasetValueMap.ShareGPT;
+  const showSLO = !isAccuracy && profileAllowsSlo(profile, profilesOptions as any[]);
+  const isRandom = datasetFormat === 'random';
+  const isShareGPT = datasetFormat === 'sharegpt';
+  const isQA = datasetFormat === 'qa_jsonl';
   const shareGPTTokenRule = optionalPositiveIntegerRule(
     intl.formatMessage({ id: 'benchmark.form.sharegpt.positiveInteger' })
   );
@@ -262,7 +278,7 @@ const RandomSettingsForm: React.FC<{
   // can't see the still-unmounted distribution fields, so seed from currentData.
   const [distToggle, setDistToggle] = useState(
     () =>
-      currentData?.dataset_name === DatasetValueMap.Random &&
+      currentData?.dataset_format === 'random' &&
       hasVal(
         currentData?.dataset_input_stdev,
         currentData?.dataset_input_min,
@@ -451,45 +467,161 @@ const RandomSettingsForm: React.FC<{
   // ---- Group 1: Dataset (what data to send) ----
   const datasetContent = (
     <>
-      <Form.Item<FormData>
-        name="dataset_name"
-        rules={[
-          {
-            required: true,
-            message: getRuleMessage('select', 'benchmark.table.dataset')
-          }
-        ]}
-      >
-        <SealSelect
-          disabled={disabled}
-          onChange={(value) => {
-            form.setFieldsValue({
-              dataset_input_tokens:
-                value === DatasetValueMap.ShareGPT
-                  ? null
-                  : (form.getFieldValue('dataset_input_tokens') ?? 1024),
-              dataset_output_tokens:
-                value === DatasetValueMap.ShareGPT
-                  ? null
-                  : (form.getFieldValue('dataset_output_tokens') ?? 128),
-              dataset_input_min: null,
-              dataset_input_max: null,
-              sharegpt_filter_enabled: false,
-              dataset_input_stdev: null,
-              dataset_output_stdev: null,
-              dataset_output_min: null,
-              dataset_output_max: null
-            });
-          }}
-          options={datasetList?.map((item) => ({
-            ...item,
-            label: item.label,
-            value: item.label
-          }))}
-          label={intl.formatMessage({ id: 'benchmark.table.dataset' })}
-          required
-        ></SealSelect>
-      </Form.Item>
+      <Flex align="flex-end" gap={8} style={{ marginBottom: 12 }}>
+        <Form.Item<FormData>
+          name="dataset_name"
+          style={{ flex: 1, marginBottom: 0 }}
+          rules={[
+            {
+              required: true,
+              message: getRuleMessage('select', 'benchmark.table.dataset')
+            }
+          ]}
+        >
+          <SealSelect
+            disabled={disabled}
+            onChange={(value) => {
+              const picked = (datasetList as BenchmarkDatasetOption[])?.find(
+                (item) => item.value === value
+              );
+              form.setFieldsValue({
+                // Length knobs belong to a synthetic corpus and to a fixed
+                // decode budget; a conversation file has neither.
+                dataset_input_tokens:
+                  picked?.format === 'random'
+                    ? (form.getFieldValue('dataset_input_tokens') ?? 1024)
+                    : null,
+                dataset_output_tokens:
+                  picked?.format === 'random'
+                    ? (form.getFieldValue('dataset_output_tokens') ?? 256)
+                    : picked?.format === 'qa_jsonl'
+                      ? (form.getFieldValue('dataset_output_tokens') ?? 256)
+                      : null,
+                dataset_input_min: null,
+                dataset_input_max: null,
+                sharegpt_filter_enabled: false,
+                dataset_input_stdev: null,
+                dataset_output_stdev: null,
+                dataset_output_min: null,
+                dataset_output_max: null
+              });
+            }}
+            options={datasetList}
+            label={intl.formatMessage({ id: 'benchmark.table.dataset' })}
+            required
+          ></SealSelect>
+        </Form.Item>
+        <Button
+          icon={<PlusOutlined />}
+          disabled={action === PageAction.EDIT}
+          onClick={() => setDatasetModalOpen(true)}
+          style={{ height: 48, flex: 'none' }}
+        >
+          {intl.formatMessage({ id: 'benchmark.dataset.add' })}
+        </Button>
+      </Flex>
+      {datasetOption && (
+        <div className="field-hint" style={{ marginTop: -4 }}>
+          {[
+            datasetOption.format,
+            datasetOption.sample_count != null
+              ? intl.formatMessage(
+                  { id: 'benchmark.dataset.samples' },
+                  { count: datasetOption.sample_count }
+                )
+              : null,
+            datasetOption.has_answers
+              ? intl.formatMessage({ id: 'benchmark.dataset.hasAnswers' })
+              : null
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </div>
+      )}
+      {isAccuracy && datasetOption && !datasetOption.has_answers && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={intl.formatMessage({ id: 'benchmark.dataset.noAnswers' })}
+        />
+      )}
+      {isAccuracy && (
+        <>
+          <Flex gap={12}>
+            <Form.Item<FormData>
+              name="max_samples"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={0}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({ id: 'benchmark.accuracy.maxSamples' })}
+                description={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxSamples.tip'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+            <Form.Item<FormData>
+              name="accuracy_concurrency"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({
+                  id: 'benchmark.accuracy.concurrency'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+            <Form.Item<FormData>
+              name="accuracy_max_out_len"
+              style={{ flex: 1, marginBottom: 0 }}
+            >
+              <CInputNumber
+                min={1}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                label={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxOutLen'
+                })}
+                description={intl.formatMessage({
+                  id: 'benchmark.accuracy.maxOutLen.tip'
+                })}
+              ></CInputNumber>
+            </Form.Item>
+          </Flex>
+          <div style={{ height: 16 }} />
+        </>
+      )}
+      {isQA && !isAccuracy && (
+        <Form.Item<FormData>
+          name="dataset_output_tokens"
+          rules={[
+            {
+              required: true,
+              message: getRuleMessage(
+                'input',
+                'benchmark.table.outputTokenLength'
+              )
+            }
+          ]}
+        >
+          <CInputNumber
+            min={1}
+            disabled={disabled}
+            label={intl.formatMessage({
+              id: 'benchmark.table.outputTokenLength'
+            })}
+            description={intl.formatMessage({
+              id: 'benchmark.qa.outputTokens.tip'
+            })}
+            required
+          ></CInputNumber>
+        </Form.Item>
+      )}
       {isRandom && (
         <>
           <Form.Item<FormData>
@@ -1543,35 +1675,52 @@ const RandomSettingsForm: React.FC<{
     <span data-field={field}>{intl.formatMessage({ id })}</span>
   );
   return (
-    <CollapsePanel
-      activeKey={groupKeys}
-      accordion={false}
-      onChange={onGroupChange}
-      items={[
-        {
-          key: 'dataset',
-          label: groupLabel('dataset', 'benchmark.form.group.dataset'),
-          forceRender: true,
-          children: datasetContent
-        },
-        ...(showSLO
-          ? [
-              {
-                key: 'slo',
-                label: groupLabel('slo', 'benchmark.form.group.slo'),
-                forceRender: true,
-                children: sloContent
-              }
-            ]
-          : []),
-        {
-          key: 'load',
-          label: groupLabel('load', 'benchmark.form.group.load'),
-          forceRender: true,
-          children: loadContent
-        }
-      ]}
-    ></CollapsePanel>
+    <>
+      <CollapsePanel
+        activeKey={groupKeys}
+        accordion={false}
+        onChange={onGroupChange}
+        items={[
+          {
+            key: 'dataset',
+            label: groupLabel('dataset', 'benchmark.form.group.dataset'),
+            forceRender: true,
+            children: datasetContent
+          },
+          ...(showSLO
+            ? [
+                {
+                  key: 'slo',
+                  label: groupLabel('slo', 'benchmark.form.group.slo'),
+                  forceRender: true,
+                  children: sloContent
+                }
+              ]
+            : []),
+          // An accuracy run has no load sweep: the questions are asked once at
+          // one concurrency, so the whole Load group (stages, bounds, warmup)
+          // does not apply and is hidden rather than disabled.
+          ...(isAccuracy
+            ? []
+            : [
+                {
+                  key: 'load',
+                  label: groupLabel('load', 'benchmark.form.group.load'),
+                  forceRender: true,
+                  children: loadContent
+                }
+              ])
+        ]}
+      ></CollapsePanel>
+      <AddDatasetModal
+        open={datasetModalOpen}
+        onCancel={() => setDatasetModalOpen(false)}
+        onOk={() => {
+          setDatasetModalOpen(false);
+          onDatasetAdded?.();
+        }}
+      />
+    </>
   );
 };
 
