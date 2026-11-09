@@ -645,25 +645,27 @@ def _fit_text(builder: TextBuilder, text: str, target: int) -> str:
 
 
 def _unique_tokens(tokenizer: Any, rng: random.Random, count: int) -> str:
-    """``count`` distinct random tokens, decoded to text."""
+    """``count`` distinct random tokens, decoded as one piece of text.
+
+    Decoded together rather than one id at a time: a tokenizer's spacing lives
+    in the tokens themselves, and concatenating individually decoded pieces can
+    merge into a different token at the seam.
+    """
     vocab = len(tokenizer)
+    ids: List[int] = []
     seen: set = set()
-    parts: List[str] = []
     guard = 0
-    while len(parts) < count and guard < count * 50:
+    while len(ids) < count and guard < count * 50:
         guard += 1
         token_id = rng.randrange(vocab)
         if token_id in seen:
             continue
-        try:
-            text = tokenizer.decode([token_id])
-        except Exception:  # noqa: BLE001 - a broken vocabulary entry is not fatal
-            continue
-        if not text.strip():
-            continue
         seen.add(token_id)
-        parts.append(text)
-    return "".join(parts)
+        ids.append(token_id)
+    try:
+        return tokenizer.decode(ids, skip_special_tokens=True)
+    except Exception:  # noqa: BLE001 - a broken vocabulary entry is not fatal
+        return ""
 
 
 class ComposedSource:
@@ -705,10 +707,14 @@ class ComposedSource:
         # One prefix pool per bucket, built once: the pool is what makes a
         # controlled share of requests share the same head.
         self._pools: List[List[str]] = []
-        for bucket in spec.prefix_buckets:
+        for bucket_index, bucket in enumerate(spec.prefix_buckets):
             pool = []
             for i in range(max(1, bucket.prefix_count)):
-                source = self._corpus[(i * 7919) % len(self._corpus)]
+                # Offset by the bucket index so two buckets are two different
+                # heads; within a bucket, `i` gives the pool its distinct heads.
+                source = self._corpus[
+                    (bucket_index * 101 + i * 7919) % len(self._corpus)
+                ]
                 pool.append(_fit_text(builder, source, bucket.prefix_tokens))
             self._pools.append(pool)
         self._cursor = 0
