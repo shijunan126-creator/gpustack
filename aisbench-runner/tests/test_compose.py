@@ -17,7 +17,11 @@ INDEX = {word: i for i, word in enumerate(WORDS)}
 
 
 class _FakeTokenizer:
-    """Word-level tokenizer: one token per space-separated word."""
+    """Word-level tokenizer whose tokens carry their own leading space.
+
+    That is how BPE vocabularies behave (`Ġ` / `▁` inside the token), and it is
+    what keeps a token boundary intact when text pieces are concatenated.
+    """
 
     def __len__(self):
         return len(WORDS)
@@ -26,7 +30,7 @@ class _FakeTokenizer:
         return [INDEX[word] for word in text.split() if word in INDEX]
 
     def decode(self, ids, skip_special_tokens=True):
-        return " ".join(WORDS[i] for i in ids)
+        return "".join(f" {WORDS[i]}" for i in ids)
 
 
 @pytest.fixture()
