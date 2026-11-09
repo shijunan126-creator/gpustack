@@ -427,8 +427,8 @@ export default {
   'benchmark.form.target.route': 'Route',
   'benchmark.form.target.route.empty':
     'No route fronts a servable LLM in this cluster. Deploy a route, or measure an instance instead.',
-  'benchmark.detail.result.basic': 'Basic'
-  // ── datasets & accuracy ────────────────────────────────────────────────
+  'benchmark.detail.result.basic': 'Basic',
+  // ── datasets & accuracy ────────────────────────────────────────────────,
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

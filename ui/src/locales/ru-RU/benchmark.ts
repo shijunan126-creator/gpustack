@@ -436,8 +436,8 @@ export default {
   'benchmark.detail.targetMode.route': 'Маршрут (развёртывание) · {route}',
   'benchmark.form.target.route': 'Маршрут',
   'benchmark.form.target.route.empty':
-    'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.'
-  // ── datasets & accuracy ────────────────────────────────────────────────
+    'В этом кластере нет маршрута, ведущего к работающей LLM. Разверните маршрут или измерьте экземпляр.',
+  // ── datasets & accuracy ────────────────────────────────────────────────,
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

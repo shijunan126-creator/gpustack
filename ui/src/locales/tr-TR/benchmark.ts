@@ -428,8 +428,8 @@ export default {
   'benchmark.form.target.route': 'Rota',
   'benchmark.form.target.route.empty':
     "Bu kümede hizmet verebilen bir LLM'e yönelen rota yok. Bir rota dağıtın ya da bunun yerine bir örnek ölçün.",
-  'benchmark.detail.result.basic': 'Temel'
-  // ── datasets & accuracy ────────────────────────────────────────────────
+  'benchmark.detail.result.basic': 'Temel',
+  // ── datasets & accuracy ────────────────────────────────────────────────,
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',

@@ -426,8 +426,8 @@ export default {
   'benchmark.detail.targetMode.route': 'ルート（デプロイメント）· {route}',
   'benchmark.form.target.route': 'ルート',
   'benchmark.form.target.route.empty':
-    'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。'
-  // ── datasets & accuracy ────────────────────────────────────────────────
+    'このクラスターには、応答可能な LLM を指すルートがありません。ルートをデプロイするか、インスタンス形態に切り替えてください。',
+  // ── datasets & accuracy ────────────────────────────────────────────────,
   'benchmark.kind': 'Benchmark type',
   'benchmark.kind.perf': 'Performance',
   'benchmark.kind.accuracy': 'Accuracy',
