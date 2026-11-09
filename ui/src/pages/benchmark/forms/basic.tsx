@@ -22,6 +22,27 @@ const BasicForm: React.FC = () => {
   const { getRuleMessage } = useAppUtils();
   const { action, open, clusterList } = useFormContext();
   const { benchmarkTargetInstance } = useBenchmarkTargetInstance();
+  // Form.Item owns the control's onChange, so the defaults an accuracy run
+  // needs are written from a watch rather than from a handler on the Segmented.
+  const kind = Form.useWatch('kind', form);
+  useEffect(() => {
+    if (kind !== KindValueMap.Accuracy) {
+      return;
+    }
+    const defaults: Record<string, any> = {};
+    if (form.getFieldValue('max_samples') == null) {
+      defaults.max_samples = 0;
+    }
+    if (form.getFieldValue('accuracy_concurrency') == null) {
+      defaults.accuracy_concurrency = 16;
+    }
+    if (form.getFieldValue('accuracy_max_out_len') == null) {
+      defaults.accuracy_max_out_len = 2048;
+    }
+    if (Object.keys(defaults).length) {
+      form.setFieldsValue(defaults);
+    }
+  }, [kind, form]);
 
   // `organization_id` is owned by the create-scope picker slot (admin "All"
   // view). When a platform admin targets an org (and we're not pre-filling
