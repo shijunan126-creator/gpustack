@@ -2081,7 +2081,7 @@ def test_sync_ready_tcp_probe_marks_running_healthy(state):
     ):
         manager.sync_cache_service_instances_state()
 
-    connect.assert_called_once_with(("127.0.0.1", 40001), timeout=ANY)
+    connect.assert_called_once_with(("10.0.0.1", 40001), timeout=ANY)
     update.assert_called_once_with(
         instance.id,
         state=CacheServiceStateEnum.RUNNING,
@@ -2547,7 +2547,62 @@ def test_probe_targets_metrics_port_for_http_health_check(monkeypatch):
         http_get.return_value = SimpleNamespace(status_code=200)
         assert manager._probe_ready(instance, "mooncake") is True
 
-    assert http_get.call_args[0][0] == "http://127.0.0.1:40011/healthcheck"
+    assert http_get.call_args[0][0] == "http://10.0.0.1:40011/healthcheck"
+
+
+def test_probe_falls_back_to_loopback_when_the_worker_address_refuses():
+    """A server bound to loopback alone is still reachable: the worker address
+    is probed first, and the probe does not stop there."""
+    manager, _ = _build_manager(worker_id=1)
+    instance = _new_instance(ports={"port": 40001})
+    probed = []
+
+    def connect(address, timeout=None):
+        probed.append(address)
+        if address[0] != "127.0.0.1":
+            raise OSError("connection refused")
+        return MagicMock()
+
+    with (
+        patch.object(
+            manager._provider_catalog,
+            "lookup",
+            return_value=(_new_provider(), True),
+        ),
+        patch(
+            "gpustack.worker.cache_service_manager.socket.create_connection",
+            side_effect=connect,
+        ),
+    ):
+        assert manager._probe_ready(instance, "mooncake") is True
+
+    assert probed == [("10.0.0.1", 40001), ("127.0.0.1", 40001)]
+
+
+def test_probe_is_unhealthy_when_no_address_answers():
+    """Both addresses are tried before the instance is called unhealthy."""
+    manager, _ = _build_manager(worker_id=1)
+    instance = _new_instance(ports={"port": 40001})
+    probed = []
+
+    def connect(address, timeout=None):
+        probed.append(address)
+        raise OSError("connection refused")
+
+    with (
+        patch.object(
+            manager._provider_catalog,
+            "lookup",
+            return_value=(_new_provider(), True),
+        ),
+        patch(
+            "gpustack.worker.cache_service_manager.socket.create_connection",
+            side_effect=connect,
+        ),
+    ):
+        assert manager._probe_ready(instance, "mooncake") is False
+
+    assert probed == [("10.0.0.1", 40001), ("127.0.0.1", 40001)]
 
 
 def test_a_custom_version_uses_the_providers_default_command():
