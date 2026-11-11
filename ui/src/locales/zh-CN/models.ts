@@ -165,11 +165,9 @@ export default {
   'models.form.pasteCommand.skipped.managed': 'GPUStack 会为每个实例自动设置',
   'models.form.pasteCommand.skipped.model': '模型在模型来源中选择',
   'models.form.pasteCommand.skipped.variable':
-    '取值为 shell 变量，只有脚本里的启动器才会给出',
+    '取值为 shell 变量（如 $1、$7），GPUStack 不会展开它，原样传入会让推理引擎启动失败',
   'models.form.pasteCommand.model':
     '命令中的模型：{model}。请在模型来源中选择。',
-  'models.form.pasteCommand.variables':
-    '以下内容引用了 GPUStack 无法解析的 shell 变量：{names}。应用后请改成实际的值。',
   'models.form.pasteCommand.error.empty': '粘贴启动命令后可预览解析结果。',
   'models.form.pasteCommand.error.no_command':
     '没有找到 vLLM 或 SGLang 的启动命令。支持 vllm serve、sglang serve、python -m vllm.… 和 python -m sglang.…',

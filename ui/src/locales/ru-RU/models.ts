@@ -176,11 +176,9 @@ export default {
   'models.form.pasteCommand.skipped.model':
     'модель выбирается в источнике модели',
   'models.form.pasteCommand.skipped.variable':
-    'значение — переменная оболочки, которую задаёт скрипт-лаунчер',
+    'значение — переменная оболочки (например, $1 или $7): GPUStack её не раскрывает, и движок получил бы этот текст буквально',
   'models.form.pasteCommand.model':
     'Модель в команде: {model}. Выберите её в источнике модели.',
-  'models.form.pasteCommand.variables':
-    'Эти значения используют переменные оболочки, которые GPUStack не может разрешить: {names}. После применения замените их реальными значениями.',
   'models.form.pasteCommand.error.empty':
     'Вставьте команду запуска, чтобы увидеть результат разбора.',
   'models.form.pasteCommand.error.no_command':

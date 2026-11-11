@@ -64,7 +64,6 @@ test('flags GPUStack sets per instance and the model are left out', () => {
     ]
   );
   assert.equal(result.model, '$MODEL_PATH');
-  assert.deepEqual(result.variables, []);
 });
 
 test('--model and an unquoted positional model are both the model', () => {
@@ -116,18 +115,24 @@ test('variables written in front of the command and after && are read', () => {
   assert.deepEqual(result.parameters, ['--dtype=bf16']);
 });
 
-test('shell variables in values are reported rather than expanded', () => {
+test('values that read a shell variable are refused, not stored', () => {
   const result = parseLaunchCommand(
     'export DIR="$HOME/cache"\nvllm serve m --download-dir "$DIR" --dtype bf16'
   );
-  assert.equal(result.env.DIR, '$HOME/cache');
-  assert.deepEqual(result.variables, ['DIR', '--download-dir']);
-  assert.ok(result.parameters.includes('--download-dir=$DIR'));
+  // Neither entry can be resolved: the worker passes the text to the engine
+  // verbatim, so storing it would break the launch.
+  assert.deepEqual(result.env, {});
+  assert.deepEqual(result.parameters, ['--dtype=bf16']);
+  assert.deepEqual(result.dropped, [
+    { flag: 'DIR', value: '$HOME/cache', reason: 'variable' },
+    { flag: '--download-dir', value: '$DIR', reason: 'variable' }
+  ]);
 });
 
 test('single quotes keep a dollar sign literal', () => {
   const result = parseLaunchCommand("vllm serve m --chat-template '$x'");
-  assert.deepEqual(result.variables, []);
+  assert.deepEqual(result.parameters, ['--chat-template=$x']);
+  assert.deepEqual(result.dropped, []);
 });
 
 test('text without an engine command is refused with a reason', () => {
@@ -247,13 +252,27 @@ test('a PD role keeps its own environment and refuses the connection variables',
   );
   // Those values name this node's interface or another rank's ports; there is
   // no launcher here to supply them, so none may reach the form.
-  assert.deepEqual(result.variables, []);
+  assert.deepEqual(
+    result.dropped.filter(({ reason }) => reason === 'variable'),
+    []
+  );
 });
 
-test('without PD a script keeps its shell variables as before', () => {
+test('a launcher script pasted outside PD refuses its positional values too', () => {
   const result = parseLaunchCommand(PD_DECODE);
-  assert.ok(result.parameters.some((entry) => entry.includes('$7')));
-  assert.equal(result.variables.includes('--tensor-parallel-size'), true);
+  assert.ok(!result.parameters.some((entry) => entry.includes('$')));
+  assert.deepEqual(
+    result.dropped
+      .filter(({ reason }) => reason === 'variable')
+      .map(({ flag }) => flag),
+    [
+      '--device-ids',
+      '--data-parallel-size',
+      '--data-parallel-rank',
+      '--tensor-parallel-size',
+      '--prefill-context-parallel-size'
+    ]
+  );
 });
 
 test('switching PD on drops what a member cannot take from an earlier paste', () => {

@@ -173,11 +173,9 @@ export default {
   'models.form.pasteCommand.skipped.model':
     'the model is chosen in the model source',
   'models.form.pasteCommand.skipped.variable':
-    'its value is a shell variable the launcher script supplies',
+    'its value reads a shell variable (such as $1 or $7), which GPUStack does not expand, so the engine would get the literal text',
   'models.form.pasteCommand.model':
     'Model in the command: {model}. Select it in the model source.',
-  'models.form.pasteCommand.variables':
-    'These read a shell variable GPUStack cannot resolve: {names}. Replace them with real values after applying.',
   'models.form.pasteCommand.error.empty':
     'Paste a launch command to preview it.',
   'models.form.pasteCommand.error.no_command':

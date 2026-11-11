@@ -175,11 +175,9 @@ export default {
     'GPUStack がインスタンスごとに設定します',
   'models.form.pasteCommand.skipped.model': 'モデルはモデルソースで選択します',
   'models.form.pasteCommand.skipped.variable':
-    '値はランチャースクリプトが供給するシェル変数です',
+    '値がシェル変数（$1 や $7 など）で、GPUStack は展開しないため、そのまま渡すと起動に失敗します',
   'models.form.pasteCommand.model':
     'コマンド内のモデル：{model}。モデルソースで選択してください。',
-  'models.form.pasteCommand.variables':
-    '次の項目は GPUStack が解決できるシェル変数を参照しています：{names}。適用後に実際の値へ置き換えてください。',
   'models.form.pasteCommand.error.empty':
     '起動コマンドを貼り付けるとプレビューが表示されます。',
   'models.form.pasteCommand.error.no_command':

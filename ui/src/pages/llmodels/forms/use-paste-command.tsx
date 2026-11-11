@@ -4,7 +4,8 @@ import { useFormContext } from '../config/form-context';
 import {
   LaunchCommandResult,
   ParseOptions,
-  mergeLaunchCommand
+  mergeLaunchCommand,
+  sanitizeForPD
 } from '../utils/launch-command';
 import PasteCommandModal from './paste-command-modal';
 
@@ -27,11 +28,18 @@ const usePasteCommand = (
   // in: the model's parameters reach every role through the merge, so the same
   // refusals apply at both levels. Derived here rather than at each call site,
   // because the model-level entry and the role entries reach the same modal.
-  const roles = Form.useWatch('roles', { form, preserve: true });
-  const effectiveOptions = {
-    ...parseOptions,
-    pd: !!parseOptions?.pd || (Array.isArray(roles) && roles.length > 0)
-  };
+  //
+  // ⚠️ Read the store, not only the watch. `Form.useWatch` publishes its first
+  // value a render after mount, and this entry mounts inside a panel that opens
+  // long after the switch seeded `roles` — a fresh mount therefore sees the
+  // watch's placeholder, not the roles, and would parse as non-PD. The store
+  // read is synchronously correct in both cases.
+  const watchedRoles = Form.useWatch('roles', { form, preserve: true });
+  const roles = Array.isArray(watchedRoles) && watchedRoles.length
+    ? watchedRoles
+    : form.getFieldValue('roles');
+  const pd = !!parseOptions?.pd || (Array.isArray(roles) && roles.length > 0);
+  const effectiveOptions: ParseOptions = { ...parseOptions, pd };
   const path = (field: string) => (namePrefix ? [...namePrefix, field] : field);
 
   const handleApply = (parsed: LaunchCommandResult) => {
@@ -42,8 +50,12 @@ const usePasteCommand = (
       },
       parsed
     );
-    form.setFieldValue(path('backend_parameters'), merged.parameters);
-    form.setFieldValue(path('env'), merged.env);
+    // The modal previews under the rules it was parsed with; this is the
+    // guarantee. A PD member never gets a connector, a port or a placement
+    // from a paste, whatever reached the modal.
+    const applied = pd ? sanitizeForPD(merged.parameters, merged.env) : merged;
+    form.setFieldValue(path('backend_parameters'), applied.parameters);
+    form.setFieldValue(path('env'), applied.env);
     setOpen(false);
     onValuesChange?.({}, form.getFieldsValue());
   };

@@ -172,11 +172,9 @@ export default {
     'GPUStack bunu her örnek için kendisi ayarlar',
   'models.form.pasteCommand.skipped.model': 'model, model kaynağında seçilir',
   'models.form.pasteCommand.skipped.variable':
-    'değeri, başlatıcı betiğin sağladığı bir kabuk değişkenidir',
+    'değeri bir kabuk değişkenini okuyor ($1 veya $7 gibi); GPUStack bunu genişletmez, motor bu metni olduğu gibi alır',
   'models.form.pasteCommand.model':
     'Komuttaki model: {model}. Model kaynağında seçin.',
-  'models.form.pasteCommand.variables':
-    "Bunlar GPUStack'in çözemediği kabuk değişkenlerini kullanıyor: {names}. Uyguladıktan sonra gerçek değerlerle değiştirin.",
   'models.form.pasteCommand.error.empty':
     'Önizlemek için bir başlatma komutu yapıştırın.',
   'models.form.pasteCommand.error.no_command':

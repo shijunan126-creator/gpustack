@@ -1,7 +1,6 @@
 import { useIntl } from '@umijs/max';
 import { Alert, Button, Flex, Input, Modal, Typography } from 'antd';
-import _ from 'lodash';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   LaunchCommandResult,
   ParseOptions,
@@ -24,32 +23,26 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
 }) => {
   const intl = useIntl();
   const [text, setText] = useState('');
-  const [parsed, setParsed] = useState<LaunchCommandResult>(() =>
-    parseLaunchCommand('', parseOptions)
+  // Derived, not stored: the PD rules change what the preview holds, and a
+  // stored result would keep showing the parse of whichever mode was current
+  // when the text was typed.
+  const pd = !!parseOptions?.pd;
+  const parsed = useMemo(
+    () => parseLaunchCommand(text, { pd }),
+    [text, pd]
   );
-
-  const handleChange = (value: string) => {
-    setText(value);
-    setParsed(parseLaunchCommand(value, parseOptions));
-  };
 
   const handleCancel = () => {
     setText('');
-    setParsed(parseLaunchCommand('', parseOptions));
     onCancel();
   };
 
   const handleApply = () => {
     onApply(parsed);
     setText('');
-    setParsed(parseLaunchCommand('', parseOptions));
   };
 
   const envEntries = Object.entries(parsed.env);
-  // Under PD the platform refuses the flags that read a launcher variable, so
-  // a leftover here means the paste still holds something unapplied; applying
-  // it would write `$7` into the deployment.
-  const blockedByVariables = !!parseOptions?.pd && parsed.variables.length > 0;
   const t = (id: string, values?: Record<string, any>) =>
     intl.formatMessage({ id: `models.form.pasteCommand.${id}` }, values);
 
@@ -84,7 +77,7 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
           </Button>
           <Button
             type="primary"
-            disabled={!!parsed.error || blockedByVariables}
+            disabled={!!parsed.error}
             onClick={handleApply}
           >
             {t('apply')}
@@ -101,7 +94,7 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
           spellCheck={false}
           placeholder={t('placeholder')}
           style={{ fontFamily: 'var(--ant-font-family-code, monospace)' }}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
         />
         {parsed.error && parsed.error !== 'empty' && (
           <Alert type="error" showIcon title={t(`error.${parsed.error}`)} />
@@ -141,15 +134,6 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
                   )
                 )}
               </div>
-            )}
-            {!!parsed.variables.length && (
-              <Alert
-                type="warning"
-                showIcon
-                title={t('variables', {
-                  names: _.uniq(parsed.variables).join(', ')
-                })}
-              />
             )}
           </Flex>
         )}

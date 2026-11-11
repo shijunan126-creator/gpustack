@@ -4,8 +4,10 @@
  * publish them — into the two things a deployment form holds: backend
  * parameters and environment variables.
  *
- * Nothing is executed or expanded. A `$VAR` stays text and is reported, since
- * its value lives in the author's shell and not in the script.
+ * Nothing is executed or expanded. A value that reads a shell variable is not
+ * a value GPUStack can hold — the worker passes the text through verbatim, so
+ * `--device-ids "$1"` would reach the engine as the literal `$1` and fail the
+ * launch — so those entries are refused and reported instead.
  */
 
 export interface DroppedFlag {
@@ -25,8 +27,6 @@ export interface LaunchCommandResult {
   /** The model the command names, if any. Informational; never applied. */
   model?: string;
   dropped: DroppedFlag[];
-  /** Names of the flags and variables whose value reads a shell variable. */
-  variables: string[];
   /** Set when nothing usable was found. */
   error?: 'empty' | 'no_command' | 'unterminated_quote';
 }
@@ -89,8 +89,11 @@ export const MANAGED_ENV = new Set([
 export interface ParseOptions {
   /**
    * The pasted script is one role of a PD deployment. Widens what the platform
-   * owns (see `PD_MANAGED_FLAGS`) and refuses values that only resolve in the
-   * author's shell, since a disaggregated member has no launcher to supply them.
+   * owns (see `PD_MANAGED_FLAGS`).
+   *
+   * Values that read a shell variable are refused in every mode, not only
+   * here: they are not values, and a disaggregated member is not the special
+   * case that makes them one.
    */
   pd?: boolean;
 }
@@ -350,8 +353,7 @@ export const parseLaunchCommand = (
   const result: LaunchCommandResult = {
     env: {},
     parameters: [],
-    dropped: [],
-    variables: []
+    dropped: []
   };
   if (!input.trim()) {
     return { ...result, error: 'empty' };
@@ -379,36 +381,35 @@ export const parseLaunchCommand = (
             return;
           }
           // A value that only resolves in the author's shell is not a value the
-          // form can hold: `$((60000 + $4 * 100))` would be stored literally.
-          // Already reported in `dropped`, so it is not also a "variable to
-          // fill in" — there is nothing to fill.
-          if (options.pd && word.expands) {
+          // form can hold: the worker passes it to the engine verbatim, so
+          // `$((60000 + $4 * 100))` would arrive as that text.
+          if (word.expands) {
             result.dropped.push({ flag: name, value, reason: 'variable' });
             return;
           }
           result.env[name] = value;
-          if (word.expands) {
-            result.variables.push(name);
-          }
         }
       });
       return;
     }
     // `NAME=value engine ...` scopes the variables to the command.
     const scoped: Record<string, string> = {};
-    const scopedVariables: string[] = [];
     while (index < statement.length && ASSIGNMENT.test(statement[index].text)) {
       const match = ASSIGNMENT.exec(statement[index].text)!;
-      scoped[match[1]] = match[2];
       if (statement[index].expands) {
-        scopedVariables.push(match[1]);
+        result.dropped.push({
+          flag: match[1],
+          value: match[2],
+          reason: 'variable'
+        });
+      } else {
+        scoped[match[1]] = match[2];
       }
       index += 1;
     }
     const rest = statement.slice(index);
     if (!rest.length) {
       Object.assign(result.env, scoped);
-      result.variables.push(...scopedVariables);
       return;
     }
     const args = engineArguments(rest.map((word) => word.text));
@@ -417,7 +418,6 @@ export const parseLaunchCommand = (
     }
     launched = true;
     Object.assign(result.env, scoped);
-    result.variables.push(...scopedVariables);
 
     const words = rest.slice(rest.length - args.length);
     let flagsFrom = 0;
@@ -436,16 +436,13 @@ export const parseLaunchCommand = (
         result.dropped.push({ flag: group.flag, value, reason: 'model' });
         return;
       }
-      if (options.pd && group.values.some((v) => v.expands)) {
+      if (group.values.some((v) => v.expands)) {
         // `$1`..`$8` in the published launcher scripts stand for values the
-        // launcher supplies; a member started on its own has no launcher.
-        // Filling this in by hand is not an option either — the flag itself is
-        // refused, so it is dropped, not listed as a missing variable.
+        // launcher supplies, and `$VAR` reads the author's shell. GPUStack
+        // expands neither: stored as a parameter, the engine would receive the
+        // literal text and fail the launch.
         result.dropped.push({ flag: group.flag, value, reason: 'variable' });
         return;
-      }
-      if (group.values.some((v) => v.expands)) {
-        result.variables.push(group.flag);
       }
       result.parameters.push(...toEntries(group));
     });
