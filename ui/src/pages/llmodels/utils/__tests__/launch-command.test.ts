@@ -191,6 +191,7 @@ exec vllm serve "$MODEL_PATH" \\
   --data-parallel-size "$3" \\
   --data-parallel-rank "$4" \\
   --tensor-parallel-size "$7" \\
+  --prefill-context-parallel-size "$8" \\
   --served-model-name glm \\
   --max-num-seqs 40 \\
   --gpu-memory-utilization 0.92 \\
@@ -222,6 +223,7 @@ test('a PD role keeps the engine flags and refuses what the form owns', () => {
       ['--data-parallel-size', 'managed'],
       ['--data-parallel-rank', 'managed'],
       ['--tensor-parallel-size', 'managed'],
+      ['--prefill-context-parallel-size', 'managed'],
       ['--served-model-name', 'managed'],
       ['--kv-transfer-config', 'managed']
     ]
