@@ -49,6 +49,10 @@ const MODEL_FLAGS = new Set(['--model', '--model-path']);
 export const PD_MANAGED_FLAGS = new Set([
   '--device-ids',
   '--tensor-parallel-size',
+  // Prefill context parallelism halves the KV layout, and the transport recipe
+  // declares each side's dp/tp only — a pcp the peer was not told about is a
+  // layout mismatch, not a tuning choice.
+  '--prefill-context-parallel-size',
   '--data-parallel-size',
   '--data-parallel-size-local',
   '--data-parallel-rank',
@@ -350,9 +354,10 @@ export const parseLaunchCommand = (
           }
           // A value that only resolves in the author's shell is not a value the
           // form can hold: `$((60000 + $4 * 100))` would be stored literally.
+          // Already reported in `dropped`, so it is not also a "variable to
+          // fill in" — there is nothing to fill.
           if (options.pd && word.expands) {
             result.dropped.push({ flag: name, value, reason: 'variable' });
-            result.variables.push(name);
             return;
           }
           result.env[name] = value;
@@ -408,8 +413,9 @@ export const parseLaunchCommand = (
       if (options.pd && group.values.some((v) => v.expands)) {
         // `$1`..`$8` in the published launcher scripts stand for values the
         // launcher supplies; a member started on its own has no launcher.
+        // Filling this in by hand is not an option either — the flag itself is
+        // refused, so it is dropped, not listed as a missing variable.
         result.dropped.push({ flag: group.flag, value, reason: 'variable' });
-        result.variables.push(group.flag);
         return;
       }
       if (group.values.some((v) => v.expands)) {

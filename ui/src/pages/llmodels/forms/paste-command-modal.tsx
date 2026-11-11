@@ -46,6 +46,10 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
   };
 
   const envEntries = Object.entries(parsed.env);
+  // Under PD the platform refuses the flags that read a launcher variable, so
+  // a leftover here means the paste still holds something unapplied; applying
+  // it would write `$7` into the deployment.
+  const blockedByVariables = !!parseOptions?.pd && parsed.variables.length > 0;
   const t = (id: string, values?: Record<string, any>) =>
     intl.formatMessage({ id: `models.form.pasteCommand.${id}` }, values);
 
@@ -80,7 +84,7 @@ const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
           </Button>
           <Button
             type="primary"
-            disabled={!!parsed.error}
+            disabled={!!parsed.error || blockedByVariables}
             onClick={handleApply}
           >
             {t('apply')}
