@@ -1168,3 +1168,11 @@ body {
 .ant-select-multiple .ant-select-content {
   height: 100%;
 }
+
+// The deployments table is wider than its tab pane once the sidebar has taken its 220px, and
+// core-ui's table sizes its scroll container to the row, so the pane never becomes the smaller
+// box: its rightmost Operations column (edit / more) was clipped with no way to reach it.
+// Scrolling the pane keeps every column available on narrow windows.
+.models-tabs .ant-tabs-tabpane {
+  overflow-x: auto;
+}
