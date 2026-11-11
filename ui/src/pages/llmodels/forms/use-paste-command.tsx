@@ -23,6 +23,15 @@ const usePasteCommand = (
   const form = Form.useFormInstance();
   const { onValuesChange } = useFormContext();
   const [open, setOpen] = useState(false);
+  // A deployment with roles is disaggregated, whichever list the paste lands
+  // in: the model's parameters reach every role through the merge, so the same
+  // refusals apply at both levels. Derived here rather than at each call site,
+  // because the model-level entry and the role entries reach the same modal.
+  const roles = Form.useWatch('roles', { form, preserve: true });
+  const effectiveOptions = {
+    ...parseOptions,
+    pd: !!parseOptions?.pd || (Array.isArray(roles) && roles.length > 0)
+  };
   const path = (field: string) => (namePrefix ? [...namePrefix, field] : field);
 
   const handleApply = (parsed: LaunchCommandResult) => {
@@ -46,7 +55,7 @@ const usePasteCommand = (
         open={open}
         onCancel={() => setOpen(false)}
         onApply={handleApply}
-        parseOptions={parseOptions}
+        parseOptions={effectiveOptions}
       />
     )
   };

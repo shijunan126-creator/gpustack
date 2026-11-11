@@ -38,12 +38,7 @@ const BackendParametersList: React.FC<BackendParametersListProps> = ({
   // model's engine it will actually run — so fall back to it, otherwise the
   // role's list would offer no suggestions at all. Without a prefix both
   // watches read the same field and the fallback is a no-op.
-  // The model is disaggregated: the platform fills in each member's connector,
-  // ports and placement, so a pasted copy of them is refused at both levels —
-  // the model's parameters reach every role through the merge.
-  const roles = Form.useWatch('roles', form);
-  const pdActive = Array.isArray(roles) && roles.length > 0;
-  const { openModal, modal } = usePasteCommand(namePrefix, { pd: pdActive });
+  const { openModal, modal } = usePasteCommand(namePrefix);
   const roleBackend = Form.useWatch(path('backend'), form);
   const modelBackend = Form.useWatch('backend', form);
   const backend = roleBackend ?? modelBackend;

@@ -97,19 +97,23 @@ const AdvanceConfig = ({ pdActive }: { pdActive?: boolean } = {}) => {
           options={modelCategories}
         ></SealSelect>
       </Form.Item>
+      {/* Kept under PD as the group-wide defaults: `role_effective_model`
+          merges these into every role, and a role's own list adds to them.
+          Hidden, they were a field the model-level paste could write into but
+          nobody could read back. */}
+      <BackendParametersList></BackendParametersList>
+      <Form.Item<FormData> name="env">
+        <LabelSelector
+          label={intl.formatMessage({
+            id: 'models.form.env'
+          })}
+          btnText={intl.formatMessage({ id: 'common.button.vars' })}
+          onBlur={handleEnvSelectorOnBlur}
+          onDelete={handleDeleteEnvSelector}
+        ></LabelSelector>
+      </Form.Item>
       {!pdActive && (
         <>
-          <BackendParametersList></BackendParametersList>
-          <Form.Item<FormData> name="env">
-            <LabelSelector
-              label={intl.formatMessage({
-                id: 'models.form.env'
-              })}
-              btnText={intl.formatMessage({ id: 'common.button.vars' })}
-              onBlur={handleEnvSelectorOnBlur}
-              onDelete={handleDeleteEnvSelector}
-            ></LabelSelector>
-          </Form.Item>
           {/* GPUStack does not support LoRA under PD. The form clears these
               adapters and submits an empty list while their control is hidden. */}
           <ModelLoraList></ModelLoraList>

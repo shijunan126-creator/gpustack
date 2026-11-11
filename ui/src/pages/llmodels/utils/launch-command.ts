@@ -314,6 +314,32 @@ const toEntries = ({ flag, values, inline }: FlagGroup): string[] => {
   return [flag, ...values.map((v) => compactJson(v.text))];
 };
 
+/**
+ * Drop from an existing parameter/environment pair what a PD member cannot
+ * take, using the same rules as a PD paste.
+ *
+ * Switching PD on runs this over the model-level lists: a script pasted before
+ * the switch was parsed by the non-PD rules, and since those lists now stay as
+ * the group defaults, an unfiltered `$7` would otherwise reach every role.
+ */
+export const sanitizeForPD = (
+  parameters?: string[] | null,
+  env?: Record<string, any> | null
+): { parameters: string[]; env: Record<string, any> } => {
+  const kept = (parameters || []).filter((entry) => {
+    const text = String(entry);
+    const flag = text.split('=', 1)[0].split(' ', 1)[0];
+    if (PD_MANAGED_FLAGS.has(flag) || MANAGED_FLAGS.has(flag)) {
+      return false;
+    }
+    return !text.includes('$');
+  });
+  const nextEnv = Object.fromEntries(
+    Object.entries(env || {}).filter(([name]) => !MANAGED_ENV.has(name))
+  );
+  return { parameters: kept, env: nextEnv };
+};
+
 export const parseLaunchCommand = (
   input: string,
   options: ParseOptions = {}

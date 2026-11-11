@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   mergeLaunchCommand,
   parseLaunchCommand,
+  sanitizeForPD,
   tokenize
 } from '../launch-command';
 
@@ -253,5 +254,19 @@ test('without PD a script keeps its shell variables as before', () => {
   const result = parseLaunchCommand(PD_DECODE);
   assert.ok(result.parameters.some((entry) => entry.includes('$7')));
   assert.equal(result.variables.includes('--tensor-parallel-size'), true);
+});
+
+test('switching PD on drops what a member cannot take from an earlier paste', () => {
+  const cleaned = sanitizeForPD(
+    [
+      '--device-ids=$1',
+      '--tensor-parallel-size=$7',
+      '--max-num-seqs=40',
+      '--seed=1024'
+    ],
+    { HCCL_IF_IP: '$LOCAL_IP', HCCL_BUFFSIZE: '1024' }
+  );
+  assert.deepEqual(cleaned.parameters, ['--max-num-seqs=40', '--seed=1024']);
+  assert.deepEqual(cleaned.env, { HCCL_BUFFSIZE: '1024' });
 });
 
