@@ -821,7 +821,9 @@ export const PD_MODE_CUSTOM = 'custom';
 export const PD_CAPABLE_BACKENDS = ['vLLM', 'SGLang'];
 
 // Engines the PD section is offered for at all — mirrors the backend's
-// `PD_BACKENDS`, which refuses the rest at admission.
+// `PD_BACKENDS`, which refuses the rest at admission. vLLM-Ascend is in both
+// lists: the engine is vLLM with an Ascend runner, so prefill/decode name the
+// same two roles, and `vllm-ascend-mooncake` is served as a mode.
 //
 // A different question from the list above, and a coarser one: that is about
 // which recipes apply, this is about whether prefill/decode names anything the
@@ -829,7 +831,7 @@ export const PD_CAPABLE_BACKENDS = ['vLLM', 'SGLang'];
 // across. MindIE is excluded as a product decision — it does disaggregate on
 // Ascend, but no recipe ships for it, so the only way in would be `custom`
 // with every connection parameter hand-written.
-export const PD_ELIGIBLE_BACKENDS = ['vLLM', 'SGLang', 'Custom'];
+export const PD_ELIGIBLE_BACKENDS = ['vLLM', 'vLLM-Ascend', 'SGLang', 'Custom'];
 
 /**
  * Whether requests may be routed to this model.
