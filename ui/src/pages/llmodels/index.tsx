@@ -118,6 +118,7 @@ const LLModels: React.FC = () => {
         }}
       >
         <Tabs
+          className="models-tabs"
           renderTabBar={() => <></>}
           items={[
             {
