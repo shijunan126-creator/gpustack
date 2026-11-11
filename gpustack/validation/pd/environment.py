@@ -64,7 +64,11 @@ class _RoleEnvironment:
 def effective_role_environment(
     role: RoleSpec, model_env: Optional[Dict[str, str]]
 ) -> Dict[str, str]:
-    """Copy the dictionary the role uses; a non-null override replaces it.
+    """The environment the role runs with: the model's, then the role's on top.
+
+    Matches `role_effective_model`, which merges the same pair for the worker:
+    a role adds variables, and re-setting one the model already carries takes
+    the role's value. A null override keeps the model's environment untouched.
 
     Args:
         role: The role whose environment is being resolved.
@@ -73,7 +77,9 @@ def effective_role_environment(
     Returns:
         A copy of the effective environment dictionary.
     """
-    return dict(model_env or {}) if role.env is None else dict(role.env)
+    merged = dict(model_env or {})
+    merged.update(role.env or {})
+    return merged
 
 
 def _roles(

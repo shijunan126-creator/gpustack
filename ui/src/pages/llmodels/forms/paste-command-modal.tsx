@@ -4,6 +4,7 @@ import _ from 'lodash';
 import React, { useState } from 'react';
 import {
   LaunchCommandResult,
+  ParseOptions,
   parseLaunchCommand
 } from '../utils/launch-command';
 
@@ -11,34 +12,37 @@ interface PasteCommandModalProps {
   open: boolean;
   onCancel: () => void;
   onApply: (parsed: LaunchCommandResult) => void;
+  /** PD role: the platform owns the connector, ports and placement. */
+  parseOptions?: ParseOptions;
 }
 
 const PasteCommandModal: React.FC<PasteCommandModalProps> = ({
   open,
   onCancel,
-  onApply
+  onApply,
+  parseOptions
 }) => {
   const intl = useIntl();
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<LaunchCommandResult>(() =>
-    parseLaunchCommand('')
+    parseLaunchCommand('', parseOptions)
   );
 
   const handleChange = (value: string) => {
     setText(value);
-    setParsed(parseLaunchCommand(value));
+    setParsed(parseLaunchCommand(value, parseOptions));
   };
 
   const handleCancel = () => {
     setText('');
-    setParsed(parseLaunchCommand(''));
+    setParsed(parseLaunchCommand('', parseOptions));
     onCancel();
   };
 
   const handleApply = () => {
     onApply(parsed);
     setText('');
-    setParsed(parseLaunchCommand(''));
+    setParsed(parseLaunchCommand('', parseOptions));
   };
 
   const envEntries = Object.entries(parsed.env);

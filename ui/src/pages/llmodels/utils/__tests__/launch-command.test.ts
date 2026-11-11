@@ -175,3 +175,81 @@ test('merging into an empty form just adds', () => {
     { parameters: ['--a'], env: { X: '1' } }
   );
 });
+
+// The published PD launcher scripts: a guard line, exports with shell
+// arithmetic, and a serve command whose values are positional parameters.
+const PD_DECODE = `#!/usr/bin/env bash
+: "\${LOCAL_IP:?Set LOCAL_IP in the D0 or D1 wrapper}"
+export HCCL_IF_IP="$LOCAL_IP"
+export HCCL_SOCKET_IFNAME="$NIC_NAME"
+export HCCL_BUFFSIZE=1024
+export HCCL_HOST_SOCKET_PORT_RANGE="$((60000 + $4 * 100))-$((60099 + $4 * 100))"
+export VLLM_RPC_TIMEOUT=3600000
+exec vllm serve "$MODEL_PATH" \\
+  --device-ids "$1" \\
+  --port "$2" \\
+  --data-parallel-size "$3" \\
+  --data-parallel-rank "$4" \\
+  --tensor-parallel-size "$7" \\
+  --served-model-name glm \\
+  --max-num-seqs 40 \\
+  --gpu-memory-utilization 0.92 \\
+  --async-scheduling \\
+  --enable-auto-tool-choice \\
+  --kv-transfer-config '{"kv_connector":"MooncakeConnectorV2","kv_role":"kv_consumer"}' \\
+  --additional-config '{"enable_flashcomm1": false}'
+`;
+
+test('a PD role keeps the engine flags and refuses what the form owns', () => {
+  const result = parseLaunchCommand(PD_DECODE, { pd: true });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.parameters, [
+    '--max-num-seqs=40',
+    '--gpu-memory-utilization=0.92',
+    '--async-scheduling',
+    '--enable-auto-tool-choice',
+    '--additional-config={"enable_flashcomm1":false}'
+  ]);
+  // Nothing positional survives: `$1`..`$8` have no launcher here.
+  assert.ok(!result.parameters.some((entry) => entry.includes('$')));
+  assert.deepEqual(
+    result.dropped
+      .filter(({ flag }) => flag.startsWith('-'))
+      .map(({ flag, reason }) => [flag, reason]),
+    [
+      ['--device-ids', 'managed'],
+      ['--port', 'managed'],
+      ['--data-parallel-size', 'managed'],
+      ['--data-parallel-rank', 'managed'],
+      ['--tensor-parallel-size', 'managed'],
+      ['--served-model-name', 'managed'],
+      ['--kv-transfer-config', 'managed']
+    ]
+  );
+});
+
+test('a PD role keeps its own environment and refuses the connection variables', () => {
+  const result = parseLaunchCommand(PD_DECODE, { pd: true });
+  assert.deepEqual(result.env, {
+    HCCL_BUFFSIZE: '1024',
+    VLLM_RPC_TIMEOUT: '3600000'
+  });
+  assert.deepEqual(
+    result.dropped
+      .filter(({ reason }) => reason === 'managed')
+      .map(({ flag }) => flag)
+      .filter((flag) => !flag.startsWith('-'))
+      .sort(),
+    ['HCCL_HOST_SOCKET_PORT_RANGE', 'HCCL_IF_IP', 'HCCL_SOCKET_IFNAME']
+  );
+  // Those values name this node's interface or another rank's ports; there is
+  // no launcher here to supply them, so none may reach the form.
+  assert.deepEqual(result.variables, []);
+});
+
+test('without PD a script keeps its shell variables as before', () => {
+  const result = parseLaunchCommand(PD_DECODE);
+  assert.ok(result.parameters.some((entry) => entry.includes('$7')));
+  assert.equal(result.variables.includes('--tensor-parallel-size'), true);
+});
+

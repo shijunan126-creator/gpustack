@@ -174,6 +174,8 @@ export default {
   'models.form.pasteCommand.skipped.managed':
     'GPUStack がインスタンスごとに設定します',
   'models.form.pasteCommand.skipped.model': 'モデルはモデルソースで選択します',
+  'models.form.pasteCommand.skipped.variable':
+    '値はランチャースクリプトが供給するシェル変数です',
   'models.form.pasteCommand.model':
     'コマンド内のモデル：{model}。モデルソースで選択してください。',
   'models.form.pasteCommand.variables':

@@ -98,18 +98,72 @@ def test_declared_fields_override_and_the_rest_inherit():
     model = _model(roles=_pd_roles())
     prefill = role_effective_model(model, "prefill")
 
-    # Overridden.
+    # Merged: the role's entries follow the model's, so a shared half written
+    # once at the model level reaches every role.
     assert prefill.backend_parameters == [
+        "--model-level",
         "--enforce-eager",
         "--max-num-batched-tokens=8192",
     ]
-    assert prefill.env == {"HCCL_CONNECT_TIMEOUT": "120", "HCCL_BUFFSIZE": "2560"}
+    assert prefill.env == {
+        "MODEL_LEVEL": "1",
+        "HCCL_CONNECT_TIMEOUT": "120",
+        "HCCL_BUFFSIZE": "2560",
+    }
     # Inherited: the role declares neither.
     assert prefill.backend == "vLLM"
     assert prefill.backend_version == "0.11.0"
     assert prefill.image_name == "model/image"
     # Identity carried through, so downstream readers still know what this is.
     assert (prefill.id, prefill.name, prefill.cluster_id) == (7, "llama-70b-pd", 3)
+
+
+def test_a_repeated_flag_takes_the_role_value():
+    # The engine keeps the last value it parses, so the merged list must not
+    # carry the model's copy ahead of it.
+    model = _model(
+        backend_parameters=["--max-model-len=4096", "--seed=1"],
+        roles=[
+            RoleSpec(
+                name="prefill",
+                backend_parameters=["--max-model-len=150000"],
+            ),
+            RoleSpec(name="decode"),
+        ],
+    )
+    assert role_effective_model(model, "prefill").backend_parameters == [
+        "--seed=1",
+        "--max-model-len=150000",
+    ]
+    assert role_effective_model(model, "decode").backend_parameters == [
+        "--max-model-len=4096",
+        "--seed=1",
+    ]
+
+
+def test_a_repeated_environment_variable_takes_the_role_value():
+    model = _model(
+        env={"HCCL_BUFFSIZE": "2560", "KEEP": "1"},
+        roles=[RoleSpec(name="prefill", env={"HCCL_BUFFSIZE": "1024"})],
+    )
+    assert role_effective_model(model, "prefill").env == {
+        "HCCL_BUFFSIZE": "1024",
+        "KEEP": "1",
+    }
+
+
+def test_a_positional_entry_on_the_model_survives_the_merge():
+    # Only flags can collide; a bare token has no name to match on and must not
+    # be dropped by the dedupe.
+    model = _model(
+        backend_parameters=["--trust-remote-code", "positional"],
+        roles=[RoleSpec(name="prefill", backend_parameters=["--enforce-eager"])],
+    )
+    assert role_effective_model(model, "prefill").backend_parameters == [
+        "--trust-remote-code",
+        "positional",
+        "--enforce-eager",
+    ]
 
 
 def test_two_roles_of_one_model_get_different_values():

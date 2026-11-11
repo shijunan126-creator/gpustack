@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useFormContext } from '../config/form-context';
 import {
   LaunchCommandResult,
+  ParseOptions,
   mergeLaunchCommand
 } from '../utils/launch-command';
 import PasteCommandModal from './paste-command-modal';
@@ -15,7 +16,10 @@ import PasteCommandModal from './paste-command-modal';
  * Writes parameters and environment together, since a launch script carries
  * both and one without the other is half a configuration.
  */
-const usePasteCommand = (namePrefix?: (string | number)[]) => {
+const usePasteCommand = (
+  namePrefix?: (string | number)[],
+  parseOptions?: ParseOptions
+) => {
   const form = Form.useFormInstance();
   const { onValuesChange } = useFormContext();
   const [open, setOpen] = useState(false);
@@ -42,6 +46,7 @@ const usePasteCommand = (namePrefix?: (string | number)[]) => {
         open={open}
         onCancel={() => setOpen(false)}
         onApply={handleApply}
+        parseOptions={parseOptions}
       />
     )
   };

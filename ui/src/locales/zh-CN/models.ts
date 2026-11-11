@@ -164,6 +164,8 @@ export default {
   'models.form.pasteCommand.skipped': '未应用',
   'models.form.pasteCommand.skipped.managed': 'GPUStack 会为每个实例自动设置',
   'models.form.pasteCommand.skipped.model': '模型在模型来源中选择',
+  'models.form.pasteCommand.skipped.variable':
+    '取值为 shell 变量，只有脚本里的启动器才会给出',
   'models.form.pasteCommand.model':
     '命令中的模型：{model}。请在模型来源中选择。',
   'models.form.pasteCommand.variables':

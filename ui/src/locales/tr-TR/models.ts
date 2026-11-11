@@ -171,6 +171,8 @@ export default {
   'models.form.pasteCommand.skipped.managed':
     'GPUStack bunu her örnek için kendisi ayarlar',
   'models.form.pasteCommand.skipped.model': 'model, model kaynağında seçilir',
+  'models.form.pasteCommand.skipped.variable':
+    'değeri, başlatıcı betiğin sağladığı bir kabuk değişkenidir',
   'models.form.pasteCommand.model':
     'Komuttaki model: {model}. Model kaynağında seçin.',
   'models.form.pasteCommand.variables':

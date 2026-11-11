@@ -314,9 +314,11 @@ const BasicForm: React.FC<BasicFormProps> = (props) => {
           <input />
         </Form.Item>
       )}
-      {/* Under PD the model-level parameters are gone — each role holds its
-          own — so there is nothing here for a pasted script to fill. */}
-      {!props.pdActive && <PasteCommandEntry></PasteCommandEntry>}
+      {/* Kept under PD as the group-wide default: a role that pastes nothing
+          inherits these, so the shared half of a launch script is entered once
+          here instead of twice. The connection state stays the form's — see
+          `PD_MANAGED_FLAGS`. */}
+      <PasteCommandEntry></PasteCommandEntry>
       <Form.Item<FormData> name="description">
         <CInput.TextArea
           scaleSize={true}

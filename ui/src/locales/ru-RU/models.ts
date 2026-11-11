@@ -175,6 +175,8 @@ export default {
     'GPUStack задаёт это для каждого экземпляра',
   'models.form.pasteCommand.skipped.model':
     'модель выбирается в источнике модели',
+  'models.form.pasteCommand.skipped.variable':
+    'значение — переменная оболочки, которую задаёт скрипт-лаунчер',
   'models.form.pasteCommand.model':
     'Модель в команде: {model}. Выберите её в источнике модели.',
   'models.form.pasteCommand.variables':

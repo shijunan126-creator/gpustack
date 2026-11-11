@@ -76,10 +76,12 @@ def test_equivalent_layout_names_are_accepted(prefill, decode):
 
 
 @pytest.mark.parametrize("role_env", [{}, {"OMP_NUM_THREADS": "2"}])
-def test_role_environment_replaces_the_model_dictionary(role_env):
+def test_role_environment_adds_to_the_model_dictionary(role_env):
+    # The model's variables reach the role as well; a role only adds to them or
+    # overrides a key, matching `role_effective_model`.
     model = model_input(decode_env=role_env, model_env={"VLLM_KV_CACHE_LAYOUT": "NHD"})
     validate_role_pairing(model)
-    assert _pairing_unverified(model) is True
+    assert _pairing_unverified(model) is False
 
 
 def test_an_unknown_layout_is_reported_instead_of_guessed():

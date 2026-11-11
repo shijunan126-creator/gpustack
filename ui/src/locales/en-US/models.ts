@@ -172,6 +172,8 @@ export default {
     'GPUStack sets this for each instance',
   'models.form.pasteCommand.skipped.model':
     'the model is chosen in the model source',
+  'models.form.pasteCommand.skipped.variable':
+    'its value is a shell variable the launcher script supplies',
   'models.form.pasteCommand.model':
     'Model in the command: {model}. Select it in the model source.',
   'models.form.pasteCommand.variables':
