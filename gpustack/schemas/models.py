@@ -1404,6 +1404,39 @@ _ROLE_OWN_FIELDS = frozenset({"name", "dependencies", "resources"})
 
 _ROLE_OVERRIDE_FIELDS = frozenset(RoleSpec.model_fields) - _ROLE_OWN_FIELDS
 
+# Role fields that add to the Model's instead of replacing them.
+#
+# Everything else on a role is a single value, so "set" can only mean "instead
+# of". These two are collections a deployment reasonably splits: the model
+# carries what both roles share (pasted once), the role carries what only it
+# needs. Replacing would make the second half unpasteable without repeating the
+# first.
+_MERGED_ROLE_FIELDS = frozenset({"backend_parameters", "env"})
+
+
+def _parameter_flag(entry: Any) -> Optional[str]:
+    """The flag a parameter entry sets, or None for a positional token."""
+    token = str(entry).strip().split("=", 1)[0].split(" ", 1)[0]
+    return token if token.startswith("-") else None
+
+
+def _merge_backend_parameters(
+    base: Optional[List[str]], extra: Optional[List[str]]
+) -> List[str]:
+    """Append the role's entries, letting a repeated flag take the role's value.
+
+    A repeated flag is one setting, not two: the engine keeps the last one it
+    parses, which is the role's, so dropping the base copy makes the merged
+    list say what the engine will do.
+    """
+    if not base:
+        return list(extra or [])
+    if not extra:
+        return list(base)
+    extra_flags = {flag for entry in extra if (flag := _parameter_flag(entry))}
+    kept = [entry for entry in base if _parameter_flag(entry) not in extra_flags]
+    return kept + list(extra)
+
 
 def find_role(model, role_name: Optional[str]) -> Optional[RoleSpec]:
     """The named role of `model`, or None if it has no roles or no match."""
@@ -1558,12 +1591,14 @@ def role_effective_model(model, role_name: Optional[str]):
     """Return `model` with the named role's overrides applied.
 
     A `RoleSpec` field left as None means "inherit the Model field of the same
-    name". Nothing downstream performs that merge: the worker's start path
-    reads `self._model.<field>` in dozens of places and the scheduler's
-    filters, selectors and scorers read a Model in dozens more, all of them
-    expecting a single set of values. So the merge happens once, here, at the
-    two points where a Model is handed to those readers — `get_model()` on the
-    worker and `find_candidate()` on the server.
+    name". `backend_parameters` and `env` are the exception: a role adds to the
+    model's, with the role's value winning for a flag or variable both set
+    (`_MERGED_ROLE_FIELDS`). Nothing downstream performs that merge: the
+    worker's start path reads `self._model.<field>` in dozens of places and the
+    scheduler's filters, selectors and scorers read a Model in dozens more, all
+    of them expecting a single set of values. So the merge happens once, here,
+    at the two points where a Model is handed to those readers — `get_model()`
+    on the worker and `find_candidate()` on the server.
 
     `replicas` is projected too, and unconditionally: it is never None, and
     for a role-bearing model `Model.replicas` is a 0/1 deployment switch while
@@ -1594,6 +1629,10 @@ def role_effective_model(model, role_name: Optional[str]):
         value = getattr(role, field, None)
         if value is None:
             continue
+        if field == "backend_parameters":
+            value = _merge_backend_parameters(getattr(model, field, None), value)
+        elif field == "env":
+            value = {**(getattr(model, field, None) or {}), **value}
         # Copy, so that mutating a projected list in place — the worker
         # substitutes `{data_dir}` into `backend_parameters` that way — cannot
         # reach back into the role held by `model.roles`.

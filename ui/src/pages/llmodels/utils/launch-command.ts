@@ -11,8 +11,11 @@
 export interface DroppedFlag {
   flag: string;
   value?: string;
-  /** `managed`: GPUStack sets it per instance. `model`: the model source does. */
-  reason: 'managed' | 'model';
+  /**
+   * `managed`: GPUStack sets it per instance. `model`: the model source does.
+   * `variable`: the value reads a shell variable, so it is not a value at all.
+   */
+  reason: 'managed' | 'model' | 'variable';
 }
 
 export interface LaunchCommandResult {
@@ -32,6 +35,61 @@ export interface LaunchCommandResult {
 // missing, a pasted value would win and break routing to the instance.
 const MANAGED_FLAGS = new Set(['--host', '--port', '--served-model-name']);
 const MODEL_FLAGS = new Set(['--model', '--model-path']);
+
+/**
+ * Flags a PD role must not take from a pasted script.
+ *
+ * The form is the source of truth for everything a disaggregated member needs
+ * to connect: the transport recipe writes `--kv-transfer-config`, the platform
+ * allocates `--port`/`--device-ids`, and the role's replica count and cards
+ * decide the parallelism. A pasted copy of any of them is at best redundant and
+ * at worst a second, contradicting value — the connector the user pastes is not
+ * the one the peer was told to expect.
+ */
+export const PD_MANAGED_FLAGS = new Set([
+  '--device-ids',
+  '--tensor-parallel-size',
+  '--data-parallel-size',
+  '--data-parallel-size-local',
+  '--data-parallel-rank',
+  '--data-parallel-start-rank',
+  '--data-parallel-address',
+  '--data-parallel-rpc-port',
+  '--data-parallel-external-lb',
+  '--headless',
+  '--api-server-count',
+  '--kv-transfer-config'
+]);
+
+/**
+ * Environment a member gets from the platform rather than from its script.
+ *
+ * These name an address, an interface or another node's port, so a pasted
+ * value points at the author's machine. `HCCL_*_PORT_RANGE` is per DP rank,
+ * which a member — one engine per instance here — cannot express at all.
+ */
+export const MANAGED_ENV = new Set([
+  'HCCL_IF_IP',
+  'VLLM_HOST_IP',
+  'HCCL_SOCKET_IFNAME',
+  'GLOO_SOCKET_IFNAME',
+  'TP_SOCKET_IFNAME',
+  'HCCL_HOST_SOCKET_PORT_RANGE',
+  'HCCL_NPU_SOCKET_PORT_RANGE',
+  'LOCAL_IP',
+  'NIC_NAME',
+  'MODEL_PATH',
+  'PYTHONPATH'
+]);
+
+export interface ParseOptions {
+  /**
+   * The pasted script is one role of a PD deployment. Widens what the platform
+   * owns (see `PD_MANAGED_FLAGS`) and refuses values that only resolve in the
+   * author's shell, since a disaggregated member has no launcher to supply them.
+   */
+  pd?: boolean;
+}
 
 interface Word {
   text: string;
@@ -252,7 +310,13 @@ const toEntries = ({ flag, values, inline }: FlagGroup): string[] => {
   return [flag, ...values.map((v) => compactJson(v.text))];
 };
 
-export const parseLaunchCommand = (input: string): LaunchCommandResult => {
+export const parseLaunchCommand = (
+  input: string,
+  options: ParseOptions = {}
+): LaunchCommandResult => {
+  const managedFlags: ReadonlySet<string> = options.pd
+    ? new Set([...MANAGED_FLAGS, ...PD_MANAGED_FLAGS])
+    : MANAGED_FLAGS;
   const result: LaunchCommandResult = {
     env: {},
     parameters: [],
@@ -278,9 +342,22 @@ export const parseLaunchCommand = (input: string): LaunchCommandResult => {
       assignments.forEach((word) => {
         const match = ASSIGNMENT.exec(word.text);
         if (match) {
-          result.env[match[1]] = match[2];
+          const name = match[1];
+          const value = match[2];
+          if (MANAGED_ENV.has(name)) {
+            result.dropped.push({ flag: name, value, reason: 'managed' });
+            return;
+          }
+          // A value that only resolves in the author's shell is not a value the
+          // form can hold: `$((60000 + $4 * 100))` would be stored literally.
+          if (options.pd && word.expands) {
+            result.dropped.push({ flag: name, value, reason: 'variable' });
+            result.variables.push(name);
+            return;
+          }
+          result.env[name] = value;
           if (word.expands) {
-            result.variables.push(match[1]);
+            result.variables.push(name);
           }
         }
       });
@@ -319,13 +396,20 @@ export const parseLaunchCommand = (input: string): LaunchCommandResult => {
     }
     groupFlags(words.slice(flagsFrom)).forEach((group) => {
       const value = group.values.map((v) => v.text).join(' ') || undefined;
-      if (MANAGED_FLAGS.has(group.flag)) {
+      if (managedFlags.has(group.flag)) {
         result.dropped.push({ flag: group.flag, value, reason: 'managed' });
         return;
       }
       if (MODEL_FLAGS.has(group.flag)) {
         result.model = value;
         result.dropped.push({ flag: group.flag, value, reason: 'model' });
+        return;
+      }
+      if (options.pd && group.values.some((v) => v.expands)) {
+        // `$1`..`$8` in the published launcher scripts stand for values the
+        // launcher supplies; a member started on its own has no launcher.
+        result.dropped.push({ flag: group.flag, value, reason: 'variable' });
+        result.variables.push(group.flag);
         return;
       }
       if (group.values.some((v) => v.expands)) {
