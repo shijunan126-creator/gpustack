@@ -44,6 +44,7 @@ import { knownCacheService } from '../services/use-query-cache-services';
 import { useQueryContextLength } from '../services/use-query-context-length';
 import { derivesNativeAnthropicApi, generateGPUIds } from '../utils';
 import { getDeploymentFormReplicas } from '../utils/deployment-lifecycle';
+import { sanitizeForPD } from '../utils/launch-command';
 import { clearUnsupportedPDCacheServices } from '../utils/pd-cache-services';
 import AdvanceConfig from './advance-config';
 import BasicForm from './basic';
@@ -273,6 +274,15 @@ const DataForm: React.FC<DataFormProps> = forwardRef((props, ref) => {
     }
     if (next.enabled) {
       form.setFieldValue('speculative_config', { enabled: false });
+      // A script pasted before the switch was read by the non-PD rules. These
+      // lists stay as the group defaults now, so drop what a member cannot
+      // take before they reach every role.
+      const cleaned = sanitizeForPD(
+        form.getFieldValue('backend_parameters'),
+        form.getFieldValue('env')
+      );
+      form.setFieldValue('backend_parameters', cleaned.parameters);
+      form.setFieldValue('env', cleaned.env);
     }
     if (next.clearModelScheduling) {
       // Cleared, not just hidden. `role_effective_model` projects the model's
@@ -288,13 +298,10 @@ const DataForm: React.FC<DataFormProps> = forwardRef((props, ref) => {
     if (next.clearModelKVCache) {
       form.setFieldValue('extended_kv_cache', { enabled: false });
     }
-    if (next.clearModelParams) {
-      // Same reason as `clearModelScheduling`: hidden-but-set would keep
-      // projecting onto every role through `role_effective_model`.
-      form.setFieldsValue({ backend_parameters: [] });
-      // Replace object fields so nested keys are cleared as well.
-      form.setFieldValue('env', {});
-    }
+    // `clearModelParams` no longer clears anything: the model-level parameter
+    // and environment lists stay visible under PD and are inherited by every
+    // role (`role_effective_model` merges them), so wiping them here would
+    // delete the half of a launch script that is shared by both members.
     if (next.clearModelLora) {
       // PD and LoRA cannot be submitted together. Clear the hidden field and
       // retain its snapshot so turning PD back off restores the user's adapters.
