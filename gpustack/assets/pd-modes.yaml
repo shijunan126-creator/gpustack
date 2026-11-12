@@ -904,10 +904,19 @@ modes:
     # The local NPU offload path uses the same bundled CANN runner baseline.
     in_process_cache_versions: ">=0.23.0"
     connector_variants:
-      standard: MooncakeConnectorV1
-      hybrid: MooncakeHybridConnector
-    # Hybrid handles standard layouts when model metadata is unavailable.
-    default_connector_variant: hybrid
+      # Both KV layouts run the rewritten connector. vllm-ascend registers
+      # `MooncakeConnectorV2` beside the legacy `MooncakeConnectorV1` in the
+      # 0.30 and 0.32 trees, and its own PD guide launches V2 for hybrid
+      # (linear + sparse-attention) models such as GLM-5.3.
+      #
+      # The separate `MooncakeHybridConnector` path is the one that must not be
+      # used for those: it starts, serves and answers 200, but the KV decode
+      # reads back is misaligned — the symptom is a fluent answer unrelated to
+      # the prompt, not an error anyone can see.
+      standard: MooncakeConnectorV2
+      hybrid: MooncakeConnectorV2
+    # V2 handles both layouts, so neither classification changes the connector.
+    default_connector_variant: standard
     cache_services:
       - provider: Mooncake
         # AscendStore composition uses the same bundled CANN runner baseline.
