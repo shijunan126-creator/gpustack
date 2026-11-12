@@ -1042,88 +1042,58 @@ modes:
           GLOO_SOCKET_IFNAME: "{{net_device}}"
           TP_SOCKET_IFNAME: "{{net_device}}"
     router:
-      membership_update: dynamic
+      # The router is vllm-ascend's own PD proxy example, run from the model's
+      # image. It is the one router every vllm-ascend image carries: the tree
+      # ships the script under examples/, while the `vllm-router` package the
+      # CUDA recipes launch is only in GPUStack's bundled runners. Launching
+      # the package from a published CANN image fails with
+      # `exec: vllm-router: not found` (exit 127) and the group stays partial
+      # behind a router that never starts.
+      #
+      # What that costs, recorded rather than discovered later: the example
+      # exports no Prometheus exposition and offers no membership API, so
+      # scale-out re-renders and restarts the router — a brief outage rather
+      # than an in-place update. Its own /v1/models and /healthcheck are
+      # served, so readiness and the model listing still work.
+      membership_update: restart
       protocol: two_hop
       image: "{{runner_image}}"
       entrypoint:
-        - vllm-router
+        - python3
+        - /vllm-workspace/vllm-ascend/examples/disaggregated_prefill_v1/load_balance_proxy_server_example.py
       connection_args:
-        # See vllm-nixl for what --enable-igw buys and why the CLI peers'
-        # registry behaviour is version-dependent.
-        - --enable-igw
-        - --vllm-pd-disaggregation
-        # `nixl`, on a mode whose transport backend is Mooncake, and that is not
-        # a mistake: this flag names the *wire protocol shape*, not the
-        # transport. vllm-ascend's Mooncake connector speaks vLLM's
-        # NixlConnector protocol byte for byte. Choosing `mooncake` here is not
-        # a degraded pairing but a hang: that branch first queries a Mooncake
-        # bootstrap server on :8998, which vllm-ascend does not run.
-        - --kv-connector
-        - nixl
         - --host
         - "{{worker_ip}}"
         - --port
         - "{{port}}"
-        - --prometheus-host
-        - "{{worker_ip}}"
-        - --prometheus-port
-        - "{{ports.prometheus}}"
+      env:
+        # The example's first import reaches vllm.logger, which pulls torch and
+        # then torch_npu, and torch_npu aborts without an accelerator visible —
+        # on the one role that is CPU-only by design. See PDRouter.env.
+        TORCH_DEVICE_BACKEND_AUTOLOAD: "0"
       tunable_args:
-        # Prefix affinity benefits prefill; decode rotates independently
-        # because its prompt KV arrives through the connector.
-        - flag: --prefill-policy
-          default: "cache_aware"
-          options: [random, round_robin, cache_aware, power_of_two, consistent_hash]
-        - flag: --decode-policy
-          default: "round_robin"
-          options: [random, round_robin, cache_aware, power_of_two, consistent_hash]
-        # The same two values and the same reasoning as vllm-nixl, including the
-        # breaker being inert on this router's PD path. Everything else is left
-        # to the router's own defaults, the health check above all.
-        - flag: --cb-failure-threshold
-          default: "10"
-          value_type: int
-          min: 1
-        - flag: --retry-max-retries
+        # The example's own retry budget. It carries no policy knobs: prefill
+        # is picked by the scheduler's own rules, not a --prefill-policy flag,
+        # so there is nothing here to keep in step with the CUDA recipes.
+        - flag: --max-retries
           default: "3"
           value_type: int
           min: 0
-      ports:
-        # Same collision as vllm-nixl: --prometheus-port defaults to 29000 and
-        # always binds.
-        - { name: prometheus, count: 1, inject_to: args }
       peers:
-        style: repeated_flag
-        prefill: { flag: "--prefill", value: "http://{{peer.ip}}:{{peer.port}}" }
-        decode: { flag: "--decode", value: "http://{{peer.ip}}:{{peer.port}}" }
+        style: parallel_lists
+        prefill: { host_flag: --prefiller-hosts, port_flag: --prefiller-ports }
+        decode: { host_flag: --decoder-hosts, port_flag: --decoder-ports }
       capabilities:
-        metrics: true
+        # /v1/models and /healthcheck are routes of the example; a Prometheus
+        # exposition is not, and polling for one would 404 once a second.
+        metrics: false
         models_endpoint: true
         # A property of the *connector*, not the router: `kv_leases` records
         # that Mooncake exports zero Prometheus counters, so an expired lease is
         # visible only in the engine log. A router with metrics does not conjure
         # an engine-side counter that was never written.
         kv_expired_metric: false
-      # --enable-igw in connection_args routes membership updates through the
-      # manager, which dispatches worker_type to the appropriate PD registry.
-      # Probe the registry after an update to verify the peer was admitted.
-      membership_api:
-        add: POST /workers
-        remove: DELETE /workers/{url}
-        # The difference between "the request was accepted" and "the member is
-        # in the registry": upstream polls the peer before admitting it and
-        # drops it silently on timeout.
-        probe: GET /workers
-        body:
-          url: "http://{{peer.ip}}:{{peer.port}}"
-          model_id: "{{model_name}}"
-        role_field: worker_type
-        role_values:
-          prefill: prefill
-          decode: decode
-        requires_args:
-          - --enable-igw
-      health_path: /health
+      health_path: /healthcheck
 
   - name: custom
     display_name: Custom

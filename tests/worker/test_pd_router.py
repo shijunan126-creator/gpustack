@@ -93,7 +93,6 @@ def test_the_catalog_router_renders_a_complete_command():
     [
         "vllm-nixl",
         "vllm-mooncake",
-        "vllm-ascend-mooncake",
         "sglang-mooncake",
         "sglang-nixl",
     ],
@@ -110,7 +109,7 @@ def test_prefill_reuses_prefixes_and_decode_rotates_workers(mode):
     assert command[command.index("--decode-policy") + 1] == "round_robin"
 
 
-@pytest.mark.parametrize("mode", ["vllm-nixl", "vllm-ascend-mooncake"])
+@pytest.mark.parametrize("mode", ["vllm-nixl"])
 def test_internal_lb_router_uses_one_http_upstream_per_member(mode):
     plan = render_router(get_pd_mode(mode), VARIABLES, PEERS)
     assert "--intra-node-data-parallel-size" not in plan.command
@@ -121,6 +120,45 @@ def test_internal_lb_router_uses_one_http_upstream_per_member(mode):
             if arg == f"--{role}"
         ]
         assert urls == [f"http://{peer.ip}:{peer.port}" for peer in addresses]
+
+
+def test_the_ascend_router_takes_its_peers_as_host_and_port_lists():
+    """vllm-ascend's proxy example has no per-peer flag: it takes each side's
+    hosts and ports as two parallel lists, in the order the peers appear."""
+    peers = {
+        "prefill": [
+            PeerAddress("10.0.0.1", 40027, {"bootstrap": 40000}),
+            PeerAddress("10.0.0.3", 40029),
+        ],
+        "decode": [PeerAddress("10.0.0.2", 40028)],
+    }
+    plan = render_router(get_pd_mode("vllm-ascend-mooncake"), VARIABLES, peers)
+
+    assert plan.command[:2] == [
+        "python3",
+        "/vllm-workspace/vllm-ascend/examples/disaggregated_prefill_v1/"
+        "load_balance_proxy_server_example.py",
+    ]
+    # The router's own listen address, then each side's two lists.
+    assert plan.command[plan.command.index("--prefiller-hosts") + 1] == "10.0.0.1"
+    hosts = plan.command[
+        plan.command.index("--prefiller-hosts") + 1 : plan.command.index(
+            "--prefiller-ports"
+        )
+    ]
+    ports = plan.command[
+        plan.command.index("--prefiller-ports") + 1 : plan.command.index(
+            "--decoder-hosts"
+        )
+    ]
+    assert hosts == ["10.0.0.1", "10.0.0.3"]
+    assert ports == ["40027", "40029"]
+    assert plan.command[plan.command.index("--decoder-hosts") + 1] == "10.0.0.2"
+    assert plan.command[plan.command.index("--decoder-ports") + 1] == "40028"
+    assert plan.health_path == "/healthcheck"
+    # The proxy's first import reaches torch_npu, which aborts without a
+    # visible accelerator on this CPU-only role.
+    assert plan.env.get("TORCH_DEVICE_BACKEND_AUTOLOAD") == "0"
 
 
 def test_mooncake_router_registers_peers_from_its_startup_command():

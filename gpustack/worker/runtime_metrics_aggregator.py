@@ -25,6 +25,7 @@ from gpustack.schemas.models import (
     ModelInstance,
     ModelInstanceStateEnum,
     ModelInstanceUpdate,
+    RoleNameEnum,
     get_backend,
     is_audio_model,
     is_image_model,
@@ -43,6 +44,26 @@ unified_registry = CollectorRegistry()
 
 # raw metrics registry
 raw_registry = CollectorRegistry()
+
+
+def _router_serves_metrics(model: Model) -> bool:
+    """Whether the model's PD router serves a Prometheus exposition.
+
+    Read off the mode, not the instance: what a router's binary exposes is a
+    property of the recipe that launched it, and the instance carries only the
+    ports it was given. An unknown mode proves nothing, so the scrape is left
+    to stand rather than silently dropped.
+    """
+    disaggregation = getattr(model, "disaggregation", None)
+    mode_name = getattr(disaggregation, "mode", None)
+    if not mode_name:
+        return True
+    try:
+        from gpustack.server.pd_mode_catalog import get_pd_mode
+
+        return bool(get_pd_mode(mode_name).router.capabilities.metrics)
+    except Exception:
+        return True
 
 
 class RuntimeMetricsAggregator:
@@ -438,6 +459,16 @@ class RuntimeMetricsAggregator:
             model_instance.state != ModelInstanceStateEnum.RUNNING
             or model_instance.worker_ip is None
             or not model_instance.ports
+        ):
+            return True
+
+        # A PD router is a different binary from the engine, and its mode
+        # declares whether that binary serves a Prometheus exposition.
+        # vllm-ascend's proxy example does not, so scraping it answers 404 on
+        # every poll — a permanent false alarm in the router's log rather than
+        # a transient failure.
+        if model_instance.role == RoleNameEnum.ROUTER.value and not (
+            _router_serves_metrics(model)
         ):
             return True
 

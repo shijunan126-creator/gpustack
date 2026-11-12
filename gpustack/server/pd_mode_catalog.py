@@ -291,8 +291,13 @@ def _parse_transfer_metrics(
 # to differ in. Two recipes on one engine reach their router the same way --
 # the same image, the same peer flags, the same membership API -- and the
 # duplication is real: `sglang-mooncake` and `sglang-nixl` declare byte-for-byte
-# identical routers today, and the two vLLM recipes share eight of their ten
-# keys.
+# identical routers today.
+#
+# The two vLLM recipes are deliberately not a pair any more. The Ascend mode
+# runs vllm-ascend's own proxy example, because that script is what every
+# published vllm-ascend image carries; the CUDA recipes run the `vllm-router`
+# package, which only GPUStack's bundled runners ship. Two routers, two
+# command lines, nothing to keep in step.
 #
 # Asserted rather than factored out, and deliberately in that order. The two
 # keys most likely to drift are `membership_api` and `connection_args`, and
@@ -308,13 +313,6 @@ _ROUTERS_THAT_MUST_AGREE: List[Tuple[str, str, Set[str]]] = [
         PDModeEnum.SGLANG_MOONCAKE.value,
         PDModeEnum.SGLANG_NIXL.value,
         set(),
-    ),
-    (
-        PDModeEnum.VLLM_NIXL.value,
-        PDModeEnum.VLLM_ASCEND_MOONCAKE.value,
-        # The connector each advertises, and the knobs an operator may turn.
-        # Everything about reaching the router itself is shared.
-        {"capabilities", "tunable_args"},
     ),
 ]
 
