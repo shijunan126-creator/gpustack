@@ -656,6 +656,31 @@ const ServiceForm: React.FC<ServiceFormProps> = forwardRef((props, ref) => {
     await onFinish(values);
   };
 
+  // A required field scrolled out of the drawer's viewport is a dead footer:
+  // its message is the only feedback and it sits above the fold, so Save looks
+  // unresponsive. Bring the first invalid field back into view. The invalid
+  // markup lands a frame or two after validation has settled, so the first
+  // frame often has nothing to scroll to yet — retry briefly instead of
+  // scrolling nothing.
+  const handleFinishFailed = (errorInfo: any) => {
+    onFinishFailed?.(errorInfo);
+    let attempts = 0;
+    const reveal = () => {
+      const invalid = document.querySelector<HTMLElement>(
+        '.ant-drawer-open .ant-form-item-has-error'
+      );
+      if (invalid) {
+        invalid.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      attempts += 1;
+      if (attempts < 6) {
+        requestAnimationFrame(reveal);
+      }
+    };
+    requestAnimationFrame(reveal);
+  };
+
   useImperativeHandle(ref, () => ({
     form,
     submit: () => {
@@ -866,7 +891,7 @@ const ServiceForm: React.FC<ServiceFormProps> = forwardRef((props, ref) => {
     <Form
       form={form}
       onFinish={handleFinish}
-      onFinishFailed={onFinishFailed}
+      onFinishFailed={handleFinishFailed}
       onValuesChange={handleFormValuesChange}
     >
       <Form.Item<FormData>
