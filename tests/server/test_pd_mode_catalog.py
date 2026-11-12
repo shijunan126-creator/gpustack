@@ -11,6 +11,7 @@ from gpustack.schemas.pd_modes import (
     PDPeerStyleEnum,
     PDPortScopeEnum,
     PDRouter,
+    PDRouterMembershipUpdateEnum,
     PDRouterProtocolEnum,
     PDTensorParallelPairingEnum,
 )
@@ -471,15 +472,16 @@ def test_router_capabilities_are_declared_per_mode():
     assert nixl.router.capabilities.kv_expired_metric is True
     assert nixl.router.health_path == "/health"
 
-    # Ascend runs the same router as the vLLM recipe, so it serves /metrics,
-    # /v1/models and /health. What stays false is the connector's KV-expiry
-    # counter: Mooncake exports none, and a router with metrics does not
-    # conjure an engine-side counter that was never written.
+    # Ascend runs vllm-ascend's own proxy example instead of vllm-router. It
+    # serves /v1/models and /healthcheck and binds no exposition, so nothing may
+    # be polled for /metrics. What stays false either way is the connector's
+    # KV-expiry counter: Mooncake exports none, and a metrics-serving router
+    # does not conjure an engine-side counter that was never written.
     ascend = get_pd_mode(PDModeEnum.VLLM_ASCEND_MOONCAKE.value)
-    assert ascend.router.capabilities.metrics is True
+    assert ascend.router.capabilities.metrics is False
     assert ascend.router.capabilities.models_endpoint is True
     assert ascend.router.capabilities.kv_expired_metric is False
-    assert ascend.router.health_path == "/health"
+    assert ascend.router.health_path == "/healthcheck"
 
 
 def test_router_capabilities_default_to_absent():
@@ -531,23 +533,21 @@ def test_router_peer_styles_and_prometheus_band():
         assert flag in nixl.router.command
     assert not [c for c in nixl.router.command if str(c).startswith("--health")]
 
-    # Hosts and ports as two parallel flags.
-    # The `parallel_lists` renderer is still supported and still tested,
-    # through a synthetic mode in tests/worker/test_pd_router.py, since no
-    # shipped mode uses it.
-    assert ascend.router.peers.style == PDPeerStyleEnum.REPEATED_FLAG
+    # Hosts and ports as two parallel flags: this recipe's router is
+    # vllm-ascend's proxy example, whose CLI takes each side's endpoints as a
+    # list pair rather than one flag per peer.
+    assert ascend.router.peers.style == PDPeerStyleEnum.PARALLEL_LISTS
     assert ascend.router.peers.prefill == {
-        "flag": "--prefill",
-        "value": "http://{{peer.ip}}:{{peer.port}}",
+        "host_flag": "--prefiller-hosts",
+        "port_flag": "--prefiller-ports",
     }
-    # `nixl` on a Mooncake-transport mode is deliberate: the flag names the
-    # wire protocol shape, not the transport. Choosing `mooncake` makes the
-    # router wait forever on a bootstrap server vllm-ascend does not run, and
-    # no request ever completes.
-    assert ascend.router.command[ascend.router.command.index("--kv-connector") + 1] == (
-        "nixl"
-    )
-    assert [band.name for band in ascend.router.ports] == ["prometheus"]
+    assert ascend.router.peers.decode == {
+        "host_flag": "--decoder-hosts",
+        "port_flag": "--decoder-ports",
+    }
+    # That router binds the one port it is given and serves no exposition, so
+    # the group allocates no Prometheus band for it.
+    assert ascend.router.ports == []
 
     # A prefill peer carries THAT PEER'S bootstrap band as a second positional
     # value. `peer.ports.` and not `ports.`: the latter is the deployment scope
@@ -879,7 +879,9 @@ def test_all_five_capabilities_round_trip_through_serialization():
         == "{{roles.decode.tensor_parallel_size}}"
     )
     assert ascend["router"]["capabilities"] == {
-        "metrics": True,
+        # The Ascend router is vllm-ascend's proxy example: it serves
+        # /v1/models and /healthcheck, and exports nothing to scrape.
+        "metrics": False,
         "models_endpoint": True,
         # The connector's, not the router's: Mooncake exports no counter for an
         # expired lease, so there is nothing for a metrics-serving router to
@@ -921,23 +923,17 @@ def test_add_without_a_read_back_is_not_available():
     assert PDMembershipAPI(add="POST /workers", probe="GET /workers").available
 
 
-def test_the_two_vllm_router_recipes_declare_the_same_membership_shape():
-    """Same binary, so the same API. Both Ascend and CUDA now launch
-    `vllm-router` — Ascend's own proxy example is gone from the catalog — and a
-    divergence here would mean one of the two was updated and the other
-    forgotten."""
-    dumped = {mode.name: mode.router for mode in load_pd_modes()}
-    nixl = dumped[PDModeEnum.VLLM_NIXL.value].membership_api
-    ascend = dumped[PDModeEnum.VLLM_ASCEND_MOONCAKE.value].membership_api
+def test_the_ascend_recipe_declares_no_membership_api():
+    """Its router is vllm-ascend's proxy example, which holds its peer list in
+    memory from the command line and offers no registry to post to.
 
-    assert nixl == ascend
-    assert nixl.add == "POST /workers"
-    assert nixl.remove == "DELETE /workers/{url}"
-    assert nixl.probe == "GET /workers"
-    # The field the single-router path drops, which is why it is named rather
-    # than assumed: the read-back has to be checked for it.
-    assert nixl.role_field == "worker_type"
-    assert nixl.role_values == {"prefill": "prefill", "decode": "decode"}
+    Declaring an API here would promise a scale-out that cannot happen, so the
+    policy is `restart`: a member change re-renders the command and restarts
+    the router. The CUDA recipes keep `vllm-router`, which does have one.
+    """
+    ascend = get_pd_mode(PDModeEnum.VLLM_ASCEND_MOONCAKE.value)
+    assert ascend.router.membership_api.available is False
+    assert ascend.router.membership_update == PDRouterMembershipUpdateEnum.RESTART
 
 
 def test_declared_and_usable_move_together_once_the_flag_is_launched():
@@ -978,7 +974,9 @@ def test_the_vllm_recipes_launch_what_their_membership_api_requires():
         assert router.membership_api.requires_args == ["--enable-igw"]
         assert "--enable-igw" in [str(t) for t in (router.command or [])], mode.name
         assert router.membership_api_usable, mode.name
-    assert seen == 2, "both vLLM-family recipes declare a membership API"
+    # Only the CUDA recipe declares one: the Ascend router is a different
+    # binary that has no registry to post to.
+    assert seen == 1, "one vLLM-family recipe declares a membership API"
 
 
 def test_the_sglang_recipes_declare_membership_without_a_flag_to_launch():
@@ -1304,23 +1302,22 @@ def test_a_router_edited_on_one_recipe_and_not_its_sibling_fails_the_load():
     assert PDModeEnum.SGLANG_MOONCAKE.value in message
 
 
-def test_the_allowance_is_not_vacuous():
-    """The vLLM pair is allowed to differ in what it advertises and what it
-    lets an operator turn, and it does. If it ever stopped, the allowance
-    would be silently guarding nothing and the next real difference would slip
-    through with it."""
+def test_the_two_recipes_reach_their_own_router_binaries():
+    """The two vLLM-family recipes no longer share a router, and which binary
+    each launches is the fact that decides everything else about it: the CUDA
+    recipe runs `vllm-router`, the Ascend recipe runs the proxy example that
+    every published vllm-ascend image carries."""
     by_name = {mode.name: mode for mode in load_pd_modes(reload=True)}
-    left = by_name[PDModeEnum.VLLM_NIXL.value].router.model_dump(mode="json")
-    right = by_name[PDModeEnum.VLLM_ASCEND_MOONCAKE.value].router.model_dump(
-        mode="json"
+    cuda = by_name[PDModeEnum.VLLM_NIXL.value].router
+    ascend = by_name[PDModeEnum.VLLM_ASCEND_MOONCAKE.value].router
+
+    assert cuda.entrypoint == ["vllm-router"]
+    assert ascend.entrypoint[0] == "python3"
+    assert ascend.entrypoint[1].endswith(
+        "/disaggregated_prefill_v1/load_balance_proxy_server_example.py"
     )
-
-    differing = {k for k in set(left) | set(right) if left.get(k) != right.get(k)}
-
-    assert "tunable_args" in differing or "capabilities" in differing
-    # And everything about reaching the router is the same.
-    for shared in ("entrypoint", "peers", "membership_api", "health_path"):
-        assert left.get(shared) == right.get(shared), shared
+    # Same model image for both: the difference is the binary, not the image.
+    assert cuda.image == ascend.image == "{{runner_image}}"
 
 
 def test_nvidia_mooncake_metrics_follow_the_sender_and_keep_ascend_capabilities_separate():
@@ -1339,7 +1336,7 @@ def test_nvidia_mooncake_metrics_follow_the_sender_and_keep_ascend_capabilities_
         ("vllm-mooncake", "restart"),
         ("sglang-mooncake", "dynamic"),
         ("sglang-nixl", "dynamic"),
-        ("vllm-ascend-mooncake", "dynamic"),
+        ("vllm-ascend-mooncake", "restart"),
         ("custom", "manual"),
     ],
 )

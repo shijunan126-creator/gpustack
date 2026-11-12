@@ -51,9 +51,10 @@ async def test_list_serves_the_connection_state_the_ui_never_asks_for():
     # `custom` injects nothing and must stay selectable everywhere.
     custom = modes[PDModeEnum.CUSTOM.value]
     assert custom.gpu_filters is None or not custom.gpu_filters.vendor
-    # The Ascend recipe's router is vllm-router, which serves a Prometheus
-    # exposition.
-    assert ascend.router.capabilities.metrics is True
+    # The Ascend recipe's router is vllm-ascend's proxy example: it serves
+    # /healthcheck and /v1/models, and nothing to scrape.
+    assert ascend.router.capabilities.metrics is False
+    assert ascend.router.health_path == "/healthcheck"
     assert ascend.kv_lease.engine_default == 480
 
 
