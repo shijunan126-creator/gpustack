@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from prometheus_client.core import GaugeMetricFamily
 
+from gpustack.schemas.models import ModelInstanceStateEnum
 from gpustack.utils.metrics import get_builtin_metrics_config
 from gpustack.worker.exporter import MetricExporter
 from gpustack.worker.runtime_metrics_aggregator import (
@@ -389,3 +390,56 @@ def test_aggregate_clears_cache_when_the_last_instance_is_removed():
     assert cache["unified"] == {}
     assert cache["raw"] == {}
     assert list(MetricExporter.collect_runtime_metrics(_ExporterProbe(cache))) == []
+
+def _pd_instance(role, ports=(40011,)):
+    return SimpleNamespace(
+        state=ModelInstanceStateEnum.RUNNING,
+        worker_ip="10.0.0.1",
+        ports=list(ports),
+        role=role,
+    )
+
+
+def _pd_model(mode):
+    return SimpleNamespace(
+        backend="vLLM-Ascend",
+        backend_parameters=[],
+        env={},
+        categories=[],
+        disaggregation=SimpleNamespace(mode=mode),
+    )
+
+
+@pytest.mark.parametrize(
+    "mode,role,scraped",
+    [
+        # vllm-ascend's proxy example serves no exposition: polling it answers
+        # 404 on every scrape, forever, which reads as a permanent fault.
+        ("vllm-ascend-mooncake", "router", False),
+        # The CUDA recipe's router does serve one.
+        ("vllm-nixl", "router", True),
+        # An engine is never skipped by this rule.
+        ("vllm-ascend-mooncake", "decode", True),
+    ],
+)
+def test_only_a_router_that_declares_no_exposition_is_left_unscraped(
+    mode, role, scraped
+):
+    aggregator = RuntimeMetricsAggregator(
+        cache={}, worker_id_getter=lambda: 77, clientset=None
+    )
+    with patch(
+        "gpustack.worker.runtime_metrics_aggregator.get_runtime_metrics_config",
+        return_value={"path": "/metrics"},
+    ), patch(
+        "gpustack.worker.runtime_metrics_aggregator.is_image_model",
+        return_value=False,
+    ), patch(
+        "gpustack.worker.runtime_metrics_aggregator.is_audio_model",
+        return_value=False,
+    ):
+        skipped = aggregator._should_skip_endpoint(
+            _pd_model(mode), _pd_instance(role), metrics_config={}
+        )
+
+    assert skipped is (not scraped)
