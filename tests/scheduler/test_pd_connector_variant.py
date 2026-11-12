@@ -1,4 +1,4 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from datetime import datetime, timezone
@@ -96,7 +96,7 @@ async def test_architecture_override_with_unavailable_layout_uses_fallback(monke
 
     await scheduler.evaluate_pretrained_config(model)
 
-    assert model.meta["pd_connector_variant"] == "hybrid"
+    assert model.meta["pd_connector_variant"] == "standard"
 
 
 @pytest.mark.parametrize(
@@ -152,7 +152,7 @@ def test_role_overrides_choose_layout_and_choice_stays_pinned_to_model_inputs():
 def test_unavailable_layout_uses_catalog_fallback():
     model = _model()
     assert scheduler._record_pd_connector_variant(model, None, [])
-    assert model.meta["pd_connector_variant"] == "hybrid"
+    assert model.meta["pd_connector_variant"] == "standard"
 
 
 @pytest.mark.parametrize(
@@ -162,7 +162,7 @@ def test_layout_recovery_keeps_the_groups_conservative_connector(recovered_confi
     model = _model()
     assert scheduler._record_pd_connector_variant(model, None, [])
     assert not scheduler._record_pd_connector_variant(model, recovered_config, [])
-    assert model.meta["pd_connector_variant"] == "hybrid"
+    assert model.meta["pd_connector_variant"] == "standard"
 
 
 @pytest.mark.parametrize(
@@ -297,12 +297,12 @@ async def test_metadata_failure_pins_fallback_before_a_member_can_start(
         ),
     )
     await runner._evaluate(instances[1])
-    assert persisted[0].meta.get("pd_connector_variant") == "hybrid"
+    assert persisted[0].meta.get("pd_connector_variant") == "standard"
     assert persisted[0].meta.get("pd_connector_variant_source")
     await runner._evaluate(instances[2])
     assert rendered == {
-        "prefill": "MooncakeHybridConnector",
-        "decode": "MooncakeHybridConnector",
+        "prefill": "MooncakeConnectorV2",
+        "decode": "MooncakeConnectorV2",
     }
 
 
@@ -331,6 +331,6 @@ async def test_parallel_pd_evaluations_share_one_persisted_connector(
     release.set()
     await asyncio.gather(first, second)
     assert rendered == {
-        "prefill": "MooncakeHybridConnector",
-        "decode": "MooncakeHybridConnector",
+        "prefill": "MooncakeConnectorV2",
+        "decode": "MooncakeConnectorV2",
     }

@@ -1078,8 +1078,11 @@ def test_a_peer_pinned_across_machines_refuses_rather_than_borrows():
 @pytest.mark.parametrize(
     "variant,connector",
     [
-        ("standard", "MooncakeConnectorV1"),
-        ("hybrid", "MooncakeHybridConnector"),
+        # Both layouts run the rewritten connector: vllm-ascend's own PD guide
+        # launches V2 for hybrid models, and the separate hybrid connector is
+        # the one that hands decode a KV it reads back misaligned.
+        ("standard", "MooncakeConnectorV2"),
+        ("hybrid", "MooncakeConnectorV2"),
     ],
 )
 def test_ascend_pair_uses_the_same_model_layout_variant(variant, connector):
@@ -1110,7 +1113,7 @@ def test_ascend_invalid_layout_metadata_uses_the_conservative_default(variant):
             _instance(role, named_ports={"kv_port": PortBand(base=5600, count=1)}),
             _variables(),
         )
-        assert _connector(injection)["kv_connector"] == "MooncakeHybridConnector"
+        assert _connector(injection)["kv_connector"] == "MooncakeConnectorV2"
 
 
 @pytest.mark.parametrize("default", [None, "", "unknown"])
