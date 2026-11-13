@@ -417,6 +417,25 @@ def test_port_band_count_rejects_arithmetic():
         )
 
 
+def test_ascend_connector_declares_no_kv_ip():
+    """vLLM's KVTransferConfig has no `kv_ip` field, and an unknown key is not
+    ignored: 0.32 fails argument parsing with `1 validation error for
+    KVTransferConfig / kv_ip / Unexpected keyword argument`, so the engine exits
+    2 before it ever binds a port. The handshake address therefore travels as
+    VLLM_HOST_IP, which get_ip() reads first and only then falls back to the
+    container's default route — where 0.0.0.0 or a loopback is a
+    reachable-looking value no peer can dial."""
+    ascend = get_pd_mode(PDModeEnum.VLLM_ASCEND_MOONCAKE.value)
+    for role in ("prefill", "decode"):
+        declared = ascend.role(role)
+        assert "kv_ip" not in declared.connector
+        assert declared.env["VLLM_HOST_IP"] == "{{worker_ip}}"
+    # Distinct ids: vLLM defaults this to `tp x pp`, which is equal on both
+    # roles here, so the pair would share one engine id.
+    assert ascend.role("prefill").connector["engine_id"] == "0"
+    assert ascend.role("decode").connector["engine_id"] == "1"
+
+
 # ---------------------------------------------------------------------------
 # Cross-role references.
 # ---------------------------------------------------------------------------
@@ -433,10 +452,15 @@ def test_cross_role_references_render_both_directions():
         assert extra["prefill"] == {
             "tp_size": "{{roles.prefill.tensor_parallel_size}}",
             "dp_size": "{{roles.prefill.data_parallel_size}}",
+            # Declared, and fixed at 1: a GPUStack PD member is one TP x DP
+            # group, so PCP never leaves its default. Both sides have to state
+            # it because the connector addresses ranks by all three.
+            "pcp_size": 1,
         }
         assert extra["decode"] == {
             "tp_size": "{{roles.decode.tensor_parallel_size}}",
             "dp_size": "{{roles.decode.data_parallel_size}}",
+            "pcp_size": 1,
         }
     # The NIXL path declares no cross-role reference at all.
     nixl = get_pd_mode(PDModeEnum.VLLM_NIXL.value)
