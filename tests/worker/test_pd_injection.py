@@ -33,9 +33,11 @@ from gpustack.schemas.models import (
     SourceEnum,
 )
 from gpustack.utils.template import deployment_variables
+from gpustack.schemas.pd_modes import PDPortSpec
 from gpustack.worker.pd_injection import (
     KV_TRANSFER_CONFIG_FLAG,
     PDInjectionError,
+    band_width,
     render_pd_injection,
 )
 
@@ -1156,3 +1158,31 @@ def test_nvidia_mooncake_renders_bootstrap_and_pd_roles():
         assert injection.env["VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT"] == "60"
         if role == "prefill":
             assert injection.env["VLLM_MOONCAKE_BOOTSTRAP_PORT"] == "5600"
+
+def test_band_width_adds_the_connector_extra_port():
+    """`extra` carries the one port the per-rank rule cannot express: Mooncake
+    opens a scheduler port at `kv_port + dp x tp x pp x pcp`, one past the
+    handshake band, so its declaration is the card count plus one rather than a
+    width pinned to a single topology."""
+    counting = PDPortSpec(name="kv_port", count="{{accelerator_count}}", extra=1)
+    assert band_width(counting, cards=8, backend_parameters=[]) == 9
+    # the same declaration follows a 16-card member instead of under-reserving
+    assert band_width(counting, cards=16, backend_parameters=[]) == 17
+
+    plain = PDPortSpec(name="kv_port", count="{{accelerator_count}}")
+    assert band_width(plain, cards=8, backend_parameters=[]) == 8
+
+    # a literal takes the same addition, so the field means one thing
+    literal = PDPortSpec(name="kv_port", count=3, extra=2)
+    assert band_width(literal, cards=8, backend_parameters=[]) == 5
+
+    # and the parallelism spelling resolves before the addition
+    tp = PDPortSpec(name="kv_port", count="{{tensor_parallel_size}}", extra=1)
+    assert band_width(tp, cards=8, backend_parameters=["--tensor-parallel-size=4"]) == 5
+
+
+def test_band_width_extra_does_not_invent_an_unresolved_band():
+    """An extra port must not turn "cannot resolve" into a number: the allocator
+    has to keep skipping a band whose base it cannot compute."""
+    spec = PDPortSpec(name="kv_port", count="{{tensor_parallel_size}}", extra=1)
+    assert band_width(spec, cards=0, backend_parameters=[]) is None

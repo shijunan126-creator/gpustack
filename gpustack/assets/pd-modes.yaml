@@ -997,8 +997,9 @@ modes:
           # thing the allocator hands out, which is this member's own API port:
           # the engine then logs "Application startup complete" and never
           # answers again, wedging the instance in `starting` while the other
-          # role (whose band lands elsewhere) runs. 9 covers an 8-card member.
-          - { name: kv_port, count: 9, inject_to: args }
+          # role (whose band lands elsewhere) runs. `extra` adds that port
+          # instead of pinning a width for one card count.
+          - { name: kv_port, count: "{{accelerator_count}}", extra: 1, inject_to: args }
         # AscendDirectTransport resolves a peer's host address to the per-card
         # RoCE addresses through this file, and the Ascend container runtime
         # injects the devices and driver but not it. Without the mount
@@ -1066,8 +1067,9 @@ modes:
           # thing the allocator hands out, which is this member's own API port:
           # the engine then logs "Application startup complete" and never
           # answers again, wedging the instance in `starting` while the other
-          # role (whose band lands elsewhere) runs. 9 covers an 8-card member.
-          - { name: kv_port, count: 9, inject_to: args }
+          # role (whose band lands elsewhere) runs. `extra` adds that port
+          # instead of pinning a width for one card count.
+          - { name: kv_port, count: "{{accelerator_count}}", extra: 1, inject_to: args }
         # Same requirement, and it has to be on both sides: decode is the one
         # that pulls, prefill is the one whose card addresses get resolved.
         host_files: ["/etc/hccn.conf"]

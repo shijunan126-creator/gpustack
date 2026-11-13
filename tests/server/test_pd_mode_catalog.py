@@ -382,6 +382,10 @@ def test_port_band_count_is_declared_by_the_connector():
     for role in ("prefill", "decode"):
         band = ascend.role(role).ports[0]
         assert band.count == "{{accelerator_count}}"
+        # ... plus the connector's scheduler port, at `kv_port + cards`: one past
+        # the handshake band, where the allocator would otherwise hand out the
+        # member's own API port.
+        assert band.extra == 1
         assert band.scope == PDPortScopeEnum.INSTANCE
     # NIXL binds one side channel per DP index, independent of HTTP LB.
     for role in ("prefill", "decode"):
@@ -412,6 +416,18 @@ def test_port_band_count_rejects_arithmetic():
                 "prefill": {
                     "ports": [{"name": "kv", "count": "{{tp}}*2"}],
                     "env": {"P": "{{ports.kv}}"},
+                }
+            },
+        )
+
+
+def test_port_band_extra_must_be_non_negative():
+    with pytest.raises(ValueError, match="extra must be >= 0"):
+        PDMode(
+            name="negative-extra",
+            roles={
+                "prefill": {
+                    "ports": [{"name": "kv_port", "count": 2, "extra": -1}],
                 }
             },
         )
@@ -896,6 +912,7 @@ def test_all_five_capabilities_round_trip_through_serialization():
     assert nixl["roles"]["prefill"]["ports"][0]["inject_to"] == "env"
     assert ascend["roles"]["prefill"]["ports"][0]["inject_to"] == "args"
     assert ascend["roles"]["decode"]["ports"][0]["count"] == "{{accelerator_count}}"
+    assert ascend["roles"]["decode"]["ports"][0]["extra"] == 1
     assert (
         ascend["roles"]["prefill"]["connector"]["kv_connector_extra_config"]["decode"][
             "tp_size"

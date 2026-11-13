@@ -348,6 +348,16 @@ class PDPortSpec(BaseModel):
     measured TP8/DP1 -> 41100-41107 and DP2xTP2 ->
     20001-20004), while NIXL's side channel is offset per DP index instead."""
 
+    extra: int = 0
+    """Ports reserved on top of ``count``, for a connector that binds more than
+    its per-rank ports. Mooncake's ``kv_port`` band is one handshake port per
+    card *plus* a scheduler port at ``kv_port + dp * tp * pp * pcp``, one past
+    the handshake band: declaring ``count: {{accelerator_count}}`` alone leaves
+    that port to whatever the allocator hands out next -- the member's own API
+    port -- and the engine then serves from a port it cannot answer on. The
+    declaration is therefore ``count`` plus ``extra: 1``, so the width follows
+    the card count instead of a fixed number written for one topology."""
+
     inject_to: PDInjectTargetEnum = PDInjectTargetEnum.ENV
     """Which injection channel carries the band's base. Cross-checked at
     load time against where {{ports.<name>}} actually appears, so a wrong
@@ -372,6 +382,8 @@ class PDPortSpec(BaseModel):
                 )
         elif self.count < 1:
             raise ValueError(f"port '{self.name}' count must be >= 1")
+        if self.extra < 0:
+            raise ValueError(f"port '{self.name}' extra must be >= 0")
         return self
 
 
