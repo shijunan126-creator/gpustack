@@ -177,28 +177,36 @@ def band_width(spec, *, cards: int, backend_parameters) -> Optional[int]:
     unallocated band leaves `{{ports.<name>}}` in the launch for the engine to
     reject by name.
 
+    `extra` is added on top of whatever `count` resolved to. It exists for the
+    one term the per-rank rule above does not cover: Mooncake also opens a
+    scheduler port at `kv_port + dp x tp x pp x pcp`, one past the handshake
+    band, so its declaration is `count: {{accelerator_count}}` with `extra: 1`.
+    Writing that width as a literal instead would be right for exactly one card
+    count and wrong -- silently, as a collision with the member's own API port
+    -- for the next topology.
+
     The caller decides what None costs -- the budget counts it as zero, the
     allocator skips it and says so -- which is the one place the two sides
     legitimately differ.
     """
     if isinstance(spec.count, int):
-        return max(spec.count, 1)
+        return max(spec.count, 1) + spec.extra
 
     key = band_count_key(spec)
 
     if key == ACCELERATOR_COUNT_KEY:
         # No accelerators means either a role that claims none (a router, which
         # declares no KV band) or a member not yet scheduled. Neither is a width.
-        return cards if cards >= 1 else None
+        return cards + spec.extra if cards >= 1 else None
 
     aliases = _PARALLELISM_ALIASES.get(key)
     resolved = (
         find_int_parameter(backend_parameters or [], aliases) if aliases else None
     )
     if resolved is not None and resolved >= 1:
-        return resolved
+        return resolved + spec.extra
     if key == "data_parallel_size" and resolved is None:
-        return 1
+        return 1 + spec.extra
     return None
 
 
